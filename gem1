@@ -814,7 +814,7 @@ struct DentalCameraSetupView: View {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     showSuccessMessage = true
                                 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         showSuccessMessage = false
                                     }
@@ -855,22 +855,9 @@ struct DentalCameraSetupView: View {
                         }
                         .padding(.bottom, 100)
 
-                        // Bottom row: Flip Camera and Photo Preview
+                        // Bottom row: Photo Preview (left) and Flip Camera (right)
                         HStack {
-                            Spacer()
-
-                            // Flip Camera Button
-                            Button(action: { cameraService.flipCamera() }) {
-                                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                    .font(.title2)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.trailing, 15)
-
-                            // Last Photo Preview
+                            // Last Photo Preview (bottom-left)
                             if let lastPhoto = lastSavedPhoto {
                                 NavigationLink(destination: GalleryView()) {
                                     Image(uiImage: lastPhoto)
@@ -883,7 +870,7 @@ struct DentalCameraSetupView: View {
                                                 .stroke(Color.white, lineWidth: 2)
                                         )
                                 }
-                                .padding(.trailing, 20)
+                                .padding(.leading, 20)
                             } else {
                                 // Placeholder when no photo saved yet
                                 RoundedRectangle(cornerRadius: 8)
@@ -893,8 +880,21 @@ struct DentalCameraSetupView: View {
                                         Image(systemName: "photo")
                                             .foregroundColor(.gray)
                                     )
-                                    .padding(.trailing, 20)
+                                    .padding(.leading, 20)
                             }
+
+                            Spacer()
+
+                            // Flip Camera Button (bottom-right)
+                            Button(action: { cameraService.flipCamera() }) {
+                                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                    .font(.title2)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Circle())
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.trailing, 20)
                         }
                         .padding(.bottom, 60)
                     }
@@ -937,7 +937,7 @@ struct DentalCameraSetupView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: showSaveAnimation ? 8 : 0))
                         .position(
-                            x: showSaveAnimation ? geo.size.width - 45 : geo.size.width / 2,
+                            x: showSaveAnimation ? 45 : geo.size.width / 2,
                             y: showSaveAnimation ? geo.size.height - 85 : geo.size.height / 2
                         )
                         .opacity(showSaveAnimation ? 0.8 : 1.0)
