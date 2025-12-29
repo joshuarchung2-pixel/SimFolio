@@ -1744,6 +1744,7 @@ struct PhotoInfoPillView: View {
 
     // MARK: - Navigation
     func updateCurrentStage() {
+        // When reopening, go to the first incomplete stage, or stay on procedure if all complete
         if metadata.procedure == nil {
             currentStage = .procedure
         } else if metadata.toothNumber == nil {
@@ -1753,17 +1754,20 @@ struct PhotoInfoPillView: View {
         } else if metadata.angle == nil {
             currentStage = .angle
         } else {
-            currentStage = .complete
-            isDropdownOpen = false
+            // All fields complete - default to procedure tab for editing
+            currentStage = .procedure
         }
     }
 
     func advanceToNextStage() {
         withAnimation {
             if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
-                currentStage = next
-                if currentStage == .complete {
+                if next == .complete {
+                    // All done - close dropdown
                     isDropdownOpen = false
+                    currentStage = .procedure
+                } else {
+                    currentStage = next
                 }
             }
         }
