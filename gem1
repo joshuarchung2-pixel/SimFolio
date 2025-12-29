@@ -1292,108 +1292,11 @@ struct PhotoInfoPillView: View {
 
     var dropdownContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Horizontal stage tabs
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach([PhotoInfoStage.procedure, .tooth, .stage, .angle], id: \.self) { stage in
-                        Button(action: {
-                            withAnimation { currentStage = stage }
-                        }) {
-                            VStack(spacing: 4) {
-                                Text(stageName(for: stage))
-                                    .font(.caption2).bold()
-                                    .foregroundColor(currentStage == stage ? .white : .gray)
-
-                                // Show current value if set
-                                Text(stageValue(for: stage))
-                                    .font(.system(size: 9))
-                                    .foregroundColor(stageColor(for: stage))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(currentStage == stage ? stageColor(for: stage) : Color.clear, lineWidth: 1)
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-            }
-
+            stageTabsView
             Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 8)
-
-            // Stage-specific content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    switch currentStage {
-                    case .procedure:
-                        procedureStageContent
-                    case .tooth:
-                        toothStageContent
-                    case .stage:
-                        stageStageContent
-                    case .angle:
-                        angleStageContent
-                    case .complete:
-                        EmptyView()
-                    }
-                }
-                .padding(.horizontal, 8)
-            }
-            .frame(maxHeight: 200)
-
+            currentStageContentView
             Divider().background(Color.gray.opacity(0.3))
-
-            // Bottom buttons
-            HStack {
-                // Clear all button
-                Button(action: { clearAllMetadata() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "xmark.circle")
-                        Text("Clear all")
-                    }
-                    .font(.caption)
-                    .foregroundColor(.red)
-                }
-
-                Spacer()
-
-                // Navigation arrows
-                if currentStage.rawValue > 0 {
-                    Button(action: {
-                        withAnimation {
-                            if let prev = PhotoInfoStage(rawValue: currentStage.rawValue - 1) {
-                                currentStage = prev
-                            }
-                        }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
-                }
-
-                if currentStage.rawValue < 3 {
-                    Button(action: {
-                        withAnimation {
-                            if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
-                                currentStage = next
-                            }
-                        }
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            bottomButtonsView
         }
         .frame(width: 280)
         .background(Color.black.opacity(0.95))
@@ -1403,6 +1306,114 @@ struct PhotoInfoPillView: View {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .onAppear { updateCurrentStage() }
+    }
+
+    // MARK: - Dropdown Sub-views
+    var stageTabsView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach([PhotoInfoStage.procedure, .tooth, .stage, .angle], id: \.self) { stage in
+                    stageTabButton(for: stage)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+        }
+    }
+
+    func stageTabButton(for stage: PhotoInfoStage) -> some View {
+        Button(action: {
+            withAnimation { currentStage = stage }
+        }) {
+            VStack(spacing: 4) {
+                Text(stageName(for: stage))
+                    .font(.caption2).bold()
+                    .foregroundColor(currentStage == stage ? .white : .gray)
+                Text(stageValue(for: stage))
+                    .font(.system(size: 9))
+                    .foregroundColor(stageColor(for: stage))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : Color.gray.opacity(0.1))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(currentStage == stage ? stageColor(for: stage) : Color.clear, lineWidth: 1)
+            )
+        }
+    }
+
+    @ViewBuilder
+    var currentStageContentView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                switch currentStage {
+                case .procedure:
+                    procedureStageContent
+                case .tooth:
+                    toothStageContent
+                case .stage:
+                    stageStageContent
+                case .angle:
+                    angleStageContent
+                case .complete:
+                    EmptyView()
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(maxHeight: 200)
+    }
+
+    var bottomButtonsView: some View {
+        HStack {
+            Button(action: { clearAllMetadata() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle")
+                    Text("Clear all")
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            }
+
+            Spacer()
+
+            if currentStage.rawValue > 0 {
+                Button(action: { navigateToPreviousStage() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
+
+            if currentStage.rawValue < 3 {
+                Button(action: { navigateToNextStage() }) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    func navigateToPreviousStage() {
+        withAnimation {
+            if let prev = PhotoInfoStage(rawValue: currentStage.rawValue - 1) {
+                currentStage = prev
+            }
+        }
+    }
+
+    func navigateToNextStage() {
+        withAnimation {
+            if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
+                currentStage = next
+            }
+        }
     }
 
     func stageName(for stage: PhotoInfoStage) -> String {
