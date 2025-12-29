@@ -1,0 +1,1087 @@
+import SwiftUI
+import AVFoundation
+import Photos
+import Combine
+import UIKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
+
+// MARK: - MAIN ENTRY POINT
+struct ContentView: View {
+    @State private var selectedTab = 0 // Track tab selection
+    
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            DentalCameraSetupView(selectedTab: $selectedTab)
+                .tabItem {
+                    Label("Camera", systemImage: "camera.fill")
+                }
+                .tag(0)
+            
+            GalleryView()
+                .tabItem {
+                    Label("Gallery", systemImage: "photo.on.rectangle")
+                }
+                .tag(1)
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            PhotoLibraryManager.shared.createAlbumIfNeeded()
+        }
+    }
+}
+
+// MARK: - TAG MANAGER (PERSISTENCE)
+class TagManager: ObservableObject {
+    static let shared = TagManager()
+    
+    @Published var procedureTags: [String] = []
+    @Published var otherTags: [String] = []
+    @Published var assetProcedureMap: [String: String] = [:]
+    @Published var assetOtherTagsMap: [String: [String]] = [:]
+    
+    private let procedureKey = "DentalPortfolio_Procedures"
+    private let otherTagsKey = "DentalPortfolio_OtherTags"
+    private let assetProcMapKey = "DentalPortfolio_AssetProcMap"
+    private let assetOtherMapKey = "DentalPortfolio_AssetOtherMap"
+    
+    init() {
+        loadData()
+        if procedureTags.isEmpty {
+            procedureTags = ["Crown", "Bridge", "Veneer", "Implant", "Denture", "Ortho"]
+            saveProcedures()
+        }
+        if otherTags.isEmpty {
+            otherTags = ["Upper", "Lower", "Anterior", "Posterior", "Prep", "Restoration"]
+            saveOtherTags()
+        }
+    }
+    
+    func addProcedure(_ tag: String) {
+        if !procedureTags.contains(tag) && !tag.isEmpty { procedureTags.append(tag); saveProcedures() }
+    }
+    func deleteProcedure(_ tag: String) {
+        procedureTags.removeAll { $0 == tag }; saveProcedures()
+    }
+    func addOtherTag(_ tag: String) {
+        if !otherTags.contains(tag) && !tag.isEmpty { otherTags.append(tag); saveOtherTags() }
+    }
+    func deleteOtherTag(_ tag: String) {
+        otherTags.removeAll { $0 == tag }; saveOtherTags()
+    }
+    func assign(procedure: String?, otherTags: [String], to assetID: String) {
+        if let proc = procedure { assetProcedureMap[assetID] = proc }
+        assetOtherTagsMap[assetID] = otherTags
+        saveMaps()
+    }
+    func getProcedure(for assetID: String) -> String? { return assetProcedureMap[assetID] }
+    func getOtherTags(for assetID: String) -> [String] { return assetOtherTagsMap[assetID] ?? [] }
+    
+    private func saveProcedures() { UserDefaults.standard.set(procedureTags, forKey: procedureKey) }
+    private func saveOtherTags() { UserDefaults.standard.set(otherTags, forKey: otherTagsKey) }
+    private func saveMaps() {
+        UserDefaults.standard.set(assetProcedureMap, forKey: assetProcMapKey)
+        UserDefaults.standard.set(assetOtherTagsMap, forKey: assetOtherMapKey)
+    }
+    private func loadData() {
+        if let p = UserDefaults.standard.stringArray(forKey: procedureKey) { procedureTags = p }
+        if let o = UserDefaults.standard.stringArray(forKey: otherTagsKey) { otherTags = o }
+        if let pm = UserDefaults.standard.dictionary(forKey: assetProcMapKey) as? [String: String] { assetProcedureMap = pm }
+        if let om = UserDefaults.standard.dictionary(forKey: assetOtherMapKey) as? [String: [String]] { assetOtherTagsMap = om }
+    }
+}
+
+// MARK: - CAMERA SERVICE (AVFoundation)
+class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+    @Published var session = AVCaptureSession()
+    @Published var capturedImage: UIImage? = nil
+    
+    // Exposure & Flash State
+    @Published var currentExposure: Float = 0.0
+    @Published var minExposure: Float = -2.0
+    @Published var maxExposure: Float = 2.0
+    @Published var flashMode: AVCaptureDevice.FlashMode = .off
+    
+    private let output = AVCapturePhotoOutput()
+    private var videoInput: AVCaptureDeviceInput?
+    private var currentExposureBias: Float = 0.0
+    
+    override init() {
+        super.init()
+        checkPermissions()
+    }
+    
+    func checkPermissions() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                if granted { self.setupCamera() }
+            }
+        case .authorized:
+            setupCamera()
+        default: break
+        }
+    }
+    
+    func setupCamera() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.session.beginConfiguration()
+            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+               let input = try? AVCaptureDeviceInput(device: device) {
+                self.videoInput = input
+                if self.session.canAddInput(input) { self.session.addInput(input) }
+                if self.session.canAddOutput(self.output) { self.session.addOutput(self.output) }
+                
+                // Initialize Exposure Limits
+                DispatchQueue.main.async {
+                    self.minExposure = device.minExposureTargetBias
+                    self.maxExposure = device.maxExposureTargetBias
+                    self.currentExposure = 0.0
+                }
+            }
+            self.session.commitConfiguration()
+            self.session.startRunning()
+        }
+    }
+    
+    // Tap to Focus (One Shot)
+    func focusAndExpose(at devicePoint: CGPoint) {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            
+            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
+                device.focusPointOfInterest = devicePoint
+                device.focusMode = .autoFocus
+            }
+            
+            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
+                device.exposurePointOfInterest = devicePoint
+                device.exposureMode = .autoExpose
+                device.setExposureTargetBias(0, completionHandler: nil)
+                DispatchQueue.main.async { self.currentExposure = 0.0 }
+            }
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to lock for focus: \(error)")
+        }
+    }
+    
+    // Long Press to Lock (AE/AF Lock)
+    func lockAEAF(at devicePoint: CGPoint) {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            
+            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
+                device.focusPointOfInterest = devicePoint
+                // Start autofocus, then it will lock when converged. 
+                // Alternatively, .locked is used to lock at current lens pos, 
+                // but usually we want to focus on the point *then* lock. 
+                // .autoFocus does exactly that: scan once, then stop (lock).
+                device.focusMode = .autoFocus 
+            }
+            
+            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
+                device.exposurePointOfInterest = devicePoint
+                device.exposureMode = .autoExpose 
+                device.setExposureTargetBias(0, completionHandler: nil)
+                DispatchQueue.main.async { self.currentExposure = 0.0 }
+            }
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to lock AE/AF: \(error)")
+        }
+    }
+    
+    func adjustExposure(delta: Float) {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            let newBias = max(device.minExposureTargetBias, min(device.maxExposureTargetBias, currentExposure + delta))
+            device.setExposureTargetBias(newBias, completionHandler: nil)
+            
+            DispatchQueue.main.async {
+                self.currentExposure = newBias
+            }
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to set exposure: \(error)")
+        }
+    }
+    
+    func takePhoto() {
+        let settings = AVCapturePhotoSettings()
+        // Check if flash is supported
+        if output.supportedFlashModes.contains(flashMode) {
+            settings.flashMode = flashMode
+        }
+        output.capturePhoto(with: settings, delegate: self)
+    }
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else { return }
+        DispatchQueue.main.async {
+            self.capturedImage = image
+        }
+    }
+    
+    func retake() {
+        DispatchQueue.main.async { self.capturedImage = nil }
+    }
+    
+    func flipCamera() {
+        guard let input = videoInput else { return }
+        session.beginConfiguration()
+        session.removeInput(input)
+        
+        let newPosition: AVCaptureDevice.Position = input.device.position == .back ? .front : .back
+        if let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
+           let newInput = try? AVCaptureDeviceInput(device: newDevice) {
+            if session.canAddInput(newInput) {
+                session.addInput(newInput)
+                videoInput = newInput
+            } else {
+                session.addInput(input)
+            }
+        } else {
+            session.addInput(input)
+        }
+        
+        // Refresh exposure limits for new device
+        if let device = videoInput?.device {
+            DispatchQueue.main.async {
+                self.minExposure = device.minExposureTargetBias
+                self.maxExposure = device.maxExposureTargetBias
+                self.currentExposure = 0.0
+            }
+        }
+        
+        session.commitConfiguration()
+    }
+}
+
+// MARK: - 1. CAMERA TAB UI
+struct DentalCameraSetupView: View {
+    @Binding var selectedTab: Int
+    
+    @StateObject private var cameraService = CameraService()
+    
+    // UI State
+    @State private var showGrid = false
+    @State private var ghostImage: UIImage? = nil
+    @State private var ghostOpacity: Double = 0.5
+    @State private var isGhostPickerPresented = false
+    @State private var isOptionsExpanded = false // Unified Options Menu
+    
+    // Focus/Exposure State
+    @State private var focusLocation: CGPoint? = nil
+    @State private var showFocusSquare = false
+    @State private var isAELocked = false
+    @State private var showShutterEffect = false
+    
+    // Dual Tagging State
+    @State private var selectedProcedure: String? = nil
+    @State private var selectedOtherTags: Set<String> = []
+    @State private var activeDropdown: String? = nil 
+    @State private var newTagText: String = ""
+    @ObservedObject var tagManager = TagManager.shared
+    
+    // Computed property for visual slider position
+    // Maps actual exposure bias [min, max] to visual slider height [-70, 70]
+    var exposureVisualOffset: CGFloat {
+        let range = cameraService.maxExposure - cameraService.minExposure
+        guard range > 0 else { return 0 }
+        let percentage = (cameraService.currentExposure - cameraService.minExposure) / range
+        let visualHeight: CGFloat = 140
+        return (CGFloat(percentage) * visualHeight) - (visualHeight / 2)
+    }
+    
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.black.ignoresSafeArea()
+            
+            // 1. CAMERA PREVIEW (Always active)
+            CameraPreview(
+                session: cameraService.session,
+                onTap: { point in
+                    isAELocked = false
+                    cameraService.focusAndExpose(at: point)
+                },
+                onLongPress: { point in
+                    isAELocked = true
+                    cameraService.lockAEAF(at: point)
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                },
+                onPan: { delta in
+                    cameraService.adjustExposure(delta: Float(delta) * 0.01)
+                },
+                touchPoint: $focusLocation
+            )
+            .ignoresSafeArea()
+            
+            // 1.5 CAPTURED IMAGE OVERLAY (Review Mode)
+            if let captured = cameraService.capturedImage {
+                Image(uiImage: captured)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill) // Matches camera preview
+                    .ignoresSafeArea()
+                    .zIndex(1)
+            }
+            
+            // 2. FOCUS INDICATOR
+            if let loc = focusLocation, cameraService.capturedImage == nil {
+                ZStack {
+                    // Focus Box with Inner Ticks
+                    ZStack {
+                        Rectangle().stroke(Color.yellow, lineWidth: 1.5).frame(width: 75, height: 75)
+                        Rectangle().fill(Color.yellow).frame(width: 1.5, height: 10).offset(y: -32.5)
+                        Rectangle().fill(Color.yellow).frame(width: 1.5, height: 10).offset(y: 32.5)
+                        Rectangle().fill(Color.yellow).frame(width: 10, height: 1.5).offset(x: -32.5)
+                        Rectangle().fill(Color.yellow).frame(width: 10, height: 1.5).offset(x: 32.5)
+                    }
+                    .opacity(showFocusSquare || isAELocked ? 1 : 0)
+                    
+                    // Native-Style Exposure Slider
+                    if showFocusSquare || isAELocked {
+                        Rectangle()
+                            .fill(Color.yellow)
+                            .frame(width: 1, height: 140)
+                            .offset(x: 65)
+                            .shadow(radius: 1)
+                            .opacity(0.8)
+                        
+                        Image(systemName: "sun.max.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.yellow)
+                            .shadow(radius: 2)
+                            .offset(x: 65, y: -exposureVisualOffset)
+                    }
+                }
+                .position(loc)
+                .id(loc)
+                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+                .onChange(of: loc) { _ in
+                    showFocusSquare = true
+                    if !isAELocked {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            if !isAELocked { withAnimation { showFocusSquare = false } }
+                        }
+                    }
+                }
+                
+                if isAELocked {
+                    Text("AE/AF LOCK")
+                        .font(.caption).fontWeight(.bold).foregroundColor(.black)
+                        .padding(.vertical, 4).padding(.horizontal, 8)
+                        .background(Color.yellow).cornerRadius(4)
+                        .padding(.top, 120)
+                        .transition(.opacity)
+                }
+            }
+            
+            // 3. OVERLAYS (Only visible when NOT reviewing)
+            if cameraService.capturedImage == nil {
+                if let ghost = ghostImage {
+                    Image(uiImage: ghost)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .opacity(ghostOpacity).allowsHitTesting(false).ignoresSafeArea()
+                }
+                if showGrid { CameraGridOverlay().allowsHitTesting(false) }
+            }
+            
+            // 4. CONTROLS LAYER
+            VStack {
+                // TOP BAR
+                ZStack(alignment: .top) {
+                    // Left: Spacer placeholder for balance if needed, or empty
+                    HStack {
+                        Spacer()
+                    }
+                    
+                    // Center: Dual Dropdowns
+                    HStack(spacing: 8) {
+                        dropdownButton(title: selectedProcedure ?? "Procedure", type: "procedure", color: .blue)
+                        dropdownButton(title: selectedOtherTags.isEmpty ? "Tags" : "\(selectedOtherTags.count)", type: "other", color: .orange)
+                    }
+                    .zIndex(10)
+                    
+                    // Right: Unified Options Button (Expanding Downward)
+                    if cameraService.capturedImage == nil {
+                        HStack {
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 10) {
+                                Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
+                                    Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
+                                        .font(.title2)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                        .foregroundColor(.white)
+                                }
+                                
+                                if isOptionsExpanded {
+                                    // Flash Toggle
+                                    Button(action: {
+                                        switch cameraService.flashMode {
+                                        case .off: cameraService.flashMode = .on
+                                        case .on: cameraService.flashMode = .auto
+                                        default: cameraService.flashMode = .off
+                                        }
+                                    }) {
+                                        Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
+                                            .font(.title2).padding(10)
+                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
+                                    }
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                    
+                                    // Grid Toggle
+                                    Button(action: { showGrid.toggle() }) {
+                                        Image(systemName: showGrid ? "square" : "grid")
+                                            .font(.title2).padding(10)
+                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
+                                    }
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                    
+                                    // Ghost Toggle
+                                    Button(action: {
+                                        if ghostImage != nil { ghostImage = nil }
+                                        else { isGhostPickerPresented = true }
+                                    }) {
+                                        Image(systemName: ghostImage != nil ? "xmark.square" : "square.on.square.dashed")
+                                            .font(.title2).padding(10)
+                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(ghostImage != nil ? .yellow : .white)
+                                    }
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 60)
+                
+                if let type = activeDropdown {
+                    HStack {
+                        Spacer()
+                        dropdownContent(type: type)
+                        Spacer()
+                    }
+                    .zIndex(9)
+                }
+                
+                Spacer()
+                
+                // BOTTOM BAR
+                if let captured = cameraService.capturedImage {
+                    // REVIEW MODE
+                    HStack(alignment: .center, spacing: 50) {
+                        Button(action: { cameraService.retake() }) {
+                            Text("Retake")
+                                .font(.headline)
+                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                        }
+                        .background(Color.black.opacity(0.6))
+                        .foregroundColor(.white).cornerRadius(10)
+                        
+                        Button(action: {
+                            PhotoLibraryManager.shared.save(image: captured, procedure: selectedProcedure, otherTags: Array(selectedOtherTags))
+                            cameraService.retake()
+                        }) {
+                            Text("Use Photo")
+                                .font(.headline)
+                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                        }
+                        .background(Color.blue)
+                        .foregroundColor(.white).cornerRadius(10)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 100)
+                } else {
+                    // CAPTURE MODE
+                    ZStack {
+                        if ghostImage != nil {
+                            VStack {
+                                Slider(value: $ghostOpacity, in: 0.1...0.8).accentColor(.blue).frame(width: 200)
+                                Spacer().frame(height: 180) // Moved up to clear shutter
+                            }
+                        }
+                        
+                        // Shutter Button (Center)
+                        Button(action: { 
+                            withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation { showShutterEffect = false }
+                            }
+                            cameraService.takePhoto() 
+                        }) {
+                            ZStack {
+                                Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
+                                Circle().fill(Color.white).frame(width: 62, height: 62)
+                            }
+                        }
+                        .padding(.bottom, 50)
+                        
+                        // Flip Camera (Bottom Right)
+                        HStack {
+                            Spacer()
+                            Button(action: { cameraService.flipCamera() }) {
+                                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                    .font(.title2)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Circle())
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.trailing, 30)
+                            .padding(.bottom, 60)
+                        }
+                    }
+                }
+            }
+            .zIndex(2) // Ensure controls are above the captured image
+            
+            // SHUTTER EFFECT FLASH
+            if showShutterEffect {
+                Color.black.ignoresSafeArea().zIndex(20)
+            }
+        }
+        .ignoresSafeArea()
+        .sheet(isPresented: $isGhostPickerPresented) {
+            CustomGhostPicker(selectedImage: $ghostImage)
+        }
+    }
+    
+    // Dropdown Helpers
+    func dropdownButton(title: String, type: String, color: Color) -> some View {
+        Button(action: {
+            withAnimation {
+                activeDropdown = (activeDropdown == type) ? nil : type
+            }
+        }) {
+            HStack(spacing: 4) {
+                Text(title).font(.caption).bold().lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption)
+            }
+            .padding(.vertical, 8).padding(.horizontal, 10)
+            .background(Color.black.opacity(0.8))
+            .foregroundColor(activeDropdown == type ? color : .white).cornerRadius(15)
+            .overlay(
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(activeDropdown == type ? color : Color.white.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .frame(width: 100)
+    }
+    
+    func dropdownContent(type: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let isProcedure = (type == "procedure")
+            let list = isProcedure ? tagManager.procedureTags : tagManager.otherTags
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(list, id: \.self) { tag in
+                        Button(action: {
+                            if isProcedure {
+                                selectedProcedure = (selectedProcedure == tag) ? nil : tag
+                                activeDropdown = nil
+                            } else {
+                                if selectedOtherTags.contains(tag) { selectedOtherTags.remove(tag) }
+                                else { selectedOtherTags.insert(tag) }
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: isProcedure ? (selectedProcedure == tag ? "circle.inset.filled" : "circle") : (selectedOtherTags.contains(tag) ? "checkmark.square.fill" : "square"))
+                                    .foregroundColor(isProcedure ? .blue : .orange)
+                                Text(tag).foregroundColor(.white).font(.caption)
+                                Spacer()
+                                Button(action: {
+                                    isProcedure ? tagManager.deleteProcedure(tag) : tagManager.deleteOtherTag(tag)
+                                    if isProcedure && selectedProcedure == tag { selectedProcedure = nil }
+                                    if !isProcedure { selectedOtherTags.remove(tag) }
+                                }) { Image(systemName: "trash").foregroundColor(.red).font(.caption2) }
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                        }
+                    }
+                }.padding(.vertical, 10)
+            }
+            .frame(maxHeight: 150)
+            Divider().background(Color.gray)
+            HStack(spacing: 5) {
+                TextField("New...", text: $newTagText)
+                    .font(.caption).textFieldStyle(RoundedBorderTextFieldStyle()).foregroundColor(.black)
+                Button(action: {
+                    if isProcedure { tagManager.addProcedure(newTagText); selectedProcedure = newTagText }
+                    else { tagManager.addOtherTag(newTagText); selectedOtherTags.insert(newTagText) }
+                    newTagText = ""
+                }) { Image(systemName: "plus.circle.fill").foregroundColor(.green) }
+                .disabled(newTagText.isEmpty)
+            }
+            .padding(10)
+        }
+        .frame(width: 160).background(Color.black.opacity(0.9)).cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
+    }
+}
+
+// MARK: - CAMERA PREVIEW & INTERACTION
+struct CameraPreview: UIViewRepresentable {
+    var session: AVCaptureSession
+    var onTap: (CGPoint) -> Void
+    var onLongPress: (CGPoint) -> Void
+    var onPan: (CGFloat) -> Void
+    @Binding var touchPoint: CGPoint?
+    
+    class VideoPreviewView: UIView {
+        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        var videoPreviewLayer: AVCaptureVideoPreviewLayer { return layer as! AVCaptureVideoPreviewLayer }
+    }
+    
+    func makeUIView(context: Context) -> VideoPreviewView {
+        let view = VideoPreviewView()
+        view.backgroundColor = .black
+        view.videoPreviewLayer.session = session
+        view.videoPreviewLayer.videoGravity = .resizeAspectFill
+        view.videoPreviewLayer.connection?.videoOrientation = .portrait
+        
+        // Tap Gesture
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        view.addGestureRecognizer(tap)
+        
+        // Long Press Gesture
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPress.minimumPressDuration = 1.0 // Increased to 1.0s
+        view.addGestureRecognizer(longPress)
+        
+        // Pan Gesture (Vertical drag for exposure)
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        view.addGestureRecognizer(pan)
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: VideoPreviewView, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    
+    class Coordinator: NSObject {
+        var parent: CameraPreview
+        init(_ parent: CameraPreview) { self.parent = parent }
+        
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let view = gesture.view as? VideoPreviewView else { return }
+            let location = gesture.location(in: view)
+            parent.touchPoint = location
+            let devicePoint = view.videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: location)
+            parent.onTap(devicePoint)
+        }
+        
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            if gesture.state == .began {
+                guard let view = gesture.view as? VideoPreviewView else { return }
+                let location = gesture.location(in: view)
+                parent.touchPoint = location
+                let devicePoint = view.videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: location)
+                parent.onLongPress(devicePoint)
+            }
+        }
+        
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            let translation = gesture.translation(in: gesture.view)
+            // Vertical movement controls exposure
+            parent.onPan(-translation.y) 
+            gesture.setTranslation(.zero, in: gesture.view)
+        }
+    }
+}
+
+struct CameraGridOverlay: View {
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                path.move(to: CGPoint(x: width/3, y: 0)); path.addLine(to: CGPoint(x: width/3, y: height))
+                path.move(to: CGPoint(x: 2*width/3, y: 0)); path.addLine(to: CGPoint(x: 2*width/3, y: height))
+                path.move(to: CGPoint(x: 0, y: height/3)); path.addLine(to: CGPoint(x: width, y: height/3))
+                path.move(to: CGPoint(x: 0, y: 2*height/3)); path.addLine(to: CGPoint(x: width, y: 2*height/3))
+            }
+            .stroke(Color.white.opacity(0.5), lineWidth: 1)
+        }
+        .aspectRatio(3/4, contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - 3. GALLERY TAB & EDITOR
+struct GalleryView: View {
+    @StateObject private var library = PhotoLibraryManager.shared
+    @ObservedObject var tagManager = TagManager.shared
+    @State private var isSidebarOpen = false
+    @State private var selectedProcedureFolder: String? = nil
+    @State private var selectedFilterTags: Set<String> = []
+    @State private var isFilterDropdownOpen = false
+    
+    let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+    
+    var filteredAssets: [PHAsset] {
+        var assets = library.assets
+        if let folder = selectedProcedureFolder {
+            assets = assets.filter { tagManager.getProcedure(for: $0.localIdentifier) == folder }
+        }
+        if !selectedFilterTags.isEmpty {
+            assets = assets.filter { asset in
+                let assetTags = Set(tagManager.getOtherTags(for: asset.localIdentifier))
+                return !selectedFilterTags.isDisjoint(with: assetTags)
+            }
+        }
+        return assets
+    }
+    
+    func countForTag(_ tag: String) -> Int {
+        var assets = library.assets
+        if let folder = selectedProcedureFolder {
+            assets = assets.filter { tagManager.getProcedure(for: $0.localIdentifier) == folder }
+        }
+        return assets.filter { tagManager.getOtherTags(for: $0.localIdentifier).contains(tag) }.count
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack(alignment: .leading) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                            Image(systemName: "sidebar.left").font(.title2).foregroundColor(.blue)
+                        }
+                        Button(action: { withAnimation { isFilterDropdownOpen.toggle() } }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.title2).foregroundColor(selectedFilterTags.isEmpty ? .white : .blue)
+                                if !selectedFilterTags.isEmpty {
+                                    Text("\(selectedFilterTags.count)").font(.caption2).bold().padding(5).background(Color.blue).foregroundColor(.white).clipShape(Circle())
+                                }
+                            }
+                        }.padding(.leading, 10)
+                        Spacer()
+                    }.padding().background(Color.black).zIndex(20)
+                    
+                    ZStack(alignment: .topLeading) {
+                        VStack(spacing: 0) {
+                            if let folder = selectedProcedureFolder {
+                                HStack {
+                                    Text(folder).font(.headline).foregroundColor(.white)
+                                    Spacer()
+                                    Text("\(filteredAssets.count) items").font(.caption).foregroundColor(.gray)
+                                }.padding(.horizontal).padding(.bottom, 5).background(Color.black)
+                            }
+                            ScrollView {
+                                if filteredAssets.isEmpty {
+                                    VStack(spacing: 20) {
+                                        Image(systemName: "folder").font(.system(size: 50)).foregroundColor(.gray)
+                                        Text("Empty Folder").foregroundColor(.gray)
+                                    }.padding(.top, 100)
+                                } else {
+                                    LazyVGrid(columns: columns, spacing: 15) {
+                                        ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                                AssetThumbnail(asset: asset).frame(height: 120).clipped()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if isFilterDropdownOpen { filterDropdownView.padding(.leading, 50).padding(.top, 0).zIndex(30) }
+                    }
+                }.offset(x: isSidebarOpen ? 200 : 0)
+                
+                if isSidebarOpen {
+                    HStack(spacing: 0) {
+                        VStack(alignment: .leading) {
+                            Text("Procedures").font(.title3).bold().foregroundColor(.white).padding(.top, 50).padding(.leading)
+                            Button(action: { selectedProcedureFolder = nil; withAnimation { isSidebarOpen = false } }) {
+                                HStack { Image(systemName: "square.grid.2x2"); Text("All Photos") }
+                                .foregroundColor(selectedProcedureFolder == nil ? .blue : .white).padding()
+                            }
+                            Divider().background(Color.gray)
+                            ScrollView {
+                                VStack(alignment: .leading) {
+                                    ForEach(tagManager.procedureTags, id: \.self) { folder in
+                                        Button(action: { selectedProcedureFolder = folder; withAnimation { isSidebarOpen = false } }) {
+                                            HStack { Image(systemName: "folder.fill"); Text(folder); Spacer() }
+                                            .padding()
+                                            .foregroundColor(selectedProcedureFolder == folder ? .blue : .white)
+                                            .background(selectedProcedureFolder == folder ? Color.white.opacity(0.1) : Color.clear)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer()
+                        }
+                        .frame(width: 200).background(Color(UIColor.systemGray6).opacity(0.95)).edgesIgnoringSafeArea(.vertical)
+                        Color.clear.contentShape(Rectangle()).onTapGesture { withAnimation { isSidebarOpen = false } }
+                    }.zIndex(2).transition(.move(edge: .leading))
+                }
+            }
+            .navigationBarHidden(true)
+            .onAppear { library.fetchAssets() }
+        }
+    }
+    
+    var filterDropdownView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Filter by Tags").font(.caption).bold().foregroundColor(.gray)
+            Divider().background(Color.gray)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(tagManager.otherTags, id: \.self) { tag in
+                        Button(action: {
+                            if selectedFilterTags.contains(tag) { selectedFilterTags.remove(tag) } else { selectedFilterTags.insert(tag) }
+                        }) {
+                            HStack {
+                                Image(systemName: selectedFilterTags.contains(tag) ? "checkmark.square.fill" : "square")
+                                    .foregroundColor(selectedFilterTags.contains(tag) ? .blue : .gray)
+                                Text("\(tag) (\(countForTag(tag)))").foregroundColor(.white)
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+            }.frame(maxHeight: 200)
+            if !selectedFilterTags.isEmpty {
+                Divider().background(Color.gray)
+                Button("Clear Filters") { selectedFilterTags.removeAll() }
+                    .font(.caption).foregroundColor(.red).frame(maxWidth: .infinity, alignment: .center)
+            }
+        }.padding().frame(width: 220).background(Color.black.opacity(0.95)).cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.5), lineWidth: 1)).shadow(radius: 10)
+    }
+}
+
+struct PhotoDetailView: View {
+    let asset: PHAsset
+    @State private var image: UIImage?
+    @State private var isEditing = false
+    @ObservedObject var tagManager = TagManager.shared
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                if let img = image { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit) }
+                else { ProgressView() }
+                
+                VStack(alignment: .leading, spacing: 5) {
+                    if let proc = tagManager.getProcedure(for: asset.localIdentifier) {
+                        Text(proc).font(.headline).foregroundColor(.blue)
+                    }
+                    let tags = tagManager.getOtherTags(for: asset.localIdentifier)
+                    if !tags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(tags, id: \.self) { tag in
+                                    Text(tag).font(.caption).padding(4).background(Color.orange.opacity(0.7)).cornerRadius(4)
+                                }
+                            }
+                        }
+                    }
+                }.padding().background(Color.black.opacity(0.5)).cornerRadius(10).padding()
+            }
+        }
+        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Edit") { isEditing = true } } }
+        .fullScreenCover(isPresented: $isEditing) { if let img = image { PhotoEditorView(inputImage: img) } }
+        .onAppear { PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in self.image = loadedImg } }
+    }
+}
+
+// MARK: - 4. ADVANCED PHOTO EDITOR
+struct PhotoEditorView: View {
+    let inputImage: UIImage
+    @State private var displayedImage: UIImage?
+    @State private var baseImage: UIImage? 
+    @Environment(\.presentationMode) var presentationMode
+    @State private var selectedTab = 0
+    @State private var brightness = 0.0
+    @State private var contrast = 1.0
+    @State private var saturation = 1.0
+    @State private var sharpness = 0.0
+    @State private var rotation = 0.0
+    private let context = CIContext()
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                Spacer()
+                if let img = displayedImage { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding() }
+                else { ProgressView() }
+                Spacer()
+                VStack(spacing: 20) {
+                    if selectedTab == 0 {
+                        HStack(spacing: 40) {
+                            Button(action: { rotateImage() }) { VStack { Image(systemName: "rotate.right").font(.title2); Text("Rotate").font(.caption) } }
+                            Button(action: { cropSquare() }) { VStack { Image(systemName: "crop").font(.title2); Text("Square").font(.caption) } }
+                        }.foregroundColor(.white).padding()
+                    } else {
+                        VStack(spacing: 15) {
+                            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
+                            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.5...1.5)
+                            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.0...2.0)
+                            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...10.0)
+                        }.padding(.horizontal)
+                    }
+                    Divider().background(Color.gray)
+                    HStack {
+                        Button(action: { selectedTab = 0 }) { VStack { Image(systemName: "crop.rotate"); Text("Transform").font(.caption2) } }
+                        .frame(maxWidth: .infinity).foregroundColor(selectedTab == 0 ? .blue : .gray)
+                        Button(action: { selectedTab = 1 }) { VStack { Image(systemName: "slider.horizontal.3"); Text("Adjust").font(.caption2) } }
+                        .frame(maxWidth: .infinity).foregroundColor(selectedTab == 1 ? .blue : .gray)
+                    }.padding(.top, 10)
+                }.padding(.bottom).background(Color(UIColor.secondarySystemBackground))
+            }
+            .navigationTitle("Edit").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } }
+                ToolbarItem(placement: .navigationBarTrailing) { Button("Save") { saveImage() } }
+            }
+            .onAppear { baseImage = inputImage; displayedImage = inputImage; applyProcessing() }
+            .onChange(of: brightness) { _ in applyProcessing() }
+            .onChange(of: contrast) { _ in applyProcessing() }
+            .onChange(of: saturation) { _ in applyProcessing() }
+            .onChange(of: sharpness) { _ in applyProcessing() }
+        }
+    }
+    
+    func applyProcessing() {
+        guard let currentDisplay = baseImage else { return }
+        let beginImage = CIImage(image: currentDisplay)
+        let exposureFilter = CIFilter.exposureAdjust(); exposureFilter.inputImage = beginImage; exposureFilter.ev = Float(brightness)
+        guard let exposureOutput = exposureFilter.outputImage else { return }
+        let colorFilter = CIFilter.colorControls(); colorFilter.inputImage = exposureOutput; colorFilter.brightness = 0; colorFilter.contrast = Float(contrast); colorFilter.saturation = Float(saturation)
+        guard let colorOutput = colorFilter.outputImage else { return }
+        let sharpFilter = CIFilter.sharpenLuminance(); sharpFilter.inputImage = colorOutput; sharpFilter.sharpness = Float(sharpness)
+        guard let finalOutput = sharpFilter.outputImage else { return }
+        if let cgimg = context.createCGImage(finalOutput, from: finalOutput.extent) {
+            let processed = UIImage(cgImage: cgimg, scale: currentDisplay.scale, orientation: currentDisplay.imageOrientation)
+            displayedImage = processed
+        }
+    }
+    
+    func rotateImage() { guard let img = baseImage else { return }; baseImage = img.rotated(by: Measurement(value: -90, unit: .degrees)); applyProcessing() }
+    func cropSquare() { guard let img = baseImage else { return }; baseImage = cropToSquare(image: img); applyProcessing() }
+    func saveImage() { if let final = displayedImage { PhotoLibraryManager.shared.save(image: final, procedure: nil, otherTags: []) }; presentationMode.wrappedValue.dismiss() }
+    func cropToSquare(image: UIImage) -> UIImage? {
+        let sideLength = min(image.size.width, image.size.height)
+        let xOffset = (image.size.width - sideLength) / 2.0; let yOffset = (image.size.height - sideLength) / 2.0
+        let cropRect = CGRect(x: xOffset, y: yOffset, width: sideLength, height: sideLength)
+        guard let cgImage = image.cgImage?.cropping(to: cropRect) else { return nil }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+}
+
+struct AdjustmentRow: View {
+    let icon: String; let label: String; @Binding var value: Double; let range: ClosedRange<Double>
+    var body: some View {
+        HStack { Image(systemName: icon).frame(width: 25); Text(label).font(.caption).frame(width: 50, alignment: .leading); Slider(value: $value, in: range) }.foregroundColor(.primary)
+    }
+}
+
+extension UIImage {
+    func rotated(by angle: Measurement<UnitAngle>) -> UIImage? {
+        let radians = CGFloat(angle.converted(to: .radians).value)
+        var newSize = CGRect(origin: CGPoint.zero, size: self.size).applying(CGAffineTransform(rotationAngle: radians)).size
+        newSize.width = floor(newSize.width); newSize.height = floor(newSize.height)
+        UIGraphicsBeginImageContextWithOptions(newSize, false, self.scale)
+        let context = UIGraphicsGetCurrentContext()!
+        context.translateBy(x: newSize.width/2, y: newSize.height/2); context.rotate(by: radians)
+        self.draw(in: CGRect(x: -self.size.width/2, y: -self.size.height/2, width: self.size.width, height: self.size.height))
+        let newImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext(); return newImage
+    }
+}
+
+// MARK: - 5. HELPERS
+struct CustomGhostPicker: View {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.presentationMode) var presentationMode
+    @StateObject private var library = PhotoLibraryManager.shared
+    let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 1) {
+                    ForEach(library.assets, id: \.localIdentifier) { asset in
+                        Button(action: { library.requestImage(for: asset) { image in self.selectedImage = image; presentationMode.wrappedValue.dismiss() } }) { AssetThumbnail(asset: asset).frame(height: 120).clipped() }
+                    }
+                }
+            }.navigationTitle("Select Ghost Reference").toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } } }.onAppear { library.fetchAssets() }
+        }
+    }
+}
+
+struct AssetThumbnail: View {
+    let asset: PHAsset
+    @State private var image: UIImage?
+    var body: some View {
+        Group { if let image = image { Image(uiImage: image).resizable().aspectRatio(contentMode: .fill) } else { Rectangle().fill(Color.gray.opacity(0.2)) } }
+        .onAppear { PhotoLibraryManager.shared.requestThumbnail(for: asset) { img in self.image = img } }
+    }
+}
+
+class PhotoLibraryManager: ObservableObject {
+    static let shared = PhotoLibraryManager()
+    @Published var assets: [PHAsset] = []
+    private let albumName = "Dental Portfolio"
+    
+    func createAlbumIfNeeded() {
+        let fetchOptions = PHFetchOptions(); fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
+        let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+        if collection.firstObject == nil {
+            PHPhotoLibrary.shared().performChanges({ PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: self.albumName) }, completionHandler: nil)
+        }
+    }
+    
+    func save(image: UIImage, procedure: String?, otherTags: [String]) {
+        createAlbumIfNeeded()
+        var placeholder: PHObjectPlaceholder?
+        PHPhotoLibrary.shared().performChanges({
+            let assetRequest = PHAssetCreationRequest.creationRequestForAsset(from: image)
+            placeholder = assetRequest.placeholderForCreatedAsset
+            let fetchOptions = PHFetchOptions(); fetchOptions.predicate = NSPredicate(format: "title = %@", self.albumName)
+            let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+            guard let album = collection.firstObject, let albumChangeRequest = PHAssetCollectionChangeRequest(for: album), let assetPlaceholder = placeholder else { return }
+            albumChangeRequest.addAssets([assetPlaceholder] as NSArray)
+        }) { success, error in
+            if success, let id = placeholder?.localIdentifier {
+                DispatchQueue.main.async { TagManager.shared.assign(procedure: procedure, otherTags: otherTags, to: id); self.fetchAssets() }
+            }
+        }
+    }
+    
+    func fetchAssets() {
+        let fetchOptions = PHFetchOptions(); fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
+        let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+        guard let album = collection.firstObject else { return }
+        let assetsFetch = PHAsset.fetchAssets(in: album, options: nil)
+        var newAssets: [PHAsset] = []; assetsFetch.enumerateObjects { asset, _, _ in newAssets.append(asset) }
+        DispatchQueue.main.async { self.assets = newAssets.reversed() }
+    }
+    
+    func requestThumbnail(for asset: PHAsset, completion: @escaping (UIImage?) -> Void) {
+        let manager = PHImageManager.default()
+        let options = PHImageRequestOptions(); options.isSynchronous = false; options.deliveryMode = .opportunistic
+        manager.requestImage(for: asset, targetSize: CGSize(width: 200, height: 200), contentMode: .aspectFill, options: options) { img, _ in completion(img) }
+    }
+    
+    func requestImage(for asset: PHAsset, completion: @escaping (UIImage?) -> Void) {
+        let manager = PHImageManager.default()
+        let options = PHImageRequestOptions(); options.isSynchronous = false; options.deliveryMode = .highQualityFormat
+        manager.requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { img, _ in completion(img) }
+    }
+}
