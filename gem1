@@ -524,6 +524,12 @@ struct DentalCameraSetupView: View {
     @State private var currentMetadata = PhotoMetadata()
     @State private var isInfoPillOpen = false
     @ObservedObject var metadataManager = MetadataManager.shared
+
+    // Photo Preview State
+    @State private var lastSavedPhoto: UIImage? = nil
+    @State private var showSaveAnimation = false
+    @State private var animatingPhoto: UIImage? = nil
+    @State private var showSuccessMessage = false
     
     // Computed property for visual slider position
     // Maps actual exposure bias [min, max] to visual slider height [-70, 70]
@@ -782,18 +788,42 @@ struct DentalCameraSetupView: View {
                         Button(action: { cameraService.retake() }) {
                             Text("Retake")
                                 .font(.headline)
-                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                                .frame(width: 120, height: 50)
                         }
                         .background(Color.black.opacity(0.6))
                         .foregroundColor(.white).cornerRadius(10)
-                        
+
                         Button(action: {
+                            // Trigger save animation
+                            animatingPhoto = captured
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                showSaveAnimation = true
+                            }
+
+                            // Save the photo
                             PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
-                            cameraService.retake()
+
+                            // After animation, update preview and show success
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                lastSavedPhoto = captured
+                                showSaveAnimation = false
+                                animatingPhoto = nil
+                                cameraService.retake()
+
+                                // Show success message
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showSuccessMessage = true
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showSuccessMessage = false
+                                    }
+                                }
+                            }
                         }) {
                             Text("Use Photo")
                                 .font(.headline)
-                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                                .frame(width: 120, height: 50)
                         }
                         .background(Color.blue)
                         .foregroundColor(.white).cornerRadius(10)
@@ -806,17 +836,17 @@ struct DentalCameraSetupView: View {
                         if ghostImage != nil {
                             VStack {
                                 Slider(value: $ghostOpacity, in: 0.1...0.8).accentColor(.blue).frame(width: 200)
-                                Spacer().frame(height: 180) // Moved up to clear shutter
+                                Spacer().frame(height: 180)
                             }
                         }
-                        
+
                         // Shutter Button (Center)
-                        Button(action: { 
+                        Button(action: {
                             withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 withAnimation { showShutterEffect = false }
                             }
-                            cameraService.takePhoto() 
+                            cameraService.takePhoto()
                         }) {
                             ZStack {
                                 Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
@@ -824,10 +854,12 @@ struct DentalCameraSetupView: View {
                             }
                         }
                         .padding(.bottom, 100)
-                        
-                        // Flip Camera (Bottom Right)
+
+                        // Bottom row: Flip Camera and Photo Preview
                         HStack {
                             Spacer()
+
+                            // Flip Camera Button
                             Button(action: { cameraService.flipCamera() }) {
                                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                                     .font(.title2)
@@ -836,14 +868,84 @@ struct DentalCameraSetupView: View {
                                     .clipShape(Circle())
                                     .foregroundColor(.white)
                             }
-                            .padding(.trailing, 30)
-                            .padding(.bottom, 60)
+                            .padding(.trailing, 15)
+
+                            // Last Photo Preview
+                            if let lastPhoto = lastSavedPhoto {
+                                NavigationLink(destination: GalleryView()) {
+                                    Image(uiImage: lastPhoto)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.white, lineWidth: 2)
+                                        )
+                                }
+                                .padding(.trailing, 20)
+                            } else {
+                                // Placeholder when no photo saved yet
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 50, height: 50)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .foregroundColor(.gray)
+                                    )
+                                    .padding(.trailing, 20)
+                            }
                         }
+                        .padding(.bottom, 60)
                     }
                 }
             }
-            .zIndex(2) // Ensure controls are above the captured image
-            
+            .zIndex(2)
+
+            // Success message overlay
+            if showSuccessMessage {
+                VStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.white)
+                        Text("Photo stored successfully")
+                            .font(.caption).bold()
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.green)
+                    .cornerRadius(20)
+                    .shadow(radius: 5)
+
+                    Spacer()
+                }
+                .padding(.top, 120)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(25)
+            }
+
+            // Save animation overlay
+            if showSaveAnimation, let photo = animatingPhoto {
+                GeometryReader { geo in
+                    Image(uiImage: photo)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(
+                            width: showSaveAnimation ? 50 : geo.size.width,
+                            height: showSaveAnimation ? 50 : geo.size.height
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: showSaveAnimation ? 8 : 0))
+                        .position(
+                            x: showSaveAnimation ? geo.size.width - 45 : geo.size.width / 2,
+                            y: showSaveAnimation ? geo.size.height - 85 : geo.size.height / 2
+                        )
+                        .opacity(showSaveAnimation ? 0.8 : 1.0)
+                }
+                .ignoresSafeArea()
+                .zIndex(15)
+            }
+
             // SHUTTER EFFECT FLASH
             if showShutterEffect {
                 Color.black.ignoresSafeArea().zIndex(20)
@@ -1110,6 +1212,13 @@ struct PhotoInfoPillView: View {
     @State private var selectedToothDate: Date = Date()
     @State private var showNewToothEntry: Bool = false
 
+    private let stageColors: [PhotoInfoStage: Color] = [
+        .procedure: .blue,
+        .tooth: .green,
+        .stage: .orange,
+        .angle: .purple
+    ]
+
     var body: some View {
         VStack(spacing: 0) {
             // Main pill button
@@ -1183,20 +1292,38 @@ struct PhotoInfoPillView: View {
 
     var dropdownContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Stage indicator
-            HStack(spacing: 4) {
-                ForEach(0..<4) { i in
-                    Circle()
-                        .fill(i <= currentStage.rawValue ? Color.blue : Color.gray.opacity(0.3))
-                        .frame(width: 6, height: 6)
+            // Horizontal stage tabs
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach([PhotoInfoStage.procedure, .tooth, .stage, .angle], id: \.self) { stage in
+                        Button(action: {
+                            withAnimation { currentStage = stage }
+                        }) {
+                            VStack(spacing: 4) {
+                                Text(stageName(for: stage))
+                                    .font(.caption2).bold()
+                                    .foregroundColor(currentStage == stage ? .white : .gray)
+
+                                // Show current value if set
+                                Text(stageValue(for: stage))
+                                    .font(.system(size: 9))
+                                    .foregroundColor(stageColor(for: stage))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(currentStage == stage ? stageColor(for: stage) : Color.clear, lineWidth: 1)
+                            )
+                        }
+                    }
                 }
-                Spacer()
-                Text(currentStage.prompt)
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
 
             Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 8)
 
@@ -1220,23 +1347,55 @@ struct PhotoInfoPillView: View {
             }
             .frame(maxHeight: 200)
 
-            // Back button (if not on first stage)
-            if currentStage.rawValue > 0 {
-                Divider().background(Color.gray.opacity(0.3))
-                Button(action: { goToPreviousStage() }) {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
+            Divider().background(Color.gray.opacity(0.3))
+
+            // Bottom buttons
+            HStack {
+                // Clear all button
+                Button(action: { clearAllMetadata() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark.circle")
+                        Text("Clear all")
                     }
                     .font(.caption)
-                    .foregroundColor(.blue)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .foregroundColor(.red)
+                }
+
+                Spacer()
+
+                // Navigation arrows
+                if currentStage.rawValue > 0 {
+                    Button(action: {
+                        withAnimation {
+                            if let prev = PhotoInfoStage(rawValue: currentStage.rawValue - 1) {
+                                currentStage = prev
+                            }
+                        }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+
+                if currentStage.rawValue < 3 {
+                    Button(action: {
+                        withAnimation {
+                            if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
+                                currentStage = next
+                            }
+                        }
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .frame(width: 260)
+        .frame(width: 280)
         .background(Color.black.opacity(0.95))
         .cornerRadius(12)
         .overlay(
@@ -1244,6 +1403,49 @@ struct PhotoInfoPillView: View {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .onAppear { updateCurrentStage() }
+    }
+
+    func stageName(for stage: PhotoInfoStage) -> String {
+        switch stage {
+        case .procedure: return "Procedure"
+        case .tooth: return "Tooth"
+        case .stage: return "Stage"
+        case .angle: return "Angle"
+        case .complete: return ""
+        }
+    }
+
+    func stageValue(for stage: PhotoInfoStage) -> String {
+        switch stage {
+        case .procedure: return metadata.procedure ?? "Not set"
+        case .tooth: return metadata.toothNumber != nil ? "#\(metadata.toothNumber!)" : "Not set"
+        case .stage: return metadata.stage ?? "Not set"
+        case .angle: return metadata.angle ?? "Not set"
+        case .complete: return ""
+        }
+    }
+
+    func stageColor(for stage: PhotoInfoStage) -> Color {
+        switch stage {
+        case .procedure: return metadata.procedure != nil ? .blue : .gray
+        case .tooth: return metadata.toothNumber != nil ? .green : .gray
+        case .stage: return metadata.stage != nil ? .orange : .gray
+        case .angle: return metadata.angle != nil ? .purple : .gray
+        case .complete: return .gray
+        }
+    }
+
+    func clearAllMetadata() {
+        withAnimation {
+            metadata.procedure = nil
+            metadata.toothNumber = nil
+            metadata.toothDate = nil
+            metadata.stage = nil
+            metadata.angle = nil
+            metadata.rating = nil
+            currentStage = .procedure
+            showNewToothEntry = false
+        }
     }
 
     // MARK: - Stage 1: Procedure Selection
@@ -1346,45 +1548,23 @@ struct PhotoInfoPillView: View {
 
     var newToothEntryForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Tooth number picker
+            // Tooth number picker - Wheel style
             VStack(alignment: .leading, spacing: 4) {
-                Text("Tooth Number (1-32)")
+                Text("Tooth Number")
                     .font(.caption2)
                     .foregroundColor(.gray)
 
-                HStack {
-                    Button(action: { if selectedToothNumber > 1 { selectedToothNumber -= 1 } }) {
-                        Image(systemName: "minus.circle")
-                            .foregroundColor(.white)
+                Picker("Tooth", selection: $selectedToothNumber) {
+                    ForEach(1...32, id: \.self) { num in
+                        Text("Tooth #\(num)")
+                            .tag(num)
                     }
-
-                    Text("\(selectedToothNumber)")
-                        .font(.title3).bold()
-                        .foregroundColor(.white)
-                        .frame(width: 40)
-
-                    Button(action: { if selectedToothNumber < 32 { selectedToothNumber += 1 } }) {
-                        Image(systemName: "plus.circle")
-                            .foregroundColor(.white)
-                    }
-
-                    Spacer()
-
-                    // Quick select grid
-                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(20)), count: 8), spacing: 2) {
-                        ForEach(1...32, id: \.self) { num in
-                            Button(action: { selectedToothNumber = num }) {
-                                Text("\(num)")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(selectedToothNumber == num ? .black : .white)
-                                    .frame(width: 18, height: 18)
-                                    .background(selectedToothNumber == num ? Color.green : Color.gray.opacity(0.3))
-                                    .cornerRadius(3)
-                            }
-                        }
-                    }
-                    .frame(width: 140)
                 }
+                .pickerStyle(.wheel)
+                .frame(height: 100)
+                .clipped()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
             }
 
             // Date picker
