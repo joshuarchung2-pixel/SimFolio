@@ -881,30 +881,24 @@ struct ZoomDialView: View {
     let minZoom: CGFloat
     let maxZoom: CGFloat
 
-    var normalizedZoom: CGFloat {
-        // Normalize zoom to 0-1 range
-        guard maxZoom > minZoom else { return 0 }
-        return (currentZoom - minZoom) / (maxZoom - minZoom)
-    }
+    // Fixed display range from 1x to 10x
+    private let displayMin: CGFloat = 1.0
+    private let displayMax: CGFloat = 10.0
 
     // Total width of the tick strip content
-    private let stripContentWidth: CGFloat = 400
+    private let stripContentWidth: CGFloat = 450
     // Visible width (2/3 of typical screen width ~250pt)
     private let visibleWidth: CGFloat = 250
 
-    // Actual zoom values to display as labels
-    private let zoomLabels: [CGFloat] = [1, 2, 3, 5, 10]
+    var normalizedZoom: CGFloat {
+        // Normalize current zoom to 0-1 range based on display range (1-10)
+        let clamped = min(max(currentZoom, displayMin), displayMax)
+        return (clamped - displayMin) / (displayMax - displayMin)
+    }
 
     var scrollOffset: CGFloat {
         // Scroll from right to left as zoom increases
         return -normalizedZoom * (stripContentWidth - visibleWidth)
-    }
-
-    // Get tick index for a specific zoom value
-    func tickIndexForZoom(_ zoom: CGFloat) -> Int {
-        guard maxZoom > minZoom else { return 0 }
-        let normalized = (zoom - minZoom) / (maxZoom - minZoom)
-        return Int(normalized * 80)
     }
 
     var body: some View {
@@ -916,13 +910,12 @@ struct ZoomDialView: View {
 
             // Horizontal strip with tick marks
             ZStack {
-                // Tick marks strip that scrolls
+                // Tick marks strip that scrolls - 90 ticks for 1-10 range (10 per integer)
                 HStack(spacing: 0) {
-                    ForEach(0..<81) { i in
-                        // Check if this tick should show a zoom label
-                        let zoomLabelForTick = zoomLabels.first { tickIndexForZoom($0) == i && $0 >= minZoom && $0 <= maxZoom }
-                        let isMainTick = zoomLabelForTick != nil
-                        let isMidTick = i % 5 == 0 && !isMainTick
+                    ForEach(0..<91) { i in
+                        // Each 10 ticks = 1 zoom level (0=1x, 10=2x, 20=3x, ... 90=10x)
+                        let isMainTick = i % 10 == 0  // Integer zoom values
+                        let isMidTick = i % 5 == 0 && !isMainTick  // Half-integer values
                         let tickHeight: CGFloat = isMainTick ? 16 : (isMidTick ? 10 : 6)
                         let tickWidth: CGFloat = isMainTick ? 2 : 1
 
@@ -931,9 +924,10 @@ struct ZoomDialView: View {
                                 .fill(Color.white)
                                 .frame(width: tickWidth, height: tickHeight)
 
-                            // Show zoom labels at positions matching actual zoom values
-                            if let zoomValue = zoomLabelForTick {
-                                Text(String(format: "%.0f", zoomValue))
+                            // Show zoom labels at integer values (1, 2, 3, ... 10)
+                            if isMainTick {
+                                let zoomValue = Int(displayMin) + (i / 10)
+                                Text("\(zoomValue)")
                                     .font(.system(size: 8, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                             }
