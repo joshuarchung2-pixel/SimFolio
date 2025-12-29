@@ -531,7 +531,7 @@ struct DentalCameraSetupView: View {
                             maxZoom: cameraService.maxZoom
                         )
                         .transition(.opacity.combined(with: .scale))
-                        .padding(.bottom, 150)
+                        .padding(.bottom, 220)
                     }
                     .allowsHitTesting(false)
                 }
@@ -898,10 +898,10 @@ struct ZoomDialView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.yellow)
 
             // Horizontal strip with tick marks
@@ -911,10 +911,10 @@ struct ZoomDialView: View {
                     ForEach(0..<81) { i in
                         let isMainTick = i % 10 == 0
                         let isMidTick = i % 5 == 0 && !isMainTick
-                        let tickHeight: CGFloat = isMainTick ? 20 : (isMidTick ? 14 : 8)
+                        let tickHeight: CGFloat = isMainTick ? 16 : (isMidTick ? 10 : 6)
                         let tickWidth: CGFloat = isMainTick ? 2 : 1
 
-                        VStack(spacing: 2) {
+                        VStack(spacing: 1) {
                             Rectangle()
                                 .fill(Color.white)
                                 .frame(width: tickWidth, height: tickHeight)
@@ -923,7 +923,7 @@ struct ZoomDialView: View {
                             if isMainTick {
                                 let zoomValue = minZoom + (maxZoom - minZoom) * CGFloat(i) / 80.0
                                 Text(zoomValue < 10 ? String(format: "%.0f", zoomValue) : String(format: "%.0f", zoomValue))
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(.system(size: 8, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                         }
@@ -955,19 +955,19 @@ struct ZoomDialView: View {
                 VStack(spacing: 0) {
                     Triangle()
                         .fill(Color.yellow)
-                        .frame(width: 10, height: 8)
+                        .frame(width: 8, height: 6)
                     Rectangle()
                         .fill(Color.yellow)
-                        .frame(width: 2, height: 24)
+                        .frame(width: 2, height: 18)
                 }
             }
-            .frame(width: visibleWidth, height: 50)
+            .frame(width: visibleWidth, height: 38)
             .clipped()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
         .background(Color.black.opacity(0.6))
-        .cornerRadius(12)
+        .cornerRadius(10)
     }
 }
 
