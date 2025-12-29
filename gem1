@@ -450,18 +450,36 @@ struct DentalCameraSetupView: View {
                     
                     // Native-Style Exposure Slider
                     if showFocusSquare || isAELocked {
-                        Rectangle()
-                            .fill(Color.yellow)
-                            .frame(width: 1, height: 140)
-                            .offset(x: 65)
-                            .shadow(radius: 1)
-                            .opacity(0.8)
-                        
+                        // Line above sun icon
+                        let sunY = -exposureVisualOffset
+                        let topLineHeight = max(0, 70 + sunY - 12) // From top (-70) to just above sun
+                        let bottomLineHeight = max(0, 70 - sunY - 12) // From just below sun to bottom (+70)
+
+                        // Top line segment (above sun)
+                        if topLineHeight > 0 {
+                            Rectangle()
+                                .fill(Color.yellow)
+                                .frame(width: 1, height: topLineHeight)
+                                .offset(x: 65, y: -70 + topLineHeight / 2)
+                                .shadow(radius: 1)
+                                .opacity(0.8)
+                        }
+
+                        // Bottom line segment (below sun)
+                        if bottomLineHeight > 0 {
+                            Rectangle()
+                                .fill(Color.yellow)
+                                .frame(width: 1, height: bottomLineHeight)
+                                .offset(x: 65, y: 70 - bottomLineHeight / 2)
+                                .shadow(radius: 1)
+                                .opacity(0.8)
+                        }
+
                         Image(systemName: "sun.max.fill")
                             .font(.system(size: 20))
                             .foregroundColor(.yellow)
                             .shadow(radius: 2)
-                            .offset(x: 65, y: -exposureVisualOffset)
+                            .offset(x: 65, y: sunY)
                     }
                 }
                 .position(loc)
@@ -893,43 +911,43 @@ struct ZoomDialView: View {
                 // Semi-transparent background arc
                 SemiCircle()
                     .fill(Color.black.opacity(0.7))
-                    .frame(width: 200, height: 100)
+                    .frame(width: 220, height: 110)
 
-                // Rotating wheel with tick marks
+                // Rotating wheel with tick marks - full 360° circle so no gaps when rotating
                 ZStack {
-                    // Tick marks around the semicircle - spread across 180°
-                    ForEach(0..<37) { i in
-                        let angle = Double(i) * 5 - 90 // -90° to +90° range (180° total)
+                    // Tick marks around the full circle
+                    ForEach(0..<72) { i in
+                        let angle = Double(i) * 5 // Full 360° circle
                         let isMainTick = i % 6 == 0
-                        let tickLength: CGFloat = isMainTick ? 14 : 7
-                        let tickWidth: CGFloat = isMainTick ? 2.5 : 1
+                        let tickLength: CGFloat = isMainTick ? 12 : 6
+                        let tickWidth: CGFloat = isMainTick ? 2 : 1
 
                         Rectangle()
                             .fill(Color.white)
                             .frame(width: tickWidth, height: tickLength)
-                            .offset(y: -85)
+                            .offset(y: -42) // Moved down to fit within background
                             .rotationEffect(.degrees(angle))
                     }
 
-                    // Zoom level numbers on the dial
+                    // Zoom level numbers on the dial - positioned around full circle
                     let zoomLabels: [(value: String, angle: Double)] = [
-                        ("1", -90),
-                        ("3", -45),
-                        ("5", 0),
-                        ("10", 90),
+                        ("1", 0),
+                        ("3", 45),
+                        ("5", 90),
+                        ("10", 180),
                     ]
                     ForEach(zoomLabels, id: \.value) { label in
                         Text(label.value)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white)
-                            .offset(y: -68)
+                            .offset(y: -28)
                             .rotationEffect(.degrees(-label.angle - rotationAngle), anchor: .center) // Keep text upright
                             .rotationEffect(.degrees(label.angle))
                     }
                 }
                 .rotationEffect(.degrees(rotationAngle)) // Rotate the entire wheel
             }
-            .frame(width: 200, height: 100)
+            .frame(width: 220, height: 110)
             .clipped() // Clip to show only top half
         }
         .padding(.horizontal)
