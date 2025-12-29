@@ -1347,24 +1347,21 @@ struct PhotoInfoPillView: View {
 
     @ViewBuilder
     var currentStageContentView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                switch currentStage {
-                case .procedure:
-                    procedureStageContent
-                case .tooth:
-                    toothStageContent
-                case .stage:
-                    stageStageContent
-                case .angle:
-                    angleStageContent
-                case .complete:
-                    EmptyView()
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            switch currentStage {
+            case .procedure:
+                procedureStageContent
+            case .tooth:
+                toothStageContent
+            case .stage:
+                stageStageContent
+            case .angle:
+                angleStageContent
+            case .complete:
+                EmptyView()
             }
-            .padding(.horizontal, 8)
         }
-        .frame(maxHeight: 200)
+        .padding(.horizontal, 8)
     }
 
     var bottomButtonsView: some View {
@@ -1559,23 +1556,34 @@ struct PhotoInfoPillView: View {
 
     var newToothEntryForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Tooth number picker - Wheel style
+            // Tooth number picker - Static label with number wheel
             VStack(alignment: .leading, spacing: 4) {
-                Text("Tooth Number")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                HStack(spacing: 0) {
+                    Text("Tooth #")
+                        .font(.title3).bold()
+                        .foregroundColor(.white)
 
-                Picker("Tooth", selection: $selectedToothNumber) {
-                    ForEach(1...32, id: \.self) { num in
-                        Text("Tooth #\(num)")
-                            .tag(num)
+                    Picker("", selection: $selectedToothNumber) {
+                        ForEach(1...32, id: \.self) { num in
+                            Text("\(num)")
+                                .tag(num)
+                        }
                     }
+                    .pickerStyle(.wheel)
+                    .frame(width: 60, height: 80)
+                    .clipped()
+
+                    Spacer()
                 }
-                .pickerStyle(.wheel)
-                .frame(height: 100)
-                .clipped()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
+
+                // Tooth name display
+                Text(toothName(for: selectedToothNumber))
+                    .font(.caption)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.15))
+                    .cornerRadius(4)
             }
 
             // Date picker
@@ -1615,6 +1623,44 @@ struct PhotoInfoPillView: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    func toothName(for number: Int) -> String {
+        switch number {
+        case 1: return "Maxillary Right 3rd Molar"
+        case 2: return "Maxillary Right 2nd Molar"
+        case 3: return "Maxillary Right 1st Molar"
+        case 4: return "Maxillary Right 2nd Premolar"
+        case 5: return "Maxillary Right 1st Premolar"
+        case 6: return "Maxillary Right Canine"
+        case 7: return "Maxillary Right Lateral Incisor"
+        case 8: return "Maxillary Right Central Incisor"
+        case 9: return "Maxillary Left Central Incisor"
+        case 10: return "Maxillary Left Lateral Incisor"
+        case 11: return "Maxillary Left Canine"
+        case 12: return "Maxillary Left 1st Premolar"
+        case 13: return "Maxillary Left 2nd Premolar"
+        case 14: return "Maxillary Left 1st Molar"
+        case 15: return "Maxillary Left 2nd Molar"
+        case 16: return "Maxillary Left 3rd Molar"
+        case 17: return "Mandibular Left 3rd Molar"
+        case 18: return "Mandibular Left 2nd Molar"
+        case 19: return "Mandibular Left 1st Molar"
+        case 20: return "Mandibular Left 2nd Premolar"
+        case 21: return "Mandibular Left 1st Premolar"
+        case 22: return "Mandibular Left Canine"
+        case 23: return "Mandibular Left Lateral Incisor"
+        case 24: return "Mandibular Left Central Incisor"
+        case 25: return "Mandibular Right Central Incisor"
+        case 26: return "Mandibular Right Lateral Incisor"
+        case 27: return "Mandibular Right Canine"
+        case 28: return "Mandibular Right 1st Premolar"
+        case 29: return "Mandibular Right 2nd Premolar"
+        case 30: return "Mandibular Right 1st Molar"
+        case 31: return "Mandibular Right 2nd Molar"
+        case 32: return "Mandibular Right 3rd Molar"
+        default: return "Unknown"
+        }
     }
 
     // MARK: - Stage 3: Stage Selection (Preparation/Restoration)
