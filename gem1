@@ -101,6 +101,11 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     @Published var minExposure: Float = -2.0
     @Published var maxExposure: Float = 2.0
     @Published var flashMode: AVCaptureDevice.FlashMode = .off
+
+    // Zoom State
+    @Published var currentZoom: CGFloat = 1.0
+    @Published var minZoom: CGFloat = 1.0
+    @Published var maxZoom: CGFloat = 10.0
     
     private let output = AVCapturePhotoOutput()
     private var videoInput: AVCaptureDeviceInput?
@@ -137,6 +142,13 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                     self.minExposure = device.minExposureTargetBias
                     self.maxExposure = device.maxExposureTargetBias
                     self.currentExposure = 0.0
+                }
+
+                // Initialize Zoom Limits
+                DispatchQueue.main.async {
+                    self.minZoom = device.minAvailableVideoZoomFactor
+                    self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
+                    self.currentZoom = device.videoZoomFactor
                 }
             }
             self.session.commitConfiguration()
@@ -202,14 +214,31 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             try device.lockForConfiguration()
             let newBias = max(device.minExposureTargetBias, min(device.maxExposureTargetBias, currentExposure + delta))
             device.setExposureTargetBias(newBias, completionHandler: nil)
-            
+
             DispatchQueue.main.async {
                 self.currentExposure = newBias
             }
-            
+
             device.unlockForConfiguration()
         } catch {
             print("Failed to set exposure: \(error)")
+        }
+    }
+
+    func setZoom(factor: CGFloat) {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            let clampedZoom = max(device.minAvailableVideoZoomFactor, min(min(device.maxAvailableVideoZoomFactor, 10.0), factor))
+            device.videoZoomFactor = clampedZoom
+
+            DispatchQueue.main.async {
+                self.currentZoom = clampedZoom
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to set zoom: \(error)")
         }
     }
     
@@ -257,6 +286,9 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 self.minExposure = device.minExposureTargetBias
                 self.maxExposure = device.maxExposureTargetBias
                 self.currentExposure = 0.0
+                self.minZoom = device.minAvailableVideoZoomFactor
+                self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
+                self.currentZoom = device.videoZoomFactor
             }
         }
         
@@ -282,6 +314,11 @@ struct DentalCameraSetupView: View {
     @State private var showFocusSquare = false
     @State private var isAELocked = false
     @State private var showShutterEffect = false
+
+    // Zoom State
+    @State private var baseZoomFactor: CGFloat = 1.0
+    @State private var showZoomDial = false
+    @State private var zoomDialTimer: DispatchWorkItem?
     
     // Dual Tagging State
     @State private var selectedProcedure: String? = nil
@@ -309,6 +346,7 @@ struct DentalCameraSetupView: View {
                 session: cameraService.session,
                 onTap: { point in
                     isAELocked = false
+                    showFocusSquare = true
                     cameraService.focusAndExpose(at: point)
                 },
                 onLongPress: { point in
@@ -318,7 +356,29 @@ struct DentalCameraSetupView: View {
                     generator.notificationOccurred(.success)
                 },
                 onPan: { delta in
-                    cameraService.adjustExposure(delta: Float(delta) * 0.01)
+                    // Only allow exposure adjustment when focus box is visible
+                    if showFocusSquare || isAELocked {
+                        cameraService.adjustExposure(delta: Float(delta) * 0.005) // Reduced sensitivity by 50%
+                    }
+                },
+                onPinch: { scale in
+                    if scale == 0.0 {
+                        // Pinch gesture ended, update base zoom
+                        baseZoomFactor = cameraService.currentZoom
+                    } else {
+                        // Pinch gesture in progress
+                        let newZoom = baseZoomFactor * scale
+                        cameraService.setZoom(factor: newZoom)
+
+                        // Show zoom dial
+                        showZoomDial = true
+                        zoomDialTimer?.cancel()
+                        let workItem = DispatchWorkItem {
+                            withAnimation { showZoomDial = false }
+                        }
+                        zoomDialTimer = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
+                    }
                 },
                 touchPoint: $focusLocation
             )
@@ -393,6 +453,21 @@ struct DentalCameraSetupView: View {
                         .opacity(ghostOpacity).allowsHitTesting(false).ignoresSafeArea()
                 }
                 if showGrid { CameraGridOverlay().allowsHitTesting(false) }
+
+                // Zoom Dial
+                if showZoomDial {
+                    VStack {
+                        Spacer()
+                        ZoomDialView(
+                            currentZoom: cameraService.currentZoom,
+                            minZoom: cameraService.minZoom,
+                            maxZoom: cameraService.maxZoom
+                        )
+                        .transition(.opacity.combined(with: .scale))
+                        .padding(.bottom, 150)
+                    }
+                    .allowsHitTesting(false)
+                }
             }
             
             // 4. CONTROLS LAYER
@@ -636,6 +711,7 @@ struct CameraPreview: UIViewRepresentable {
     var onTap: (CGPoint) -> Void
     var onLongPress: (CGPoint) -> Void
     var onPan: (CGFloat) -> Void
+    var onPinch: (CGFloat) -> Void
     @Binding var touchPoint: CGPoint?
     
     class VideoPreviewView: UIView {
@@ -662,7 +738,11 @@ struct CameraPreview: UIViewRepresentable {
         // Pan Gesture (Vertical drag for exposure)
         let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
         view.addGestureRecognizer(pan)
-        
+
+        // Pinch Gesture (Zoom)
+        let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
+        view.addGestureRecognizer(pinch)
+
         return view
     }
     
@@ -672,8 +752,10 @@ struct CameraPreview: UIViewRepresentable {
     
     class Coordinator: NSObject {
         var parent: CameraPreview
+        var lastPinchScale: CGFloat = 1.0
+
         init(_ parent: CameraPreview) { self.parent = parent }
-        
+
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let view = gesture.view as? VideoPreviewView else { return }
             let location = gesture.location(in: view)
@@ -681,7 +763,7 @@ struct CameraPreview: UIViewRepresentable {
             let devicePoint = view.videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: location)
             parent.onTap(devicePoint)
         }
-        
+
         @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
             if gesture.state == .began {
                 guard let view = gesture.view as? VideoPreviewView else { return }
@@ -691,12 +773,23 @@ struct CameraPreview: UIViewRepresentable {
                 parent.onLongPress(devicePoint)
             }
         }
-        
+
         @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
             let translation = gesture.translation(in: gesture.view)
             // Vertical movement controls exposure
-            parent.onPan(-translation.y) 
+            parent.onPan(-translation.y)
             gesture.setTranslation(.zero, in: gesture.view)
+        }
+
+        @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            if gesture.state == .began {
+                lastPinchScale = 1.0
+            } else if gesture.state == .changed {
+                parent.onPinch(gesture.scale)
+                gesture.scale = 1.0
+            } else if gesture.state == .ended {
+                parent.onPinch(0.0) // Signal end of pinch with 0.0
+            }
         }
     }
 }
@@ -716,6 +809,65 @@ struct CameraGridOverlay: View {
         }
         .aspectRatio(3/4, contentMode: .fit)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct ZoomDialView: View {
+    let currentZoom: CGFloat
+    let minZoom: CGFloat
+    let maxZoom: CGFloat
+
+    var normalizedZoom: CGFloat {
+        // Normalize zoom to 0-1 range
+        guard maxZoom > minZoom else { return 0 }
+        return (currentZoom - minZoom) / (maxZoom - minZoom)
+    }
+
+    var rotationAngle: Double {
+        // Map zoom level to rotation angle (approximately -135° to +135° = 270° total range)
+        let minAngle: Double = -135
+        let maxAngle: Double = 135
+        return minAngle + (Double(normalizedZoom) * (maxAngle - minAngle))
+    }
+
+    var body: some View {
+        ZStack {
+            // Background dial with tick marks
+            ZStack {
+                // Outer circle
+                Circle()
+                    .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                    .frame(width: 100, height: 100)
+
+                // Tick marks around the circle
+                ForEach(0..<36) { i in
+                    let angle = Double(i) * 10 - 180
+                    let isMainTick = i % 3 == 0
+                    let tickLength: CGFloat = isMainTick ? 8 : 4
+                    let tickWidth: CGFloat = isMainTick ? 2 : 1
+                    let isInActiveRange = angle >= -135 && angle <= 135
+
+                    Rectangle()
+                        .fill(isInActiveRange ? Color.white : Color.white.opacity(0.3))
+                        .frame(width: tickWidth, height: tickLength)
+                        .offset(y: -46)
+                        .rotationEffect(.degrees(angle))
+                }
+
+                // Center text showing zoom value
+                Text(String(format: "%.1fx", currentZoom))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.yellow)
+
+                // Indicator line
+                Rectangle()
+                    .fill(Color.yellow)
+                    .frame(width: 2, height: 20)
+                    .offset(y: -40)
+                    .rotationEffect(.degrees(rotationAngle))
+            }
+        }
+        .padding()
     }
 }
 
