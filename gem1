@@ -796,7 +796,7 @@ struct DentalCameraSetupView: View {
                         Button(action: {
                             // Trigger save animation
                             animatingPhoto = captured
-                            withAnimation(.easeInOut(duration: 0.4)) {
+                            withAnimation(.spring(response: 0.8, dampingFraction: 0.75, blendDuration: 0.5)) {
                                 showSaveAnimation = true
                             }
 
@@ -804,11 +804,15 @@ struct DentalCameraSetupView: View {
                             PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
 
                             // After animation, update preview and show success
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
                                 lastSavedPhoto = captured
-                                showSaveAnimation = false
-                                animatingPhoto = nil
-                                cameraService.retake()
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    showSaveAnimation = false
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    animatingPhoto = nil
+                                    cameraService.retake()
+                                }
 
                                 // Show success message
                                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -928,19 +932,26 @@ struct DentalCameraSetupView: View {
             // Save animation overlay
             if showSaveAnimation, let photo = animatingPhoto {
                 GeometryReader { geo in
+                    let targetSize: CGFloat = showSaveAnimation ? 70 : geo.size.width
+                    let targetHeight: CGFloat = showSaveAnimation ? 70 : geo.size.height
+                    let targetX: CGFloat = showSaveAnimation ? 55 : geo.size.width / 2
+                    let targetY: CGFloat = showSaveAnimation ? geo.size.height - 95 : geo.size.height / 2
+                    let targetCorner: CGFloat = showSaveAnimation ? 12 : 0
+
                     Image(uiImage: photo)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(
-                            width: showSaveAnimation ? 50 : geo.size.width,
-                            height: showSaveAnimation ? 50 : geo.size.height
+                        .frame(width: targetSize, height: targetHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: targetCorner))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: targetCorner)
+                                .stroke(Color.white, lineWidth: showSaveAnimation ? 3 : 0)
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: showSaveAnimation ? 8 : 0))
-                        .position(
-                            x: showSaveAnimation ? 45 : geo.size.width / 2,
-                            y: showSaveAnimation ? geo.size.height - 85 : geo.size.height / 2
-                        )
-                        .opacity(showSaveAnimation ? 0.8 : 1.0)
+                        .shadow(color: .white.opacity(showSaveAnimation ? 0.6 : 0), radius: 15)
+                        .shadow(color: .blue.opacity(showSaveAnimation ? 0.4 : 0), radius: 20)
+                        .rotationEffect(.degrees(showSaveAnimation ? -5 : 0))
+                        .scaleEffect(showSaveAnimation ? 1.0 : 1.0)
+                        .position(x: targetX, y: targetY)
                 }
                 .ignoresSafeArea()
                 .zIndex(15)
