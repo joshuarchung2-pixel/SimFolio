@@ -887,84 +887,87 @@ struct ZoomDialView: View {
         return (currentZoom - minZoom) / (maxZoom - minZoom)
     }
 
-    var rotationAngle: Double {
-        // Map zoom level to rotation angle - wheel spins as zoom changes
-        // At min zoom, wheel is at 0°, at max zoom, wheel rotates -180°
-        return -Double(normalizedZoom) * 180
+    // Total width of the tick strip content
+    private let stripContentWidth: CGFloat = 400
+    // Visible width (2/3 of typical screen width ~250pt)
+    private let visibleWidth: CGFloat = 250
+
+    var scrollOffset: CGFloat {
+        // Scroll from right to left as zoom increases
+        return -normalizedZoom * (stripContentWidth - visibleWidth)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.yellow)
-                .padding(.bottom, 6)
 
-            // Stationary indicator triangle at top center
-            Triangle()
-                .fill(Color.yellow)
-                .frame(width: 10, height: 8)
-
-            // Half-circle dial that rotates
+            // Horizontal strip with tick marks
             ZStack {
-                // Semi-transparent background arc
-                SemiCircle()
-                    .fill(Color.black.opacity(0.7))
-                    .frame(width: 220, height: 110)
-
-                // Rotating wheel with tick marks - full 360° circle so no gaps when rotating
-                ZStack {
-                    // Tick marks around the full circle
-                    ForEach(0..<72) { i in
-                        let angle = Double(i) * 5 // Full 360° circle
-                        let isMainTick = i % 6 == 0
-                        let tickLength: CGFloat = isMainTick ? 12 : 6
+                // Tick marks strip that scrolls
+                HStack(spacing: 0) {
+                    ForEach(0..<81) { i in
+                        let isMainTick = i % 10 == 0
+                        let isMidTick = i % 5 == 0 && !isMainTick
+                        let tickHeight: CGFloat = isMainTick ? 20 : (isMidTick ? 14 : 8)
                         let tickWidth: CGFloat = isMainTick ? 2 : 1
 
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: tickWidth, height: tickLength)
-                            .offset(y: -42) // Moved down to fit within background
-                            .rotationEffect(.degrees(angle))
-                    }
+                        VStack(spacing: 2) {
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: tickWidth, height: tickHeight)
 
-                    // Zoom level numbers on the dial - positioned around full circle
-                    let zoomLabels: [(value: String, angle: Double)] = [
-                        ("1", 0),
-                        ("3", 45),
-                        ("5", 90),
-                        ("10", 180),
-                    ]
-                    ForEach(zoomLabels, id: \.value) { label in
-                        Text(label.value)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white)
-                            .offset(y: -28)
-                            .rotationEffect(.degrees(-label.angle - rotationAngle), anchor: .center) // Keep text upright
-                            .rotationEffect(.degrees(label.angle))
+                            // Show zoom labels at main ticks
+                            if isMainTick {
+                                let zoomValue = minZoom + (maxZoom - minZoom) * CGFloat(i) / 80.0
+                                Text(zoomValue < 10 ? String(format: "%.0f", zoomValue) : String(format: "%.0f", zoomValue))
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .frame(width: 5) // Spacing between ticks
                     }
                 }
-                .rotationEffect(.degrees(rotationAngle)) // Rotate the entire wheel
-            }
-            .frame(width: 220, height: 110)
-            .clipped() // Clip to show only top half
-        }
-        .padding(.horizontal)
-    }
-}
+                .offset(x: scrollOffset)
 
-// Semi-circle shape for background
-struct SemiCircle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addArc(center: CGPoint(x: rect.midX, y: rect.maxY),
-                    radius: rect.width / 2,
-                    startAngle: .degrees(180),
-                    endAngle: .degrees(0),
-                    clockwise: false)
-        path.closeSubpath()
-        return path
+                // Fade edges with gradient masks
+                HStack {
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.black, Color.black.opacity(0)]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 40)
+
+                    Spacer()
+
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.black.opacity(0), Color.black]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 40)
+                }
+
+                // Center indicator
+                VStack(spacing: 0) {
+                    Triangle()
+                        .fill(Color.yellow)
+                        .frame(width: 10, height: 8)
+                    Rectangle()
+                        .fill(Color.yellow)
+                        .frame(width: 2, height: 24)
+                }
+            }
+            .frame(width: visibleWidth, height: 50)
+            .clipped()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(12)
     }
 }
 
