@@ -897,8 +897,16 @@ struct ZoomDialView: View {
     }
 
     var scrollOffset: CGFloat {
-        // Scroll from right to left as zoom increases
-        return -normalizedZoom * (stripContentWidth - visibleWidth)
+        // Calculate offset so indicator aligns with correct tick
+        // At zoom 1.0 (normalizedZoom=0), tick 0 ("1" label) should be at center
+        // At zoom 10.0 (normalizedZoom=1), tick 90 ("10" label) should be at center
+        let tickSpacing: CGFloat = 5
+        let firstTickCenter: CGFloat = tickSpacing / 2  // 2.5pt
+        let lastTickCenter: CGFloat = 90 * tickSpacing + tickSpacing / 2  // 452.5pt
+        let tickRange = lastTickCenter - firstTickCenter  // 450pt
+
+        let targetTickPosition = firstTickCenter + normalizedZoom * tickRange
+        return (visibleWidth / 2) - targetTickPosition
     }
 
     var body: some View {
