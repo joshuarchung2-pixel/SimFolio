@@ -136,7 +136,7 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 self.videoInput = input
                 if self.session.canAddInput(input) { self.session.addInput(input) }
                 if self.session.canAddOutput(self.output) { self.session.addOutput(self.output) }
-                
+
                 // Initialize Exposure Limits
                 DispatchQueue.main.async {
                     self.minExposure = device.minExposureTargetBias
@@ -150,9 +150,32 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                     self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
                     self.currentZoom = device.videoZoomFactor
                 }
+
+                // Enable continuous auto-focus by default
+                self.enableContinuousAutoFocus()
             }
             self.session.commitConfiguration()
             self.session.startRunning()
+        }
+    }
+
+    // Enable continuous auto-focus and auto-exposure
+    func enableContinuousAutoFocus() {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to enable continuous auto-focus: \(error)")
         }
     }
     
@@ -290,8 +313,10 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
                 self.currentZoom = device.videoZoomFactor
             }
+            // Re-enable continuous auto-focus for the new camera
+            enableContinuousAutoFocus()
         }
-        
+
         session.commitConfiguration()
     }
 }
@@ -367,7 +392,11 @@ struct DentalCameraSetupView: View {
                         if !isAELocked {
                             focusSquareTimer?.cancel()
                             let workItem = DispatchWorkItem {
-                                if !isAELocked { withAnimation { showFocusSquare = false } }
+                                if !isAELocked {
+                                    withAnimation { showFocusSquare = false }
+                                    // Re-enable continuous auto-focus after focus box disappears
+                                    cameraService.enableContinuousAutoFocus()
+                                }
                             }
                             focusSquareTimer = workItem
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: workItem) // 2x default (1.2s)
@@ -443,7 +472,11 @@ struct DentalCameraSetupView: View {
                     if !isAELocked {
                         focusSquareTimer?.cancel()
                         let workItem = DispatchWorkItem {
-                            if !isAELocked { withAnimation { showFocusSquare = false } }
+                            if !isAELocked {
+                                withAnimation { showFocusSquare = false }
+                                // Re-enable continuous auto-focus after focus box disappears
+                                cameraService.enableContinuousAutoFocus()
+                            }
                         }
                         focusSquareTimer = workItem
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem) // Default linger time
@@ -838,65 +871,82 @@ struct ZoomDialView: View {
 
     var rotationAngle: Double {
         // Map zoom level to rotation angle - wheel spins as zoom changes
-        // At min zoom, wheel is at 0°, at max zoom, wheel rotates -270°
-        return -Double(normalizedZoom) * 270
+        // At min zoom, wheel is at 0°, at max zoom, wheel rotates -180°
+        return -Double(normalizedZoom) * 180
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.yellow)
-                .padding(.bottom, 4)
+                .padding(.bottom, 6)
 
             // Stationary indicator triangle at top center
             Triangle()
                 .fill(Color.yellow)
-                .frame(width: 8, height: 6)
-                .padding(.bottom, 2)
+                .frame(width: 10, height: 8)
 
             // Half-circle dial that rotates
             ZStack {
+                // Semi-transparent background arc
+                SemiCircle()
+                    .fill(Color.black.opacity(0.7))
+                    .frame(width: 200, height: 100)
+
                 // Rotating wheel with tick marks
                 ZStack {
-                    // Tick marks around the semicircle
-                    ForEach(0..<31) { i in
-                        let angle = Double(i) * 9 - 135 // -135° to +135° range (270° total)
-                        let isMainTick = i % 5 == 0
-                        let tickLength: CGFloat = isMainTick ? 12 : 6
-                        let tickWidth: CGFloat = isMainTick ? 2 : 1
+                    // Tick marks around the semicircle - spread across 180°
+                    ForEach(0..<37) { i in
+                        let angle = Double(i) * 5 - 90 // -90° to +90° range (180° total)
+                        let isMainTick = i % 6 == 0
+                        let tickLength: CGFloat = isMainTick ? 14 : 7
+                        let tickWidth: CGFloat = isMainTick ? 2.5 : 1
 
                         Rectangle()
-                            .fill(Color.white.opacity(0.9))
+                            .fill(Color.white)
                             .frame(width: tickWidth, height: tickLength)
-                            .offset(y: -65)
+                            .offset(y: -85)
                             .rotationEffect(.degrees(angle))
                     }
 
                     // Zoom level numbers on the dial
-                    let zoomLabels: [(value: String, position: Int)] = [
-                        ("1", 0),
-                        ("3", 10),
-                        ("5", 15),
-                        ("10", 25),
+                    let zoomLabels: [(value: String, angle: Double)] = [
+                        ("1", -90),
+                        ("3", -45),
+                        ("5", 0),
+                        ("10", 90),
                     ]
-                    ForEach(zoomLabels, id: \.position) { label in
-                        let angle = Double(label.position) * 9 - 135
+                    ForEach(zoomLabels, id: \.value) { label in
                         Text(label.value)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                            .offset(y: -50)
-                            .rotationEffect(.degrees(-angle), anchor: .center) // Counter-rotate text
-                            .rotationEffect(.degrees(angle))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .offset(y: -68)
+                            .rotationEffect(.degrees(-label.angle - rotationAngle), anchor: .center) // Keep text upright
+                            .rotationEffect(.degrees(label.angle))
                     }
                 }
                 .rotationEffect(.degrees(rotationAngle)) // Rotate the entire wheel
             }
-            .frame(width: 160, height: 80)
+            .frame(width: 200, height: 100)
             .clipped() // Clip to show only top half
         }
         .padding(.horizontal)
+    }
+}
+
+// Semi-circle shape for background
+struct SemiCircle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addArc(center: CGPoint(x: rect.midX, y: rect.maxY),
+                    radius: rect.width / 2,
+                    startAngle: .degrees(180),
+                    endAngle: .degrees(0),
+                    clockwise: false)
+        path.closeSubpath()
+        return path
     }
 }
 
