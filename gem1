@@ -531,7 +531,7 @@ struct DentalCameraSetupView: View {
                             maxZoom: cameraService.maxZoom
                         )
                         .transition(.opacity.combined(with: .scale))
-                        .padding(.bottom, 220)
+                        .padding(.bottom, 180)
                     }
                     .allowsHitTesting(false)
                 }
@@ -892,9 +892,19 @@ struct ZoomDialView: View {
     // Visible width (2/3 of typical screen width ~250pt)
     private let visibleWidth: CGFloat = 250
 
+    // Actual zoom values to display as labels
+    private let zoomLabels: [CGFloat] = [1, 2, 3, 5, 10]
+
     var scrollOffset: CGFloat {
         // Scroll from right to left as zoom increases
         return -normalizedZoom * (stripContentWidth - visibleWidth)
+    }
+
+    // Get tick index for a specific zoom value
+    func tickIndexForZoom(_ zoom: CGFloat) -> Int {
+        guard maxZoom > minZoom else { return 0 }
+        let normalized = (zoom - minZoom) / (maxZoom - minZoom)
+        return Int(normalized * 80)
     }
 
     var body: some View {
@@ -909,7 +919,9 @@ struct ZoomDialView: View {
                 // Tick marks strip that scrolls
                 HStack(spacing: 0) {
                     ForEach(0..<81) { i in
-                        let isMainTick = i % 10 == 0
+                        // Check if this tick should show a zoom label
+                        let zoomLabelForTick = zoomLabels.first { tickIndexForZoom($0) == i && $0 >= minZoom && $0 <= maxZoom }
+                        let isMainTick = zoomLabelForTick != nil
                         let isMidTick = i % 5 == 0 && !isMainTick
                         let tickHeight: CGFloat = isMainTick ? 16 : (isMidTick ? 10 : 6)
                         let tickWidth: CGFloat = isMainTick ? 2 : 1
@@ -919,10 +931,9 @@ struct ZoomDialView: View {
                                 .fill(Color.white)
                                 .frame(width: tickWidth, height: tickHeight)
 
-                            // Show zoom labels at main ticks
-                            if isMainTick {
-                                let zoomValue = minZoom + (maxZoom - minZoom) * CGFloat(i) / 80.0
-                                Text(zoomValue < 10 ? String(format: "%.0f", zoomValue) : String(format: "%.0f", zoomValue))
+                            // Show zoom labels at positions matching actual zoom values
+                            if let zoomValue = zoomLabelForTick {
+                                Text(String(format: "%.0f", zoomValue))
                                     .font(.system(size: 8, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                             }
