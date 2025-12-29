@@ -616,7 +616,7 @@ struct DentalCameraSetupView: View {
                                 Circle().fill(Color.white).frame(width: 62, height: 62)
                             }
                         }
-                        .padding(.bottom, 50)
+                        .padding(.bottom, 100)
                         
                         // Flip Camera (Bottom Right)
                         HStack {
@@ -837,50 +837,78 @@ struct ZoomDialView: View {
     }
 
     var rotationAngle: Double {
-        // Map zoom level to rotation angle (approximately -135° to +135° = 270° total range)
-        let minAngle: Double = -135
-        let maxAngle: Double = 135
-        return minAngle + (Double(normalizedZoom) * (maxAngle - minAngle))
+        // Map zoom level to rotation angle - wheel spins as zoom changes
+        // At min zoom, wheel is at 0°, at max zoom, wheel rotates -270°
+        return -Double(normalizedZoom) * 270
     }
 
     var body: some View {
-        ZStack {
-            // Background dial with tick marks
+        VStack(spacing: 0) {
+            // Zoom value display
+            Text(String(format: "%.1fx", currentZoom))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.yellow)
+                .padding(.bottom, 4)
+
+            // Stationary indicator triangle at top center
+            Triangle()
+                .fill(Color.yellow)
+                .frame(width: 8, height: 6)
+                .padding(.bottom, 2)
+
+            // Half-circle dial that rotates
             ZStack {
-                // Outer circle
-                Circle()
-                    .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                    .frame(width: 100, height: 100)
+                // Rotating wheel with tick marks
+                ZStack {
+                    // Tick marks around the semicircle
+                    ForEach(0..<31) { i in
+                        let angle = Double(i) * 9 - 135 // -135° to +135° range (270° total)
+                        let isMainTick = i % 5 == 0
+                        let tickLength: CGFloat = isMainTick ? 12 : 6
+                        let tickWidth: CGFloat = isMainTick ? 2 : 1
 
-                // Tick marks around the circle
-                ForEach(0..<36) { i in
-                    let angle = Double(i) * 10 - 180
-                    let isMainTick = i % 3 == 0
-                    let tickLength: CGFloat = isMainTick ? 8 : 4
-                    let tickWidth: CGFloat = isMainTick ? 2 : 1
-                    let isInActiveRange = angle >= -135 && angle <= 135
+                        Rectangle()
+                            .fill(Color.white.opacity(0.9))
+                            .frame(width: tickWidth, height: tickLength)
+                            .offset(y: -65)
+                            .rotationEffect(.degrees(angle))
+                    }
 
-                    Rectangle()
-                        .fill(isInActiveRange ? Color.white : Color.white.opacity(0.3))
-                        .frame(width: tickWidth, height: tickLength)
-                        .offset(y: -46)
-                        .rotationEffect(.degrees(angle))
+                    // Zoom level numbers on the dial
+                    let zoomLabels: [(value: String, position: Int)] = [
+                        ("1", 0),
+                        ("3", 10),
+                        ("5", 15),
+                        ("10", 25),
+                    ]
+                    ForEach(zoomLabels, id: \.position) { label in
+                        let angle = Double(label.position) * 9 - 135
+                        Text(label.value)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .offset(y: -50)
+                            .rotationEffect(.degrees(-angle), anchor: .center) // Counter-rotate text
+                            .rotationEffect(.degrees(angle))
+                    }
                 }
-
-                // Center text showing zoom value
-                Text(String(format: "%.1fx", currentZoom))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.yellow)
-
-                // Indicator line
-                Rectangle()
-                    .fill(Color.yellow)
-                    .frame(width: 2, height: 20)
-                    .offset(y: -40)
-                    .rotationEffect(.degrees(rotationAngle))
+                .rotationEffect(.degrees(rotationAngle)) // Rotate the entire wheel
             }
+            .frame(width: 160, height: 80)
+            .clipped() // Clip to show only top half
         }
-        .padding()
+        .padding(.horizontal)
+    }
+}
+
+// Triangle shape for the indicator
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 
