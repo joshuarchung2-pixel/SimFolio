@@ -161,19 +161,19 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         guard let device = videoInput?.device else { return }
         do {
             try device.lockForConfiguration()
-            
+
             if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
                 device.focusPointOfInterest = devicePoint
                 device.focusMode = .autoFocus
             }
-            
+
             if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
                 device.exposurePointOfInterest = devicePoint
                 device.exposureMode = .autoExpose
-                device.setExposureTargetBias(0, completionHandler: nil)
-                DispatchQueue.main.async { self.currentExposure = 0.0 }
+                // Preserve current exposure bias - don't reset to 0
+                device.setExposureTargetBias(currentExposure, completionHandler: nil)
             }
-            
+
             device.unlockForConfiguration()
         } catch {
             print("Failed to lock for focus: \(error)")
@@ -185,23 +185,23 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         guard let device = videoInput?.device else { return }
         do {
             try device.lockForConfiguration()
-            
+
             if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
                 device.focusPointOfInterest = devicePoint
-                // Start autofocus, then it will lock when converged. 
-                // Alternatively, .locked is used to lock at current lens pos, 
-                // but usually we want to focus on the point *then* lock. 
+                // Start autofocus, then it will lock when converged.
+                // Alternatively, .locked is used to lock at current lens pos,
+                // but usually we want to focus on the point *then* lock.
                 // .autoFocus does exactly that: scan once, then stop (lock).
-                device.focusMode = .autoFocus 
+                device.focusMode = .autoFocus
             }
-            
+
             if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
                 device.exposurePointOfInterest = devicePoint
-                device.exposureMode = .autoExpose 
-                device.setExposureTargetBias(0, completionHandler: nil)
-                DispatchQueue.main.async { self.currentExposure = 0.0 }
+                device.exposureMode = .autoExpose
+                // Preserve current exposure bias - don't reset to 0
+                device.setExposureTargetBias(currentExposure, completionHandler: nil)
             }
-            
+
             device.unlockForConfiguration()
         } catch {
             print("Failed to lock AE/AF: \(error)")
@@ -319,6 +319,9 @@ struct DentalCameraSetupView: View {
     @State private var baseZoomFactor: CGFloat = 1.0
     @State private var showZoomDial = false
     @State private var zoomDialTimer: DispatchWorkItem?
+
+    // Focus Square Timer
+    @State private var focusSquareTimer: DispatchWorkItem?
     
     // Dual Tagging State
     @State private var selectedProcedure: String? = nil
@@ -359,6 +362,16 @@ struct DentalCameraSetupView: View {
                     // Only allow exposure adjustment when focus box is visible
                     if showFocusSquare || isAELocked {
                         cameraService.adjustExposure(delta: Float(delta) * 0.005) // Reduced sensitivity by 50%
+
+                        // Extend focus square linger time by 2x when adjusting exposure
+                        if !isAELocked {
+                            focusSquareTimer?.cancel()
+                            let workItem = DispatchWorkItem {
+                                if !isAELocked { withAnimation { showFocusSquare = false } }
+                            }
+                            focusSquareTimer = workItem
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: workItem) // 2x default (1.2s)
+                        }
                     }
                 },
                 onPinch: { scale in
@@ -428,9 +441,12 @@ struct DentalCameraSetupView: View {
                 .onChange(of: loc) { _ in
                     showFocusSquare = true
                     if !isAELocked {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        focusSquareTimer?.cancel()
+                        let workItem = DispatchWorkItem {
                             if !isAELocked { withAnimation { showFocusSquare = false } }
                         }
+                        focusSquareTimer = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem) // Default linger time
                     }
                 }
                 
@@ -752,7 +768,6 @@ struct CameraPreview: UIViewRepresentable {
     
     class Coordinator: NSObject {
         var parent: CameraPreview
-        var lastPinchScale: CGFloat = 1.0
 
         init(_ parent: CameraPreview) { self.parent = parent }
 
@@ -782,12 +797,10 @@ struct CameraPreview: UIViewRepresentable {
         }
 
         @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-            if gesture.state == .began {
-                lastPinchScale = 1.0
-            } else if gesture.state == .changed {
+            if gesture.state == .began || gesture.state == .changed {
+                // Pass cumulative scale since gesture began (don't reset gesture.scale)
                 parent.onPinch(gesture.scale)
-                gesture.scale = 1.0
-            } else if gesture.state == .ended {
+            } else if gesture.state == .ended || gesture.state == .cancelled {
                 parent.onPinch(0.0) // Signal end of pinch with 0.0
             }
         }
