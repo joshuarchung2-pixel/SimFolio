@@ -31,20 +31,192 @@ struct ContentView: View {
     }
 }
 
-// MARK: - TAG MANAGER (PERSISTENCE)
+// MARK: - PHOTO METADATA MODEL
+struct ToothEntry: Codable, Hashable, Identifiable {
+    var id: String { "\(procedure)-\(toothNumber)-\(dateString)" }
+    let procedure: String
+    let toothNumber: Int
+    let date: Date
+
+    var dateString: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        return formatter.string(from: date)
+    }
+
+    var displayString: String {
+        "Tooth \(toothNumber) - \(dateString)"
+    }
+}
+
+struct PhotoMetadata: Codable {
+    var procedure: String?
+    var toothNumber: Int?
+    var toothDate: Date?
+    var stage: String?  // "Preparation" or "Restoration"
+    var angle: String?  // "Occlusal", "Buccal/Facial", etc.
+    var rating: Int?    // 1-10
+
+    var toothEntry: ToothEntry? {
+        guard let proc = procedure, let num = toothNumber, let date = toothDate else { return nil }
+        return ToothEntry(procedure: proc, toothNumber: num, date: date)
+    }
+
+    var isComplete: Bool {
+        procedure != nil && toothNumber != nil && toothDate != nil && stage != nil && angle != nil
+    }
+
+    var summaryText: String {
+        var parts: [String] = []
+        if let p = procedure { parts.append(p) }
+        if let t = toothNumber { parts.append("#\(t)") }
+        if let s = stage { parts.append(s.prefix(4).description) }
+        if let a = angle { parts.append(a) }
+        return parts.isEmpty ? "Choose procedure" : parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - METADATA MANAGER (PERSISTENCE)
+class MetadataManager: ObservableObject {
+    static let shared = MetadataManager()
+
+    // Procedure options (can add, cannot delete base ones)
+    @Published var procedures: [String] = ["Class 1", "Class 2", "Class 3", "Crown"]
+    private let baseProcedures = ["Class 1", "Class 2", "Class 3", "Crown"]
+
+    // Stage options (fixed)
+    let stages: [String] = ["Preparation", "Restoration"]
+
+    // Angle options (fixed)
+    let angles: [String] = ["Occlusal", "Buccal/Facial", "Lingual", "Proximal", "Mesial", "Distal", "Other"]
+
+    // Tooth entries history per procedure
+    @Published var toothHistory: [String: [ToothEntry]] = [:]  // procedure -> [ToothEntry]
+
+    // Asset metadata map
+    @Published var assetMetadata: [String: PhotoMetadata] = [:]  // assetID -> PhotoMetadata
+
+    // UserDefaults keys
+    private let proceduresKey = "DentalPortfolio_Procedures_v2"
+    private let toothHistoryKey = "DentalPortfolio_ToothHistory"
+    private let assetMetadataKey = "DentalPortfolio_AssetMetadata"
+
+    init() {
+        loadData()
+    }
+
+    func addProcedure(_ procedure: String) {
+        guard !procedure.isEmpty && !procedures.contains(procedure) else { return }
+        procedures.append(procedure)
+        saveProcedures()
+    }
+
+    func canDeleteProcedure(_ procedure: String) -> Bool {
+        return !baseProcedures.contains(procedure)
+    }
+
+    func deleteProcedure(_ procedure: String) {
+        guard canDeleteProcedure(procedure) else { return }
+        procedures.removeAll { $0 == procedure }
+        saveProcedures()
+    }
+
+    func addToothEntry(_ entry: ToothEntry) {
+        var entries = toothHistory[entry.procedure] ?? []
+        // Check if this exact tooth/date combo already exists
+        if !entries.contains(where: { $0.toothNumber == entry.toothNumber && Calendar.current.isDate($0.date, inSameDayAs: entry.date) }) {
+            entries.append(entry)
+            toothHistory[entry.procedure] = entries
+            saveToothHistory()
+        }
+    }
+
+    func getToothEntries(for procedure: String) -> [ToothEntry] {
+        return toothHistory[procedure] ?? []
+    }
+
+    func assignMetadata(_ metadata: PhotoMetadata, to assetID: String) {
+        assetMetadata[assetID] = metadata
+
+        // Also add to tooth history if applicable
+        if let entry = metadata.toothEntry {
+            addToothEntry(entry)
+        }
+
+        saveAssetMetadata()
+    }
+
+    func getMetadata(for assetID: String) -> PhotoMetadata? {
+        return assetMetadata[assetID]
+    }
+
+    func setRating(_ rating: Int, for assetID: String) {
+        var metadata = assetMetadata[assetID] ?? PhotoMetadata()
+        metadata.rating = max(1, min(10, rating))
+        assetMetadata[assetID] = metadata
+        saveAssetMetadata()
+    }
+
+    func getRating(for assetID: String) -> Int? {
+        return assetMetadata[assetID]?.rating
+    }
+
+    // MARK: - Persistence
+    private func saveProcedures() {
+        UserDefaults.standard.set(procedures, forKey: proceduresKey)
+    }
+
+    private func saveToothHistory() {
+        if let encoded = try? JSONEncoder().encode(toothHistory) {
+            UserDefaults.standard.set(encoded, forKey: toothHistoryKey)
+        }
+    }
+
+    private func saveAssetMetadata() {
+        if let encoded = try? JSONEncoder().encode(assetMetadata) {
+            UserDefaults.standard.set(encoded, forKey: assetMetadataKey)
+        }
+    }
+
+    private func loadData() {
+        // Load procedures
+        if let procs = UserDefaults.standard.stringArray(forKey: proceduresKey) {
+            // Merge with base procedures to ensure they exist
+            var merged = baseProcedures
+            for p in procs where !merged.contains(p) {
+                merged.append(p)
+            }
+            procedures = merged
+        }
+
+        // Load tooth history
+        if let data = UserDefaults.standard.data(forKey: toothHistoryKey),
+           let decoded = try? JSONDecoder().decode([String: [ToothEntry]].self, from: data) {
+            toothHistory = decoded
+        }
+
+        // Load asset metadata
+        if let data = UserDefaults.standard.data(forKey: assetMetadataKey),
+           let decoded = try? JSONDecoder().decode([String: PhotoMetadata].self, from: data) {
+            assetMetadata = decoded
+        }
+    }
+}
+
+// MARK: - Legacy TagManager (kept for backward compatibility)
 class TagManager: ObservableObject {
     static let shared = TagManager()
-    
+
     @Published var procedureTags: [String] = []
     @Published var otherTags: [String] = []
     @Published var assetProcedureMap: [String: String] = [:]
     @Published var assetOtherTagsMap: [String: [String]] = [:]
-    
+
     private let procedureKey = "DentalPortfolio_Procedures"
     private let otherTagsKey = "DentalPortfolio_OtherTags"
     private let assetProcMapKey = "DentalPortfolio_AssetProcMap"
     private let assetOtherMapKey = "DentalPortfolio_AssetOtherMap"
-    
+
     init() {
         loadData()
         if procedureTags.isEmpty {
@@ -56,7 +228,7 @@ class TagManager: ObservableObject {
             saveOtherTags()
         }
     }
-    
+
     func addProcedure(_ tag: String) {
         if !procedureTags.contains(tag) && !tag.isEmpty { procedureTags.append(tag); saveProcedures() }
     }
@@ -76,7 +248,7 @@ class TagManager: ObservableObject {
     }
     func getProcedure(for assetID: String) -> String? { return assetProcedureMap[assetID] }
     func getOtherTags(for assetID: String) -> [String] { return assetOtherTagsMap[assetID] ?? [] }
-    
+
     private func saveProcedures() { UserDefaults.standard.set(procedureTags, forKey: procedureKey) }
     private func saveOtherTags() { UserDefaults.standard.set(otherTags, forKey: otherTagsKey) }
     private func saveMaps() {
@@ -136,7 +308,7 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 self.videoInput = input
                 if self.session.canAddInput(input) { self.session.addInput(input) }
                 if self.session.canAddOutput(self.output) { self.session.addOutput(self.output) }
-                
+
                 // Initialize Exposure Limits
                 DispatchQueue.main.async {
                     self.minExposure = device.minExposureTargetBias
@@ -150,9 +322,32 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                     self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
                     self.currentZoom = device.videoZoomFactor
                 }
+
+                // Enable continuous auto-focus by default
+                self.enableContinuousAutoFocus()
             }
             self.session.commitConfiguration()
             self.session.startRunning()
+        }
+    }
+
+    // Enable continuous auto-focus and auto-exposure
+    func enableContinuousAutoFocus() {
+        guard let device = videoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to enable continuous auto-focus: \(error)")
         }
     }
     
@@ -290,8 +485,10 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 self.maxZoom = min(device.maxAvailableVideoZoomFactor, 10.0)
                 self.currentZoom = device.videoZoomFactor
             }
+            // Re-enable continuous auto-focus for the new camera
+            enableContinuousAutoFocus()
         }
-        
+
         session.commitConfiguration()
     }
 }
@@ -322,13 +519,17 @@ struct DentalCameraSetupView: View {
 
     // Focus Square Timer
     @State private var focusSquareTimer: DispatchWorkItem?
-    
-    // Dual Tagging State
-    @State private var selectedProcedure: String? = nil
-    @State private var selectedOtherTags: Set<String> = []
-    @State private var activeDropdown: String? = nil 
-    @State private var newTagText: String = ""
-    @ObservedObject var tagManager = TagManager.shared
+
+    // Photo Metadata State (new unified system)
+    @State private var currentMetadata = PhotoMetadata()
+    @State private var isInfoPillOpen = false
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    // Photo Preview State
+    @State private var lastSavedPhoto: UIImage? = nil
+    @State private var showSaveAnimation = false
+    @State private var animatingPhoto: UIImage? = nil
+    @State private var showSuccessMessage = false
     
     // Computed property for visual slider position
     // Maps actual exposure bias [min, max] to visual slider height [-70, 70]
@@ -367,7 +568,11 @@ struct DentalCameraSetupView: View {
                         if !isAELocked {
                             focusSquareTimer?.cancel()
                             let workItem = DispatchWorkItem {
-                                if !isAELocked { withAnimation { showFocusSquare = false } }
+                                if !isAELocked {
+                                    withAnimation { showFocusSquare = false }
+                                    // Re-enable continuous auto-focus after focus box disappears
+                                    cameraService.enableContinuousAutoFocus()
+                                }
                             }
                             focusSquareTimer = workItem
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: workItem) // 2x default (1.2s)
@@ -421,18 +626,36 @@ struct DentalCameraSetupView: View {
                     
                     // Native-Style Exposure Slider
                     if showFocusSquare || isAELocked {
-                        Rectangle()
-                            .fill(Color.yellow)
-                            .frame(width: 1, height: 140)
-                            .offset(x: 65)
-                            .shadow(radius: 1)
-                            .opacity(0.8)
-                        
+                        // Line above sun icon
+                        let sunY = -exposureVisualOffset
+                        let topLineHeight = max(0, 70 + sunY - 12) // From top (-70) to just above sun
+                        let bottomLineHeight = max(0, 70 - sunY - 12) // From just below sun to bottom (+70)
+
+                        // Top line segment (above sun)
+                        if topLineHeight > 0 {
+                            Rectangle()
+                                .fill(Color.yellow)
+                                .frame(width: 1, height: topLineHeight)
+                                .offset(x: 65, y: -70 + topLineHeight / 2)
+                                .shadow(radius: 1)
+                                .opacity(0.8)
+                        }
+
+                        // Bottom line segment (below sun)
+                        if bottomLineHeight > 0 {
+                            Rectangle()
+                                .fill(Color.yellow)
+                                .frame(width: 1, height: bottomLineHeight)
+                                .offset(x: 65, y: 70 - bottomLineHeight / 2)
+                                .shadow(radius: 1)
+                                .opacity(0.8)
+                        }
+
                         Image(systemName: "sun.max.fill")
                             .font(.system(size: 20))
                             .foregroundColor(.yellow)
                             .shadow(radius: 2)
-                            .offset(x: 65, y: -exposureVisualOffset)
+                            .offset(x: 65, y: sunY)
                     }
                 }
                 .position(loc)
@@ -443,7 +666,11 @@ struct DentalCameraSetupView: View {
                     if !isAELocked {
                         focusSquareTimer?.cancel()
                         let workItem = DispatchWorkItem {
-                            if !isAELocked { withAnimation { showFocusSquare = false } }
+                            if !isAELocked {
+                                withAnimation { showFocusSquare = false }
+                                // Re-enable continuous auto-focus after focus box disappears
+                                cameraService.enableContinuousAutoFocus()
+                            }
                         }
                         focusSquareTimer = workItem
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem) // Default linger time
@@ -480,7 +707,7 @@ struct DentalCameraSetupView: View {
                             maxZoom: cameraService.maxZoom
                         )
                         .transition(.opacity.combined(with: .scale))
-                        .padding(.bottom, 150)
+                        .padding(.bottom, 180)
                     }
                     .allowsHitTesting(false)
                 }
@@ -490,18 +717,13 @@ struct DentalCameraSetupView: View {
             VStack {
                 // TOP BAR
                 ZStack(alignment: .top) {
-                    // Left: Spacer placeholder for balance if needed, or empty
-                    HStack {
-                        Spacer()
-                    }
-                    
-                    // Center: Dual Dropdowns
-                    HStack(spacing: 8) {
-                        dropdownButton(title: selectedProcedure ?? "Procedure", type: "procedure", color: .blue)
-                        dropdownButton(title: selectedOtherTags.isEmpty ? "Tags" : "\(selectedOtherTags.count)", type: "other", color: .orange)
-                    }
+                    // Center: Unified Photo Info Pill
+                    PhotoInfoPillView(
+                        metadata: $currentMetadata,
+                        isDropdownOpen: $isInfoPillOpen
+                    )
                     .zIndex(10)
-                    
+
                     // Right: Unified Options Button (Expanding Downward)
                     if cameraService.capturedImage == nil {
                         HStack {
@@ -515,7 +737,7 @@ struct DentalCameraSetupView: View {
                                         .clipShape(Circle())
                                         .foregroundColor(.white)
                                 }
-                                
+
                                 if isOptionsExpanded {
                                     // Flash Toggle
                                     Button(action: {
@@ -530,7 +752,7 @@ struct DentalCameraSetupView: View {
                                             .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
-                                    
+
                                     // Grid Toggle
                                     Button(action: { showGrid.toggle() }) {
                                         Image(systemName: showGrid ? "square" : "grid")
@@ -538,7 +760,7 @@ struct DentalCameraSetupView: View {
                                             .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
-                                    
+
                                     // Ghost Toggle
                                     Button(action: {
                                         if ghostImage != nil { ghostImage = nil }
@@ -557,15 +779,6 @@ struct DentalCameraSetupView: View {
                 .padding(.horizontal)
                 .padding(.top, 60)
                 
-                if let type = activeDropdown {
-                    HStack {
-                        Spacer()
-                        dropdownContent(type: type)
-                        Spacer()
-                    }
-                    .zIndex(9)
-                }
-                
                 Spacer()
                 
                 // BOTTOM BAR
@@ -575,18 +788,46 @@ struct DentalCameraSetupView: View {
                         Button(action: { cameraService.retake() }) {
                             Text("Retake")
                                 .font(.headline)
-                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                                .frame(width: 120, height: 50)
                         }
                         .background(Color.black.opacity(0.6))
                         .foregroundColor(.white).cornerRadius(10)
-                        
+
                         Button(action: {
-                            PhotoLibraryManager.shared.save(image: captured, procedure: selectedProcedure, otherTags: Array(selectedOtherTags))
-                            cameraService.retake()
+                            // Trigger save animation
+                            animatingPhoto = captured
+                            withAnimation(.spring(response: 0.8, dampingFraction: 0.75, blendDuration: 0.5)) {
+                                showSaveAnimation = true
+                            }
+
+                            // Save the photo
+                            PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
+
+                            // After animation, update preview and show success
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                                lastSavedPhoto = captured
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    showSaveAnimation = false
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    animatingPhoto = nil
+                                    cameraService.retake()
+                                }
+
+                                // Show success message
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showSuccessMessage = true
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showSuccessMessage = false
+                                    }
+                                }
+                            }
                         }) {
                             Text("Use Photo")
                                 .font(.headline)
-                                .frame(width: 120, height: 50) // Fixed size for symmetry
+                                .frame(width: 120, height: 50)
                         }
                         .background(Color.blue)
                         .foregroundColor(.white).cornerRadius(10)
@@ -599,28 +840,56 @@ struct DentalCameraSetupView: View {
                         if ghostImage != nil {
                             VStack {
                                 Slider(value: $ghostOpacity, in: 0.1...0.8).accentColor(.blue).frame(width: 200)
-                                Spacer().frame(height: 180) // Moved up to clear shutter
+                                Spacer().frame(height: 180)
                             }
                         }
-                        
+
                         // Shutter Button (Center)
-                        Button(action: { 
+                        Button(action: {
                             withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 withAnimation { showShutterEffect = false }
                             }
-                            cameraService.takePhoto() 
+                            cameraService.takePhoto()
                         }) {
                             ZStack {
                                 Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
                                 Circle().fill(Color.white).frame(width: 62, height: 62)
                             }
                         }
-                        .padding(.bottom, 50)
-                        
-                        // Flip Camera (Bottom Right)
+                        .padding(.bottom, 100)
+
+                        // Bottom row: Photo Preview (left) and Flip Camera (right)
                         HStack {
+                            // Last Photo Preview (bottom-left)
+                            if let lastPhoto = lastSavedPhoto {
+                                NavigationLink(destination: GalleryView()) {
+                                    Image(uiImage: lastPhoto)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.white, lineWidth: 2)
+                                        )
+                                }
+                                .padding(.leading, 20)
+                            } else {
+                                // Placeholder when no photo saved yet
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 50, height: 50)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .foregroundColor(.gray)
+                                    )
+                                    .padding(.leading, 20)
+                            }
+
                             Spacer()
+
+                            // Flip Camera Button (bottom-right)
                             Button(action: { cameraService.flipCamera() }) {
                                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                                     .font(.title2)
@@ -629,14 +898,65 @@ struct DentalCameraSetupView: View {
                                     .clipShape(Circle())
                                     .foregroundColor(.white)
                             }
-                            .padding(.trailing, 30)
-                            .padding(.bottom, 60)
+                            .padding(.trailing, 20)
                         }
+                        .padding(.bottom, 60)
                     }
                 }
             }
-            .zIndex(2) // Ensure controls are above the captured image
-            
+            .zIndex(2)
+
+            // Success message overlay
+            if showSuccessMessage {
+                VStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.white)
+                        Text("Photo stored successfully")
+                            .font(.caption).bold()
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.green)
+                    .cornerRadius(20)
+                    .shadow(radius: 5)
+
+                    Spacer()
+                }
+                .padding(.top, 120)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(25)
+            }
+
+            // Save animation overlay
+            if showSaveAnimation, let photo = animatingPhoto {
+                GeometryReader { geo in
+                    let targetSize: CGFloat = showSaveAnimation ? 70 : geo.size.width
+                    let targetHeight: CGFloat = showSaveAnimation ? 70 : geo.size.height
+                    let targetX: CGFloat = showSaveAnimation ? 55 : geo.size.width / 2
+                    let targetY: CGFloat = showSaveAnimation ? geo.size.height - 95 : geo.size.height / 2
+                    let targetCorner: CGFloat = showSaveAnimation ? 12 : 0
+
+                    Image(uiImage: photo)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: targetSize, height: targetHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: targetCorner))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: targetCorner)
+                                .stroke(Color.white, lineWidth: showSaveAnimation ? 3 : 0)
+                        )
+                        .shadow(color: .white.opacity(showSaveAnimation ? 0.6 : 0), radius: 15)
+                        .shadow(color: .blue.opacity(showSaveAnimation ? 0.4 : 0), radius: 20)
+                        .rotationEffect(.degrees(showSaveAnimation ? -5 : 0))
+                        .scaleEffect(showSaveAnimation ? 1.0 : 1.0)
+                        .position(x: targetX, y: targetY)
+                }
+                .ignoresSafeArea()
+                .zIndex(15)
+            }
+
             // SHUTTER EFFECT FLASH
             if showShutterEffect {
                 Color.black.ignoresSafeArea().zIndex(20)
@@ -646,78 +966,6 @@ struct DentalCameraSetupView: View {
         .sheet(isPresented: $isGhostPickerPresented) {
             CustomGhostPicker(selectedImage: $ghostImage)
         }
-    }
-    
-    // Dropdown Helpers
-    func dropdownButton(title: String, type: String, color: Color) -> some View {
-        Button(action: {
-            withAnimation {
-                activeDropdown = (activeDropdown == type) ? nil : type
-            }
-        }) {
-            HStack(spacing: 4) {
-                Text(title).font(.caption).bold().lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption)
-            }
-            .padding(.vertical, 8).padding(.horizontal, 10)
-            .background(Color.black.opacity(0.8))
-            .foregroundColor(activeDropdown == type ? color : .white).cornerRadius(15)
-            .overlay(
-                RoundedRectangle(cornerRadius: 15)
-                    .stroke(activeDropdown == type ? color : Color.white.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .frame(width: 100)
-    }
-    
-    func dropdownContent(type: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let isProcedure = (type == "procedure")
-            let list = isProcedure ? tagManager.procedureTags : tagManager.otherTags
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(list, id: \.self) { tag in
-                        Button(action: {
-                            if isProcedure {
-                                selectedProcedure = (selectedProcedure == tag) ? nil : tag
-                                activeDropdown = nil
-                            } else {
-                                if selectedOtherTags.contains(tag) { selectedOtherTags.remove(tag) }
-                                else { selectedOtherTags.insert(tag) }
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: isProcedure ? (selectedProcedure == tag ? "circle.inset.filled" : "circle") : (selectedOtherTags.contains(tag) ? "checkmark.square.fill" : "square"))
-                                    .foregroundColor(isProcedure ? .blue : .orange)
-                                Text(tag).foregroundColor(.white).font(.caption)
-                                Spacer()
-                                Button(action: {
-                                    isProcedure ? tagManager.deleteProcedure(tag) : tagManager.deleteOtherTag(tag)
-                                    if isProcedure && selectedProcedure == tag { selectedProcedure = nil }
-                                    if !isProcedure { selectedOtherTags.remove(tag) }
-                                }) { Image(systemName: "trash").foregroundColor(.red).font(.caption2) }
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                        }
-                    }
-                }.padding(.vertical, 10)
-            }
-            .frame(maxHeight: 150)
-            Divider().background(Color.gray)
-            HStack(spacing: 5) {
-                TextField("New...", text: $newTagText)
-                    .font(.caption).textFieldStyle(RoundedBorderTextFieldStyle()).foregroundColor(.black)
-                Button(action: {
-                    if isProcedure { tagManager.addProcedure(newTagText); selectedProcedure = newTagText }
-                    else { tagManager.addOtherTag(newTagText); selectedOtherTags.insert(newTagText) }
-                    newTagText = ""
-                }) { Image(systemName: "plus.circle.fill").foregroundColor(.green) }
-                .disabled(newTagText.isEmpty)
-            }
-            .padding(10)
-        }
-        .frame(width: 160).background(Color.black.opacity(0.9)).cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
     }
 }
 
@@ -830,203 +1078,1242 @@ struct ZoomDialView: View {
     let minZoom: CGFloat
     let maxZoom: CGFloat
 
+    // Fixed display range from 1x to 10x
+    private let displayMin: CGFloat = 1.0
+    private let displayMax: CGFloat = 10.0
+
+    // Total width of the tick strip content
+    private let stripContentWidth: CGFloat = 450
+    // Visible width (2/3 of typical screen width ~250pt)
+    private let visibleWidth: CGFloat = 250
+
     var normalizedZoom: CGFloat {
-        // Normalize zoom to 0-1 range
-        guard maxZoom > minZoom else { return 0 }
-        return (currentZoom - minZoom) / (maxZoom - minZoom)
+        // Normalize current zoom to 0-1 range based on display range (1-10)
+        let clamped = min(max(currentZoom, displayMin), displayMax)
+        return (clamped - displayMin) / (displayMax - displayMin)
     }
 
-    var rotationAngle: Double {
-        // Map zoom level to rotation angle (approximately -135° to +135° = 270° total range)
-        let minAngle: Double = -135
-        let maxAngle: Double = 135
-        return minAngle + (Double(normalizedZoom) * (maxAngle - minAngle))
+    var scrollOffset: CGFloat {
+        // Calculate offset so indicator aligns with correct tick
+        // At zoom 1.0 (normalizedZoom=0), tick 0 ("1" label) should be at center
+        // At zoom 10.0 (normalizedZoom=1), tick 90 ("10" label) should be at center
+        let tickSpacing: CGFloat = 5
+        let firstTickCenter: CGFloat = tickSpacing / 2  // 2.5pt
+        let lastTickCenter: CGFloat = 90 * tickSpacing + tickSpacing / 2  // 452.5pt
+        let tickRange = lastTickCenter - firstTickCenter  // 450pt
+
+        let targetTickPosition = firstTickCenter + normalizedZoom * tickRange
+        return (visibleWidth / 2) - targetTickPosition
     }
 
     var body: some View {
-        ZStack {
-            // Background dial with tick marks
+        VStack(spacing: 4) {
+            // Zoom value display
+            Text(String(format: "%.1fx", currentZoom))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.yellow)
+
+            // Horizontal strip with tick marks
             ZStack {
-                // Outer circle
-                Circle()
-                    .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                    .frame(width: 100, height: 100)
+                // Tick marks strip that scrolls - 90 ticks for 1-10 range (10 per integer)
+                HStack(spacing: 0) {
+                    ForEach(0..<91) { i in
+                        // Each 10 ticks = 1 zoom level (0=1x, 10=2x, 20=3x, ... 90=10x)
+                        let isMainTick = i % 10 == 0  // Integer zoom values
+                        let isMidTick = i % 5 == 0 && !isMainTick  // Half-integer values
+                        let tickHeight: CGFloat = isMainTick ? 16 : (isMidTick ? 10 : 6)
+                        let tickWidth: CGFloat = isMainTick ? 2 : 1
 
-                // Tick marks around the circle
-                ForEach(0..<36) { i in
-                    let angle = Double(i) * 10 - 180
-                    let isMainTick = i % 3 == 0
-                    let tickLength: CGFloat = isMainTick ? 8 : 4
-                    let tickWidth: CGFloat = isMainTick ? 2 : 1
-                    let isInActiveRange = angle >= -135 && angle <= 135
+                        VStack(spacing: 1) {
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: tickWidth, height: tickHeight)
 
-                    Rectangle()
-                        .fill(isInActiveRange ? Color.white : Color.white.opacity(0.3))
-                        .frame(width: tickWidth, height: tickLength)
-                        .offset(y: -46)
-                        .rotationEffect(.degrees(angle))
+                            // Show zoom labels at integer values (1, 2, 3, ... 10)
+                            if isMainTick {
+                                let zoomValue = Int(displayMin) + (i / 10)
+                                Text("\(zoomValue)")
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .frame(width: 5) // Spacing between ticks
+                    }
+                }
+                .offset(x: scrollOffset)
+
+                // Fade edges with gradient masks
+                HStack {
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.black, Color.black.opacity(0)]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 40)
+
+                    Spacer()
+
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.black.opacity(0), Color.black]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 40)
                 }
 
-                // Center text showing zoom value
-                Text(String(format: "%.1fx", currentZoom))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.yellow)
+                // Center indicator
+                VStack(spacing: 0) {
+                    Triangle()
+                        .fill(Color.yellow)
+                        .frame(width: 8, height: 6)
+                    Rectangle()
+                        .fill(Color.yellow)
+                        .frame(width: 2, height: 18)
+                }
+            }
+            .frame(width: visibleWidth, height: 38)
+            .clipped()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(10)
+    }
+}
 
-                // Indicator line
-                Rectangle()
-                    .fill(Color.yellow)
-                    .frame(width: 2, height: 20)
-                    .offset(y: -40)
-                    .rotationEffect(.degrees(rotationAngle))
+// Triangle shape for the indicator
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - PHOTO INFO PILL VIEW
+enum PhotoInfoStage: Int, CaseIterable {
+    case procedure = 0
+    case tooth = 1
+    case stage = 2
+    case angle = 3
+    case complete = 4
+
+    var prompt: String {
+        switch self {
+        case .procedure: return "Choose procedure"
+        case .tooth: return "Choose tooth"
+        case .stage: return "Choose stage"
+        case .angle: return "Choose angle"
+        case .complete: return ""
+        }
+    }
+}
+
+struct PhotoInfoPillView: View {
+    @Binding var metadata: PhotoMetadata
+    @Binding var isDropdownOpen: Bool
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var currentStage: PhotoInfoStage = .procedure
+    @State private var newProcedureText: String = ""
+    @State private var selectedToothNumber: Int = 1
+    @State private var selectedToothDate: Date = Date()
+    @State private var showNewToothEntry: Bool = false
+
+    private let stageColors: [PhotoInfoStage: Color] = [
+        .procedure: .blue,
+        .tooth: .green,
+        .stage: .orange,
+        .angle: .purple
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main pill button
+            Button(action: { withAnimation { isDropdownOpen.toggle() } }) {
+                HStack(spacing: 6) {
+                    // Show current selections with visual hierarchy
+                    if metadata.procedure == nil {
+                        Text("Choose procedure")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    } else {
+                        // Procedure badge
+                        Text(metadata.procedure ?? "")
+                            .font(.caption2).bold()
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.8))
+                            .cornerRadius(4)
+
+                        if let tooth = metadata.toothNumber {
+                            Text("#\(tooth)")
+                                .font(.caption2).bold()
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.8))
+                                .cornerRadius(4)
+                        }
+
+                        if let stage = metadata.stage {
+                            Text(String(stage.prefix(4)))
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.8))
+                                .cornerRadius(4)
+                        }
+
+                        if let angle = metadata.angle {
+                            Text(angle)
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.purple.opacity(0.8))
+                                .cornerRadius(4)
+                        }
+                    }
+
+                    Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(isDropdownOpen ? Color.blue : Color.white.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .foregroundColor(.white)
+
+            // Dropdown content
+            if isDropdownOpen {
+                dropdownContent
+                    .padding(.top, 8)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
+                        removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                    ))
             }
         }
-        .padding()
+    }
+
+    var dropdownContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            stageTabsView
+            Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 8)
+            currentStageContentView
+            Divider().background(Color.gray.opacity(0.3))
+            bottomButtonsView
+        }
+        .frame(width: 340)
+        .background(Color.black.opacity(0.95))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
+        .onAppear { updateCurrentStage() }
+    }
+
+    // MARK: - Dropdown Sub-views
+    var stageTabsView: some View {
+        HStack(spacing: 6) {
+            ForEach([PhotoInfoStage.procedure, .tooth, .stage, .angle], id: \.self) { stage in
+                stageTabButton(for: stage)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+    }
+
+    func stageTabButton(for stage: PhotoInfoStage) -> some View {
+        Button(action: {
+            withAnimation { currentStage = stage }
+        }) {
+            VStack(spacing: 4) {
+                Text(stageName(for: stage))
+                    .font(.caption2).bold()
+                    .foregroundColor(currentStage == stage ? .white : .gray)
+                Text(stageValue(for: stage))
+                    .font(.system(size: 9))
+                    .foregroundColor(stageColor(for: stage))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : Color.gray.opacity(0.1))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(currentStage == stage ? stageColor(for: stage) : Color.clear, lineWidth: 1)
+            )
+        }
+    }
+
+    @ViewBuilder
+    var currentStageContentView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch currentStage {
+            case .procedure:
+                procedureStageContent
+            case .tooth:
+                toothStageContent
+            case .stage:
+                stageStageContent
+            case .angle:
+                angleStageContent
+            case .complete:
+                EmptyView()
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    var bottomButtonsView: some View {
+        HStack {
+            Button(action: { clearAllMetadata() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle")
+                    Text("Clear all")
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            }
+
+            Spacer()
+
+            if currentStage.rawValue > 0 {
+                Button(action: { navigateToPreviousStage() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
+
+            if currentStage.rawValue < 3 {
+                Button(action: { navigateToNextStage() }) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    func navigateToPreviousStage() {
+        withAnimation {
+            if let prev = PhotoInfoStage(rawValue: currentStage.rawValue - 1) {
+                currentStage = prev
+            }
+        }
+    }
+
+    func navigateToNextStage() {
+        withAnimation {
+            if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
+                currentStage = next
+            }
+        }
+    }
+
+    func stageName(for stage: PhotoInfoStage) -> String {
+        switch stage {
+        case .procedure: return "Procedure"
+        case .tooth: return "Tooth"
+        case .stage: return "Stage"
+        case .angle: return "Angle"
+        case .complete: return ""
+        }
+    }
+
+    func stageValue(for stage: PhotoInfoStage) -> String {
+        switch stage {
+        case .procedure: return metadata.procedure ?? "Not set"
+        case .tooth: return metadata.toothNumber != nil ? "#\(metadata.toothNumber!)" : "Not set"
+        case .stage: return metadata.stage ?? "Not set"
+        case .angle: return metadata.angle ?? "Not set"
+        case .complete: return ""
+        }
+    }
+
+    func stageColor(for stage: PhotoInfoStage) -> Color {
+        switch stage {
+        case .procedure: return metadata.procedure != nil ? .blue : .gray
+        case .tooth: return metadata.toothNumber != nil ? .green : .gray
+        case .stage: return metadata.stage != nil ? .orange : .gray
+        case .angle: return metadata.angle != nil ? .purple : .gray
+        case .complete: return .gray
+        }
+    }
+
+    func clearAllMetadata() {
+        withAnimation {
+            metadata.procedure = nil
+            metadata.toothNumber = nil
+            metadata.toothDate = nil
+            metadata.stage = nil
+            metadata.angle = nil
+            metadata.rating = nil
+            currentStage = .procedure
+            showNewToothEntry = false
+        }
+    }
+
+    // MARK: - Stage 1: Procedure Selection
+    var procedureStageContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(metadataManager.procedures, id: \.self) { procedure in
+                Button(action: {
+                    metadata.procedure = procedure
+                    advanceToNextStage()
+                }) {
+                    HStack {
+                        Image(systemName: metadata.procedure == procedure ? "circle.inset.filled" : "circle")
+                            .foregroundColor(.blue)
+                        Text(procedure)
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 8)
+                    .background(metadata.procedure == procedure ? Color.blue.opacity(0.2) : Color.clear)
+                    .cornerRadius(6)
+                }
+            }
+
+            // Add new procedure
+            Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 4)
+            HStack(spacing: 8) {
+                TextField("Add new...", text: $newProcedureText)
+                    .font(.caption)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .foregroundColor(.black)
+
+                Button(action: {
+                    if !newProcedureText.isEmpty {
+                        metadataManager.addProcedure(newProcedureText)
+                        metadata.procedure = newProcedureText
+                        newProcedureText = ""
+                        advanceToNextStage()
+                    }
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.green)
+                }
+                .disabled(newProcedureText.isEmpty)
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Stage 2: Tooth Selection
+    var toothStageContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let existingTeeth = metadataManager.getToothEntries(for: metadata.procedure ?? "")
+
+            if !existingTeeth.isEmpty && !showNewToothEntry {
+                // Show previously entered teeth
+                Text("Previous teeth:")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 4)
+
+                ForEach(existingTeeth) { entry in
+                    Button(action: {
+                        metadata.toothNumber = entry.toothNumber
+                        metadata.toothDate = entry.date
+                        advanceToNextStage()
+                    }) {
+                        HStack {
+                            Image(systemName: "tooth")
+                                .foregroundColor(.green)
+                            Text(entry.displayString)
+                                .foregroundColor(.white)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 8)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                }
+
+                Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 4)
+
+                Button(action: { showNewToothEntry = true }) {
+                    HStack {
+                        Image(systemName: "plus.circle")
+                            .foregroundColor(.blue)
+                        Text("Enter new tooth")
+                            .foregroundColor(.blue)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 8)
+                }
+            } else {
+                // New tooth entry form
+                newToothEntryForm
+            }
+        }
+    }
+
+    var newToothEntryForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Tooth number picker - Static label with number wheel and name on right
+            HStack(spacing: 8) {
+                Text("Tooth #")
+                    .font(.title3).bold()
+                    .foregroundColor(.white)
+
+                Picker("", selection: $selectedToothNumber) {
+                    ForEach(1...32, id: \.self) { num in
+                        Text("\(num)")
+                            .tag(num)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(width: 55, height: 80)
+                .clipped()
+
+                // Tooth name display with fade animation
+                Text(toothName(for: selectedToothNumber))
+                    .font(.caption)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.15))
+                    .cornerRadius(6)
+                    .id(selectedToothNumber) // Forces view recreation for animation
+                    .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+                    .animation(.easeInOut(duration: 0.25), value: selectedToothNumber)
+            }
+
+            // Date picker
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Date")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+
+                DatePicker("", selection: $selectedToothDate, displayedComponents: .date)
+                    .labelsHidden()
+                    .colorScheme(.dark)
+            }
+
+            // Confirm button
+            Button(action: {
+                metadata.toothNumber = selectedToothNumber
+                metadata.toothDate = selectedToothDate
+                showNewToothEntry = false
+                advanceToNextStage()
+            }) {
+                Text("Confirm Tooth #\(selectedToothNumber)")
+                    .font(.caption).bold()
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.green)
+                    .cornerRadius(8)
+            }
+
+            if metadataManager.getToothEntries(for: metadata.procedure ?? "").count > 0 {
+                Button(action: { showNewToothEntry = false }) {
+                    Text("Cancel")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    func toothName(for number: Int) -> String {
+        switch number {
+        case 1: return "Maxillary Right 3rd Molar"
+        case 2: return "Maxillary Right 2nd Molar"
+        case 3: return "Maxillary Right 1st Molar"
+        case 4: return "Maxillary Right 2nd Premolar"
+        case 5: return "Maxillary Right 1st Premolar"
+        case 6: return "Maxillary Right Canine"
+        case 7: return "Maxillary Right Lateral Incisor"
+        case 8: return "Maxillary Right Central Incisor"
+        case 9: return "Maxillary Left Central Incisor"
+        case 10: return "Maxillary Left Lateral Incisor"
+        case 11: return "Maxillary Left Canine"
+        case 12: return "Maxillary Left 1st Premolar"
+        case 13: return "Maxillary Left 2nd Premolar"
+        case 14: return "Maxillary Left 1st Molar"
+        case 15: return "Maxillary Left 2nd Molar"
+        case 16: return "Maxillary Left 3rd Molar"
+        case 17: return "Mandibular Left 3rd Molar"
+        case 18: return "Mandibular Left 2nd Molar"
+        case 19: return "Mandibular Left 1st Molar"
+        case 20: return "Mandibular Left 2nd Premolar"
+        case 21: return "Mandibular Left 1st Premolar"
+        case 22: return "Mandibular Left Canine"
+        case 23: return "Mandibular Left Lateral Incisor"
+        case 24: return "Mandibular Left Central Incisor"
+        case 25: return "Mandibular Right Central Incisor"
+        case 26: return "Mandibular Right Lateral Incisor"
+        case 27: return "Mandibular Right Canine"
+        case 28: return "Mandibular Right 1st Premolar"
+        case 29: return "Mandibular Right 2nd Premolar"
+        case 30: return "Mandibular Right 1st Molar"
+        case 31: return "Mandibular Right 2nd Molar"
+        case 32: return "Mandibular Right 3rd Molar"
+        default: return "Unknown"
+        }
+    }
+
+    // MARK: - Stage 3: Stage Selection (Preparation/Restoration)
+    var stageStageContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(metadataManager.stages, id: \.self) { stage in
+                Button(action: {
+                    metadata.stage = stage
+                    advanceToNextStage()
+                }) {
+                    HStack {
+                        Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                            .foregroundColor(stage == "Preparation" ? .orange : .green)
+                        Text(stage)
+                            .foregroundColor(.white)
+                        Spacer()
+                        if metadata.stage == stage {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 8)
+                    .background(metadata.stage == stage ? Color.blue.opacity(0.2) : Color.clear)
+                    .cornerRadius(6)
+                }
+            }
+        }
+    }
+
+    // MARK: - Stage 4: Angle Selection
+    var angleStageContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(metadataManager.angles, id: \.self) { angle in
+                Button(action: {
+                    metadata.angle = angle
+                    advanceToNextStage()
+                }) {
+                    HStack {
+                        Image(systemName: angleIcon(for: angle))
+                            .foregroundColor(.purple)
+                        Text(angle)
+                            .foregroundColor(.white)
+                        Spacer()
+                        if metadata.angle == angle {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 8)
+                    .background(metadata.angle == angle ? Color.blue.opacity(0.2) : Color.clear)
+                    .cornerRadius(6)
+                }
+            }
+        }
+    }
+
+    func angleIcon(for angle: String) -> String {
+        switch angle {
+        case "Occlusal": return "arrow.down.circle"
+        case "Buccal/Facial": return "arrow.left.circle"
+        case "Lingual": return "arrow.right.circle"
+        case "Proximal": return "arrow.left.arrow.right.circle"
+        case "Mesial": return "arrow.up.left.circle"
+        case "Distal": return "arrow.up.right.circle"
+        default: return "questionmark.circle"
+        }
+    }
+
+    // MARK: - Navigation
+    func updateCurrentStage() {
+        // When reopening, go to the first incomplete stage, or stay on procedure if all complete
+        if metadata.procedure == nil {
+            currentStage = .procedure
+        } else if metadata.toothNumber == nil {
+            currentStage = .tooth
+        } else if metadata.stage == nil {
+            currentStage = .stage
+        } else if metadata.angle == nil {
+            currentStage = .angle
+        } else {
+            // All fields complete - default to procedure tab for editing
+            currentStage = .procedure
+        }
+    }
+
+    func advanceToNextStage() {
+        withAnimation {
+            if let next = PhotoInfoStage(rawValue: currentStage.rawValue + 1) {
+                if next == .complete {
+                    // All done - close dropdown
+                    isDropdownOpen = false
+                    currentStage = .procedure
+                } else {
+                    currentStage = next
+                }
+            }
+        }
+    }
+
+    func goToPreviousStage() {
+        withAnimation {
+            if currentStage.rawValue > 0 {
+                // Clear the current stage's data
+                switch currentStage {
+                case .tooth:
+                    metadata.procedure = nil
+                case .stage:
+                    metadata.toothNumber = nil
+                    metadata.toothDate = nil
+                    showNewToothEntry = false
+                case .angle:
+                    metadata.stage = nil
+                case .complete:
+                    metadata.angle = nil
+                default:
+                    break
+                }
+                currentStage = PhotoInfoStage(rawValue: currentStage.rawValue - 1) ?? .procedure
+            }
+        }
     }
 }
 
 // MARK: - 3. GALLERY TAB & EDITOR
 struct GalleryView: View {
     @StateObject private var library = PhotoLibraryManager.shared
-    @ObservedObject var tagManager = TagManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
     @State private var isSidebarOpen = false
-    @State private var selectedProcedureFolder: String? = nil
-    @State private var selectedFilterTags: Set<String> = []
-    @State private var isFilterDropdownOpen = false
-    
+    @State private var selectedProcedure: String? = nil
+    @State private var selectedTooth: ToothEntry? = nil
+    @State private var expandedAngleStack: String? = nil
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-    
+
+    // Get unique tooth entries for the selected procedure
+    var toothEntriesForProcedure: [ToothEntry] {
+        guard let proc = selectedProcedure else { return [] }
+        return metadataManager.getToothEntries(for: proc)
+    }
+
+    // Get assets filtered by current selection
     var filteredAssets: [PHAsset] {
         var assets = library.assets
-        if let folder = selectedProcedureFolder {
-            assets = assets.filter { tagManager.getProcedure(for: $0.localIdentifier) == folder }
+        if let proc = selectedProcedure {
+            assets = assets.filter {
+                metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == proc
+            }
         }
-        if !selectedFilterTags.isEmpty {
+        if let tooth = selectedTooth {
             assets = assets.filter { asset in
-                let assetTags = Set(tagManager.getOtherTags(for: asset.localIdentifier))
-                return !selectedFilterTags.isDisjoint(with: assetTags)
+                guard let meta = metadataManager.getMetadata(for: asset.localIdentifier) else { return false }
+                return meta.toothNumber == tooth.toothNumber &&
+                       meta.toothDate != nil && tooth.date != nil &&
+                       Calendar.current.isDate(meta.toothDate!, inSameDayAs: tooth.date)
             }
         }
         return assets
     }
-    
-    func countForTag(_ tag: String) -> Int {
-        var assets = library.assets
-        if let folder = selectedProcedureFolder {
-            assets = assets.filter { tagManager.getProcedure(for: $0.localIdentifier) == folder }
+
+    // Group assets by stage (Preparation/Restoration)
+    var assetsByStage: [String: [PHAsset]] {
+        var grouped: [String: [PHAsset]] = ["Preparation": [], "Restoration": []]
+        for asset in filteredAssets {
+            if let stage = metadataManager.getMetadata(for: asset.localIdentifier)?.stage {
+                grouped[stage, default: []].append(asset)
+            } else {
+                grouped["Preparation", default: []].append(asset)
+            }
         }
-        return assets.filter { tagManager.getOtherTags(for: $0.localIdentifier).contains(tag) }.count
+        return grouped
     }
-    
+
+    // Group assets by angle within a stage, sorted by average rating
+    func assetsByAngle(for stage: String) -> [(angle: String, assets: [PHAsset], avgRating: Double)] {
+        let stageAssets = assetsByStage[stage] ?? []
+        var grouped: [String: [PHAsset]] = [:]
+
+        for asset in stageAssets {
+            let angle = metadataManager.getMetadata(for: asset.localIdentifier)?.angle ?? "Other"
+            grouped[angle, default: []].append(asset)
+        }
+
+        return grouped.map { (angle, assets) in
+            let ratings = assets.compactMap { metadataManager.getRating(for: $0.localIdentifier) }
+            let avg = ratings.isEmpty ? 0.0 : Double(ratings.reduce(0, +)) / Double(ratings.count)
+            return (angle, assets, avg)
+        }.sorted { $0.avgRating > $1.avgRating }
+    }
+
     var body: some View {
         NavigationView {
             ZStack(alignment: .leading) {
                 VStack(spacing: 0) {
+                    // Header bar
                     HStack {
                         Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
                             Image(systemName: "sidebar.left").font(.title2).foregroundColor(.blue)
                         }
-                        Button(action: { withAnimation { isFilterDropdownOpen.toggle() } }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
-                                    .font(.title2).foregroundColor(selectedFilterTags.isEmpty ? .white : .blue)
-                                if !selectedFilterTags.isEmpty {
-                                    Text("\(selectedFilterTags.count)").font(.caption2).bold().padding(5).background(Color.blue).foregroundColor(.white).clipShape(Circle())
+
+                        // Breadcrumb navigation
+                        if selectedProcedure != nil || selectedTooth != nil {
+                            HStack(spacing: 4) {
+                                if let proc = selectedProcedure {
+                                    Button(action: { selectedTooth = nil }) {
+                                        Text(proc)
+                                            .font(.caption).bold()
+                                            .foregroundColor(selectedTooth == nil ? .blue : .gray)
+                                    }
+                                }
+                                if let tooth = selectedTooth {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                    Text("Tooth \(tooth.toothNumber)")
+                                        .font(.caption).bold()
+                                        .foregroundColor(.blue)
                                 }
                             }
-                        }.padding(.leading, 10)
+                            .padding(.leading, 10)
+                        }
+
                         Spacer()
-                    }.padding().background(Color.black).zIndex(20)
-                    
-                    ZStack(alignment: .topLeading) {
-                        VStack(spacing: 0) {
-                            if let folder = selectedProcedureFolder {
-                                HStack {
-                                    Text(folder).font(.headline).foregroundColor(.white)
-                                    Spacer()
-                                    Text("\(filteredAssets.count) items").font(.caption).foregroundColor(.gray)
-                                }.padding(.horizontal).padding(.bottom, 5).background(Color.black)
+
+                        // Photo count
+                        Text("\(filteredAssets.count) photos")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    .padding()
+                    .background(Color.black)
+                    .zIndex(20)
+
+                    // Main content
+                    ScrollView {
+                        if filteredAssets.isEmpty {
+                            VStack(spacing: 20) {
+                                Image(systemName: selectedTooth != nil ? "tooth" : "folder")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray)
+                                Text(selectedTooth != nil ? "No photos for this tooth" : "Select a procedure")
+                                    .foregroundColor(.gray)
                             }
-                            ScrollView {
-                                if filteredAssets.isEmpty {
-                                    VStack(spacing: 20) {
-                                        Image(systemName: "folder").font(.system(size: 50)).foregroundColor(.gray)
-                                        Text("Empty Folder").foregroundColor(.gray)
-                                    }.padding(.top, 100)
-                                } else {
-                                    LazyVGrid(columns: columns, spacing: 15) {
-                                        ForEach(filteredAssets, id: \.localIdentifier) { asset in
-                                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                                AssetThumbnail(asset: asset).frame(height: 120).clipped()
-                                            }
-                                        }
+                            .padding(.top, 100)
+                        } else if selectedTooth != nil {
+                            // Show grouped by stage and angle
+                            VStack(alignment: .leading, spacing: 20) {
+                                ForEach(["Preparation", "Restoration"], id: \.self) { stage in
+                                    let angleGroups = assetsByAngle(for: stage)
+                                    if !angleGroups.isEmpty {
+                                        StageSection(
+                                            stage: stage,
+                                            angleGroups: angleGroups,
+                                            expandedAngle: $expandedAngleStack,
+                                            metadataManager: metadataManager
+                                        )
                                     }
                                 }
                             }
+                            .padding()
+                        } else {
+                            // Show flat grid for procedure-level view
+                            LazyVGrid(columns: columns, spacing: 15) {
+                                ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                                    NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(height: 120)
+                                            .clipped()
+                                    }
+                                }
+                            }
+                            .padding()
                         }
-                        if isFilterDropdownOpen { filterDropdownView.padding(.leading, 50).padding(.top, 0).zIndex(30) }
                     }
-                }.offset(x: isSidebarOpen ? 200 : 0)
-                
+                }
+                .offset(x: isSidebarOpen ? 250 : 0)
+
+                // Sidebar
                 if isSidebarOpen {
                     HStack(spacing: 0) {
-                        VStack(alignment: .leading) {
-                            Text("Procedures").font(.title3).bold().foregroundColor(.white).padding(.top, 50).padding(.leading)
-                            Button(action: { selectedProcedureFolder = nil; withAnimation { isSidebarOpen = false } }) {
-                                HStack { Image(systemName: "square.grid.2x2"); Text("All Photos") }
-                                .foregroundColor(selectedProcedureFolder == nil ? .blue : .white).padding()
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Procedures")
+                                .font(.title3).bold()
+                                .foregroundColor(.white)
+                                .padding(.top, 50)
+                                .padding(.horizontal)
+
+                            // All Photos button
+                            Button(action: {
+                                selectedProcedure = nil
+                                selectedTooth = nil
+                                withAnimation { isSidebarOpen = false }
+                            }) {
+                                HStack {
+                                    Image(systemName: "square.grid.2x2")
+                                    Text("All Photos")
+                                    Spacer()
+                                }
+                                .padding()
+                                .foregroundColor(selectedProcedure == nil ? .blue : .white)
+                                .background(selectedProcedure == nil ? Color.white.opacity(0.1) : Color.clear)
                             }
+
                             Divider().background(Color.gray)
+
+                            // Procedure folders with tooth subfolders
                             ScrollView {
-                                VStack(alignment: .leading) {
-                                    ForEach(tagManager.procedureTags, id: \.self) { folder in
-                                        Button(action: { selectedProcedureFolder = folder; withAnimation { isSidebarOpen = false } }) {
-                                            HStack { Image(systemName: "folder.fill"); Text(folder); Spacer() }
-                                            .padding()
-                                            .foregroundColor(selectedProcedureFolder == folder ? .blue : .white)
-                                            .background(selectedProcedureFolder == folder ? Color.white.opacity(0.1) : Color.clear)
-                                        }
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                        ProcedureFolderView(
+                                            procedure: procedure,
+                                            toothEntries: metadataManager.getToothEntries(for: procedure),
+                                            selectedProcedure: $selectedProcedure,
+                                            selectedTooth: $selectedTooth,
+                                            isSidebarOpen: $isSidebarOpen,
+                                            metadataManager: metadataManager,
+                                            assets: library.assets
+                                        )
                                     }
                                 }
                             }
+
                             Spacer()
                         }
-                        .frame(width: 200).background(Color(UIColor.systemGray6).opacity(0.95)).edgesIgnoringSafeArea(.vertical)
-                        Color.clear.contentShape(Rectangle()).onTapGesture { withAnimation { isSidebarOpen = false } }
-                    }.zIndex(2).transition(.move(edge: .leading))
+                        .frame(width: 250)
+                        .background(Color(UIColor.systemGray6).opacity(0.98))
+                        .edgesIgnoringSafeArea(.vertical)
+
+                        // Tap outside to close
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { withAnimation { isSidebarOpen = false } }
+                    }
+                    .zIndex(2)
+                    .transition(.move(edge: .leading))
                 }
             }
             .navigationBarHidden(true)
             .onAppear { library.fetchAssets() }
         }
     }
-    
-    var filterDropdownView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Filter by Tags").font(.caption).bold().foregroundColor(.gray)
-            Divider().background(Color.gray)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(tagManager.otherTags, id: \.self) { tag in
-                        Button(action: {
-                            if selectedFilterTags.contains(tag) { selectedFilterTags.remove(tag) } else { selectedFilterTags.insert(tag) }
-                        }) {
-                            HStack {
-                                Image(systemName: selectedFilterTags.contains(tag) ? "checkmark.square.fill" : "square")
-                                    .foregroundColor(selectedFilterTags.contains(tag) ? .blue : .gray)
-                                Text("\(tag) (\(countForTag(tag)))").foregroundColor(.white)
-                                Spacer()
+}
+
+// MARK: - Procedure Folder View (with expandable tooth subfolders)
+struct ProcedureFolderView: View {
+    let procedure: String
+    let toothEntries: [ToothEntry]
+    @Binding var selectedProcedure: String?
+    @Binding var selectedTooth: ToothEntry?
+    @Binding var isSidebarOpen: Bool
+    @ObservedObject var metadataManager: MetadataManager
+    let assets: [PHAsset]
+    @State private var isExpanded = false
+
+    var photoCount: Int {
+        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == procedure }.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Procedure row
+            Button(action: {
+                if toothEntries.isEmpty {
+                    selectedProcedure = procedure
+                    selectedTooth = nil
+                    withAnimation { isSidebarOpen = false }
+                } else {
+                    withAnimation { isExpanded.toggle() }
+                }
+            }) {
+                HStack {
+                    Image(systemName: isExpanded ? "folder.fill" : "folder")
+                        .foregroundColor(.blue)
+                    Text(procedure)
+                        .foregroundColor(selectedProcedure == procedure ? .blue : .white)
+                    Spacer()
+                    Text("\(photoCount)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    if !toothEntries.isEmpty {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(selectedProcedure == procedure && selectedTooth == nil ? Color.white.opacity(0.1) : Color.clear)
+            }
+
+            // Tooth subfolders (when expanded)
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    // View all for this procedure
+                    Button(action: {
+                        selectedProcedure = procedure
+                        selectedTooth = nil
+                        withAnimation { isSidebarOpen = false }
+                    }) {
+                        HStack {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .foregroundColor(.gray)
+                            Text("All \(procedure)")
+                                .font(.caption)
+                                .foregroundColor(selectedProcedure == procedure && selectedTooth == nil ? .blue : .white)
+                            Spacer()
+                        }
+                        .padding(.leading, 40)
+                        .padding(.vertical, 6)
+                    }
+
+                    ForEach(toothEntries) { entry in
+                        ToothSubfolderRow(
+                            entry: entry,
+                            selectedTooth: $selectedTooth,
+                            selectedProcedure: $selectedProcedure,
+                            isSidebarOpen: $isSidebarOpen,
+                            metadataManager: metadataManager,
+                            assets: assets
+                        )
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+}
+
+// MARK: - Tooth Subfolder Row
+struct ToothSubfolderRow: View {
+    let entry: ToothEntry
+    @Binding var selectedTooth: ToothEntry?
+    @Binding var selectedProcedure: String?
+    @Binding var isSidebarOpen: Bool
+    @ObservedObject var metadataManager: MetadataManager
+    let assets: [PHAsset]
+
+    var photoCount: Int {
+        assets.filter { asset in
+            guard let meta = metadataManager.getMetadata(for: asset.localIdentifier) else { return false }
+            return meta.procedure == entry.procedure &&
+                   meta.toothNumber == entry.toothNumber &&
+                   meta.toothDate != nil &&
+                   Calendar.current.isDate(meta.toothDate!, inSameDayAs: entry.date)
+        }.count
+    }
+
+    var isSelected: Bool {
+        guard let sel = selectedTooth else { return false }
+        return sel.procedure == entry.procedure &&
+               sel.toothNumber == entry.toothNumber &&
+               Calendar.current.isDate(sel.date, inSameDayAs: entry.date)
+    }
+
+    var body: some View {
+        Button(action: {
+            selectedProcedure = entry.procedure
+            selectedTooth = entry
+            withAnimation { isSidebarOpen = false }
+        }) {
+            HStack {
+                Image(systemName: "tooth")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                Text("#\(entry.toothNumber)")
+                    .font(.caption).bold()
+                    .foregroundColor(isSelected ? .blue : .white)
+                Text(entry.dateString)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                Spacer()
+                Text("\(photoCount)")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+            .padding(.leading, 40)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.white.opacity(0.1) : Color.clear)
+        }
+    }
+}
+
+// MARK: - Stage Section (Preparation/Restoration)
+struct StageSection: View {
+    let stage: String
+    let angleGroups: [(angle: String, assets: [PHAsset], avgRating: Double)]
+    @Binding var expandedAngle: String?
+    @ObservedObject var metadataManager: MetadataManager
+
+    let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Stage header
+            HStack {
+                Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                    .foregroundColor(stage == "Preparation" ? .orange : .green)
+                Text(stage)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(angleGroups.flatMap { $0.assets }.count) photos")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.gray.opacity(0.2))
+            .cornerRadius(8)
+
+            // Angle stacks
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(angleGroups, id: \.angle) { group in
+                    AngleStackView(
+                        angle: group.angle,
+                        assets: group.assets,
+                        avgRating: group.avgRating,
+                        isExpanded: expandedAngle == "\(stage)-\(group.angle)",
+                        onTap: {
+                            withAnimation {
+                                if expandedAngle == "\(stage)-\(group.angle)" {
+                                    expandedAngle = nil
+                                } else {
+                                    expandedAngle = "\(stage)-\(group.angle)"
+                                }
+                            }
+                        },
+                        metadataManager: metadataManager
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Angle Stack View (collated images by angle)
+struct AngleStackView: View {
+    let angle: String
+    let assets: [PHAsset]
+    let avgRating: Double
+    let isExpanded: Bool
+    let onTap: () -> Void
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Stack header
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Stacked preview (shows multiple overlapping thumbnails)
+                    ZStack {
+                        ForEach(Array(assets.prefix(3).enumerated().reversed()), id: \.element.localIdentifier) { index, asset in
+                            AssetThumbnail(asset: asset)
+                                .frame(height: 80)
+                                .cornerRadius(6)
+                                .shadow(radius: 2)
+                                .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 4)
+                        }
+                    }
+                    .frame(height: 90)
+                    .clipped()
+
+                    HStack {
+                        Text(angle)
+                            .font(.caption2).bold()
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("\(assets.count)")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                    }
+
+                    // Rating stars
+                    if avgRating > 0 {
+                        HStack(spacing: 2) {
+                            ForEach(1...5, id: \.self) { star in
+                                Image(systemName: star <= Int(avgRating / 2) ? "star.fill" : "star")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.yellow)
                             }
                         }
                     }
                 }
-            }.frame(maxHeight: 200)
-            if !selectedFilterTags.isEmpty {
-                Divider().background(Color.gray)
-                Button("Clear Filters") { selectedFilterTags.removeAll() }
-                    .font(.caption).foregroundColor(.red).frame(maxWidth: .infinity, alignment: .center)
             }
-        }.padding().frame(width: 220).background(Color.black.opacity(0.95)).cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.5), lineWidth: 1)).shadow(radius: 10)
+
+            // Expanded view showing all images
+            if isExpanded {
+                VStack(spacing: 8) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                            HStack {
+                                AssetThumbnail(asset: asset)
+                                    .frame(width: 60, height: 60)
+                                    .cornerRadius(4)
+
+                                VStack(alignment: .leading) {
+                                    Text(angle)
+                                        .font(.caption2)
+                                        .foregroundColor(.white)
+                                    RatingView(
+                                        rating: metadataManager.getRating(for: asset.localIdentifier) ?? 0,
+                                        assetID: asset.localIdentifier,
+                                        metadataManager: metadataManager
+                                    )
+                                }
+                                Spacer()
+                            }
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                    }
+                }
+                .padding(.top, 8)
+                .transition(.opacity)
+            }
+        }
+        .padding(8)
+        .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Rating View
+struct RatingView: View {
+    let rating: Int
+    let assetID: String
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(1...10, id: \.self) { value in
+                Button(action: {
+                    metadataManager.setRating(value, for: assetID)
+                }) {
+                    Circle()
+                        .fill(value <= rating ? Color.yellow : Color.gray.opacity(0.3))
+                        .frame(width: 12, height: 12)
+                }
+            }
+        }
     }
 }
 
@@ -1034,35 +2321,114 @@ struct PhotoDetailView: View {
     let asset: PHAsset
     @State private var image: UIImage?
     @State private var isEditing = false
-    @ObservedObject var tagManager = TagManager.shared
-    
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    var metadata: PhotoMetadata? {
+        metadataManager.getMetadata(for: asset.localIdentifier)
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack {
-                if let img = image { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit) }
-                else { ProgressView() }
-                
-                VStack(alignment: .leading, spacing: 5) {
-                    if let proc = tagManager.getProcedure(for: asset.localIdentifier) {
-                        Text(proc).font(.headline).foregroundColor(.blue)
-                    }
-                    let tags = tagManager.getOtherTags(for: asset.localIdentifier)
-                    if !tags.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                ForEach(tags, id: \.self) { tag in
-                                    Text(tag).font(.caption).padding(4).background(Color.orange.opacity(0.7)).cornerRadius(4)
+                if let img = image {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    ProgressView()
+                }
+
+                // Metadata display
+                if let meta = metadata {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Top row: Procedure and Tooth
+                        HStack(spacing: 8) {
+                            if let proc = meta.procedure {
+                                Text(proc)
+                                    .font(.caption).bold()
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.opacity(0.8))
+                                    .cornerRadius(4)
+                            }
+                            if let tooth = meta.toothNumber {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "tooth")
+                                        .font(.caption2)
+                                    Text("#\(tooth)")
+                                        .font(.caption).bold()
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.green.opacity(0.8))
+                                .cornerRadius(4)
+                            }
+                            if let date = meta.toothDate {
+                                let formatter = DateFormatter()
+                                let _ = formatter.dateStyle = .short
+                                Text(formatter.string(from: date))
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
                             }
                         }
+
+                        // Second row: Stage and Angle
+                        HStack(spacing: 8) {
+                            if let stage = meta.stage {
+                                HStack(spacing: 4) {
+                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                                        .font(.caption2)
+                                    Text(stage)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(stage == "Preparation" ? Color.orange.opacity(0.8) : Color.green.opacity(0.8))
+                                .cornerRadius(4)
+                            }
+                            if let angle = meta.angle {
+                                Text(angle)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.purple.opacity(0.8))
+                                    .cornerRadius(4)
+                            }
+                        }
+
+                        // Rating row
+                        HStack {
+                            Text("Rating:")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            RatingView(
+                                rating: meta.rating ?? 0,
+                                assetID: asset.localIdentifier,
+                                metadataManager: metadataManager
+                            )
+                        }
                     }
-                }.padding().background(Color.black.opacity(0.5)).cornerRadius(10).padding()
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .padding()
+                }
             }
         }
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Edit") { isEditing = true } } }
-        .fullScreenCover(isPresented: $isEditing) { if let img = image { PhotoEditorView(inputImage: img) } }
-        .onAppear { PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in self.image = loadedImg } }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Edit") { isEditing = true }
+            }
+        }
+        .fullScreenCover(isPresented: $isEditing) {
+            if let img = image { PhotoEditorView(inputImage: img) }
+        }
+        .onAppear {
+            PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
+                self.image = loadedImg
+            }
+        }
     }
 }
 
@@ -1225,6 +2591,26 @@ class PhotoLibraryManager: ObservableObject {
         }) { success, error in
             if success, let id = placeholder?.localIdentifier {
                 DispatchQueue.main.async { TagManager.shared.assign(procedure: procedure, otherTags: otherTags, to: id); self.fetchAssets() }
+            }
+        }
+    }
+
+    func saveWithMetadata(image: UIImage, metadata: PhotoMetadata) {
+        createAlbumIfNeeded()
+        var placeholder: PHObjectPlaceholder?
+        PHPhotoLibrary.shared().performChanges({
+            let assetRequest = PHAssetCreationRequest.creationRequestForAsset(from: image)
+            placeholder = assetRequest.placeholderForCreatedAsset
+            let fetchOptions = PHFetchOptions(); fetchOptions.predicate = NSPredicate(format: "title = %@", self.albumName)
+            let collection = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+            guard let album = collection.firstObject, let albumChangeRequest = PHAssetCollectionChangeRequest(for: album), let assetPlaceholder = placeholder else { return }
+            albumChangeRequest.addAssets([assetPlaceholder] as NSArray)
+        }) { success, error in
+            if success, let id = placeholder?.localIdentifier {
+                DispatchQueue.main.async {
+                    MetadataManager.shared.assignMetadata(metadata, to: id)
+                    self.fetchAssets()
+                }
             }
         }
     }
