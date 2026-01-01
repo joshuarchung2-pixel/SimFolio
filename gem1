@@ -55,7 +55,7 @@ struct PhotoMetadata: Codable {
     var toothDate: Date?
     var stage: String?  // "Preparation" or "Restoration"
     var angle: String?  // "Occlusal", "Buccal/Facial", etc.
-    var rating: Int?    // 1-10
+    var rating: Int?    // 1-5 stars
 
     var toothEntry: ToothEntry? {
         guard let proc = procedure, let num = toothNumber, let date = toothDate else { return nil }
@@ -247,7 +247,7 @@ class MetadataManager: ObservableObject {
 
     func setRating(_ rating: Int, for assetID: String) {
         var metadata = assetMetadata[assetID] ?? PhotoMetadata()
-        metadata.rating = max(1, min(10, rating))
+        metadata.rating = max(1, min(5, rating))
         assetMetadata[assetID] = metadata
         saveAssetMetadata()
     }
@@ -2665,7 +2665,7 @@ struct AngleStackView: View {
                     if avgRating > 0 {
                         HStack(spacing: 2) {
                             ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= Int(avgRating / 2) ? "star.fill" : "star")
+                                Image(systemName: star <= Int(avgRating) ? "star.fill" : "star")
                                     .font(.system(size: 8))
                                     .foregroundColor(.yellow)
                             }
@@ -2674,35 +2674,45 @@ struct AngleStackView: View {
                 }
             }
 
-            // Expanded view showing all images in horizontal scroll
+            // Expanded view showing all images - uses full width
             if isExpanded {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(assets, id: \.localIdentifier) { asset in
-                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                VStack(spacing: 4) {
-                                    AssetThumbnail(asset: asset)
-                                        .frame(width: 80, height: 80)
-                                        .cornerRadius(6)
+                GeometryReader { geometry in
+                    let itemCount = assets.count
+                    let spacing: CGFloat = 12
+                    let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
+                    let availableWidth = geometry.size.width - totalSpacing
+                    let itemWidth = min(availableWidth / CGFloat(max(1, itemCount)), 150)
+                    let itemHeight = itemWidth
 
-                                    // Rating display (horizontal)
-                                    HStack(spacing: 1) {
-                                        ForEach(1...5, id: \.self) { star in
-                                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
-                                            Image(systemName: star <= (currentRating / 2) ? "star.fill" : "star")
-                                                .font(.system(size: 8))
-                                                .foregroundColor(.yellow)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: spacing) {
+                            ForEach(assets, id: \.localIdentifier) { asset in
+                                NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                    VStack(spacing: 6) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(width: itemWidth, height: itemHeight)
+                                            .cornerRadius(8)
+
+                                        // Rating display (horizontal)
+                                        HStack(spacing: 2) {
+                                            ForEach(1...5, id: \.self) { star in
+                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.yellow)
+                                            }
                                         }
                                     }
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
                                 }
-                                .padding(6)
-                                .background(Color.gray.opacity(0.15))
-                                .cornerRadius(8)
                             }
                         }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
+                .frame(height: 180)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
@@ -2719,14 +2729,14 @@ struct RatingView: View {
     @ObservedObject var metadataManager: MetadataManager
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(1...10, id: \.self) { value in
+        HStack(spacing: 4) {
+            ForEach(1...5, id: \.self) { value in
                 Button(action: {
                     metadataManager.setRating(value, for: assetID)
                 }) {
-                    Circle()
-                        .fill(value <= rating ? Color.yellow : Color.gray.opacity(0.3))
-                        .frame(width: 12, height: 12)
+                    Image(systemName: value <= rating ? "star.fill" : "star")
+                        .font(.system(size: 16))
+                        .foregroundColor(value <= rating ? .yellow : .gray.opacity(0.5))
                 }
             }
         }
