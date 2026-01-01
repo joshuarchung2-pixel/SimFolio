@@ -2095,16 +2095,16 @@ struct GalleryView: View {
                 if !isSidebarOpen {
                     HStack {
                         Color.clear
-                            .frame(width: 30)
+                            .frame(width: 60)
                             .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 10)
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
                                     .onChanged { value in
                                         dragOffset = value.translation.width
                                     }
                                     .onEnded { value in
                                         // Open sidebar if swiped right with enough distance
-                                        if value.translation.width > 30 {
+                                        if value.translation.width > 20 {
                                             withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
                                         }
                                         dragOffset = 0
@@ -2196,14 +2196,14 @@ struct GalleryView: View {
                         .edgesIgnoringSafeArea(.vertical)
 
                         // Tap or swipe outside to close
-                        Color.clear
+                        Color.black.opacity(0.3)
                             .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
-                            .gesture(
-                                DragGesture(minimumDistance: 10)
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
                                     .onEnded { value in
                                         // Close sidebar if swiped left
-                                        if value.translation.width < -30 {
+                                        if value.translation.width < -20 {
                                             withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
                                         }
                                     }
@@ -2211,6 +2211,15 @@ struct GalleryView: View {
                     }
                     .zIndex(2)
                     .transition(.move(edge: .leading))
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                            .onEnded { value in
+                                // Close sidebar if swiped left anywhere
+                                if value.translation.width < -20 {
+                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                                }
+                            }
+                    )
                 }
             }
             .navigationBarHidden(true)
