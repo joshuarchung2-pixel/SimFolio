@@ -2608,7 +2608,7 @@ struct StageSection: View {
                     .background(Color.gray.opacity(0.05))
                     .cornerRadius(8)
                 } else {
-                    // Angle stacks
+                    // Angle stacks in grid
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(angleGroups, id: \.angle) { group in
                             AngleStackView(
@@ -2629,14 +2629,26 @@ struct StageSection: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 4) // Inner padding for grid content
+                    .padding(.horizontal, 4)
+
+                    // Expanded view - renders outside grid at full width
+                    if let expanded = expandedAngle,
+                       expanded.hasPrefix("\(stage)-"),
+                       let group = angleGroups.first(where: { "\(stage)-\($0.angle)" == expanded }) {
+                        ExpandedAngleView(
+                            angle: group.angle,
+                            assets: group.assets,
+                            metadataManager: metadataManager
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Angle Stack View (collated images by angle)
+// MARK: - Angle Stack View (collated images by angle - collapsed preview only)
 struct AngleStackView: View {
     let angle: String
     let assets: [PHAsset]
@@ -2646,91 +2658,122 @@ struct AngleStackView: View {
     @ObservedObject var metadataManager: MetadataManager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Stack header
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 4) {
-                    // Stacked preview (shows multiple overlapping thumbnails)
-                    ZStack {
-                        ForEach(Array(assets.prefix(3).enumerated().reversed()), id: \.element.localIdentifier) { index, asset in
-                            AssetThumbnail(asset: asset)
-                                .frame(height: 80)
-                                .cornerRadius(6)
-                                .shadow(radius: 2)
-                                .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 4)
-                        }
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Stacked preview (shows multiple overlapping thumbnails)
+                ZStack {
+                    ForEach(Array(assets.prefix(3).enumerated().reversed()), id: \.element.localIdentifier) { index, asset in
+                        AssetThumbnail(asset: asset)
+                            .frame(height: 80)
+                            .cornerRadius(6)
+                            .shadow(radius: 2)
+                            .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 4)
                     }
-                    .frame(height: 90)
-                    .clipped()
+                }
+                .frame(height: 90)
+                .clipped()
 
-                    HStack {
-                        Text(angle)
-                            .font(.caption2).bold()
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text("\(assets.count)")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
+                HStack {
+                    Text(angle)
+                        .font(.caption2).bold()
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text("\(assets.count)")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
 
-                    // Rating stars
-                    if avgRating > 0 {
-                        HStack(spacing: 2) {
-                            ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= Int(avgRating) ? "star.fill" : "star")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.yellow)
-                            }
+                // Rating stars
+                if avgRating > 0 {
+                    HStack(spacing: 2) {
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= Int(avgRating) ? "star.fill" : "star")
+                                .font(.system(size: 8))
+                                .foregroundColor(.yellow)
                         }
                     }
                 }
-            }
-
-            // Expanded view showing all images - uses full width
-            if isExpanded {
-                GeometryReader { geometry in
-                    let itemCount = assets.count
-                    let spacing: CGFloat = 12
-                    let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
-                    let availableWidth = geometry.size.width - totalSpacing
-                    let itemWidth = min(availableWidth / CGFloat(max(1, itemCount)), 150)
-                    let itemHeight = itemWidth
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: spacing) {
-                            ForEach(assets, id: \.localIdentifier) { asset in
-                                NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                    VStack(spacing: 6) {
-                                        AssetThumbnail(asset: asset)
-                                            .frame(width: itemWidth, height: itemHeight)
-                                            .cornerRadius(8)
-
-                                        // Rating display (horizontal)
-                                        HStack(spacing: 2) {
-                                            ForEach(1...5, id: \.self) { star in
-                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
-                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
-                                                    .font(.system(size: 10))
-                                                    .foregroundColor(.yellow)
-                                            }
-                                        }
-                                    }
-                                    .padding(8)
-                                    .background(Color.gray.opacity(0.15))
-                                    .cornerRadius(10)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    }
-                }
-                .frame(height: 180)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .padding(12)
         .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Expanded Angle View (full-width horizontal scroll)
+struct ExpandedAngleView: View {
+    let angle: String
+    let assets: [PHAsset]
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header showing angle name
+            HStack {
+                Text(angle)
+                    .font(.caption).bold()
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(assets.count) photos")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 4)
+
+            // Horizontally scrolling photos
+            GeometryReader { geometry in
+                let spacing: CGFloat = 12
+                let itemPadding: CGFloat = 8
+                let ratingHeight: CGFloat = 20
+                let itemHeight: CGFloat = 120
+                let totalItemHeight = itemHeight + ratingHeight + itemPadding * 2
+                let itemCount = assets.count
+                let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
+                let horizontalPadding: CGFloat = 16
+                let availableWidth = geometry.size.width - totalSpacing - horizontalPadding * 2
+
+                // Calculate item width: expand to fit all items, max 150pt each, min based on available space
+                let idealItemWidth = availableWidth / CGFloat(max(1, itemCount))
+                let itemWidth = min(max(idealItemWidth, 80), 150)
+
+                // Determine if scrolling is needed
+                let totalContentWidth = (itemWidth + itemPadding * 2) * CGFloat(itemCount) + totalSpacing
+                let needsScroll = totalContentWidth > geometry.size.width - horizontalPadding * 2
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: spacing) {
+                        ForEach(assets, id: \.localIdentifier) { asset in
+                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                VStack(spacing: 6) {
+                                    AssetThumbnail(asset: asset)
+                                        .frame(width: itemWidth, height: itemHeight)
+                                        .cornerRadius(8)
+
+                                    // Rating display
+                                    HStack(spacing: 2) {
+                                        ForEach(1...5, id: \.self) { star in
+                                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                            Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.yellow)
+                                        }
+                                    }
+                                }
+                                .padding(itemPadding)
+                                .background(Color.gray.opacity(0.15))
+                                .cornerRadius(10)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .frame(minWidth: needsScroll ? nil : geometry.size.width, alignment: .center)
+                }
+            }
+            .frame(height: 180)
+        }
+        .padding(12)
+        .background(Color.blue.opacity(0.1))
         .cornerRadius(8)
     }
 }
