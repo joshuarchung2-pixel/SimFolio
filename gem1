@@ -667,9 +667,9 @@ struct DentalCameraSetupView: View {
     }
     
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             Color.black.ignoresSafeArea()
-            
+
             // 1. CAMERA PREVIEW (Always active)
             CameraPreview(
                 session: cameraService.session,
@@ -729,11 +729,15 @@ struct DentalCameraSetupView: View {
             
             // 1.5 CAPTURED IMAGE OVERLAY (Review Mode)
             if let captured = cameraService.capturedImage {
-                Image(uiImage: captured)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill) // Matches camera preview
-                    .ignoresSafeArea()
-                    .zIndex(1)
+                GeometryReader { geometry in
+                    Image(uiImage: captured)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .zIndex(1)
             }
             
             // 2. FOCUS INDICATOR
@@ -2093,26 +2097,31 @@ struct GalleryView: View {
                 }
                 .offset(x: isSidebarOpen ? 250 : 0)
 
-                // Edge swipe gesture overlay (left edge for opening)
+                // Edge swipe gesture overlay (left edge for opening, below header)
                 if !isSidebarOpen {
-                    HStack {
-                        Color.clear
-                            .frame(width: 60)
-                            .contentShape(Rectangle())
-                            .highPriorityGesture(
-                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                    .onChanged { value in
-                                        dragOffset = value.translation.width
-                                    }
-                                    .onEnded { value in
-                                        // Open sidebar if swiped right with enough distance
-                                        if value.translation.width > 20 {
-                                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
+                    VStack(spacing: 0) {
+                        // Spacer for header height (approx 60pt)
+                        Color.clear.frame(height: 60)
+
+                        HStack {
+                            Color.clear
+                                .frame(width: 60)
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(
+                                    DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                        .onChanged { value in
+                                            dragOffset = value.translation.width
                                         }
-                                        dragOffset = 0
-                                    }
-                            )
-                        Spacer()
+                                        .onEnded { value in
+                                            // Open sidebar if swiped right with enough distance
+                                            if value.translation.width > 20 {
+                                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
+                                            }
+                                            dragOffset = 0
+                                        }
+                                )
+                            Spacer()
+                        }
                     }
                 }
 
