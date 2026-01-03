@@ -2035,7 +2035,7 @@ struct GalleryView: View {
                             Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).foregroundColor(.blue)
                         }
                     }
-                    .padding()
+                    .padding(16)
                     .background(Color.black)
                     .zIndex(20)
 
@@ -2064,7 +2064,7 @@ struct GalleryView: View {
                                     )
                                 }
                             }
-                            .padding()
+                            .padding(16)
                         } else if filteredAssets.isEmpty {
                             VStack(spacing: 20) {
                                 Image(systemName: "folder")
@@ -2073,6 +2073,8 @@ struct GalleryView: View {
                                 Text("Select a procedure")
                                     .foregroundColor(.gray)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
                             .padding(.top, 100)
                         } else {
                             // Show flat grid for procedure-level view
@@ -2085,7 +2087,7 @@ struct GalleryView: View {
                                     }
                                 }
                             }
-                            .padding()
+                            .padding(16)
                         }
                     }
                 }
@@ -2571,8 +2573,8 @@ struct StageSection: View {
                         .foregroundColor(.gray)
                         .padding(.leading, 8)
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
                 .background(Color.gray.opacity(0.2))
                 .cornerRadius(8)
             }
@@ -2618,6 +2620,7 @@ struct StageSection: View {
                             )
                         }
                     }
+                    .padding(.horizontal, 4) // Inner padding for grid content
                 }
             }
         }
@@ -2709,6 +2712,7 @@ struct AngleStackView: View {
                                 }
                             }
                         }
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
                 }
@@ -2716,7 +2720,7 @@ struct AngleStackView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
-        .padding(8)
+        .padding(12)
         .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
         .cornerRadius(8)
     }
