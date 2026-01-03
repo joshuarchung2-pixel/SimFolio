@@ -653,6 +653,7 @@ struct DentalCameraSetupView: View {
 
     // Photo Preview State
     @State private var lastSavedPhoto: UIImage? = nil
+    @State private var lastSavedMetadata: PhotoMetadata? = nil
     @State private var showSuccessMessage = false
     @State private var showThumbnailGlow = false
     
@@ -926,8 +927,11 @@ struct DentalCameraSetupView: View {
                             // Save the photo
                             PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
 
-                            // Update preview immediately and trigger thumbnail glow
+                            // Update preview and store metadata for navigation
                             lastSavedPhoto = captured
+                            lastSavedMetadata = currentMetadata
+
+                            // Trigger thumbnail glow
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showThumbnailGlow = true
                             }
@@ -994,7 +998,11 @@ struct DentalCameraSetupView: View {
                         HStack {
                             // Last Photo Preview (bottom-left)
                             if let lastPhoto = lastSavedPhoto {
-                                NavigationLink(destination: GalleryView()) {
+                                NavigationLink(destination: GalleryView(
+                                    initialProcedure: lastSavedMetadata?.procedure,
+                                    initialToothNumber: lastSavedMetadata?.toothNumber,
+                                    initialToothDate: lastSavedMetadata?.toothDate
+                                )) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
@@ -1336,6 +1344,14 @@ struct PhotoInfoPillView: View {
         .angle: .purple
     ]
 
+    // Check if any required metadata field is blank
+    var hasIncompleteFields: Bool {
+        metadata.procedure == nil ||
+        metadata.toothNumber == nil ||
+        metadata.stage == nil ||
+        metadata.angle == nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Main pill button
@@ -1393,8 +1409,14 @@ struct PhotoInfoPillView: View {
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(isDropdownOpen ? Color.blue : Color.white.opacity(0.3), lineWidth: 1)
+                        .stroke(
+                            hasIncompleteFields ? Color.red.opacity(0.8) :
+                            (isDropdownOpen ? Color.blue : Color.white.opacity(0.3)),
+                            lineWidth: hasIncompleteFields ? 1.5 : 1
+                        )
                 )
+                .shadow(color: hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear, radius: 8)
+                .shadow(color: hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear, radius: 16)
             }
             .foregroundColor(.white)
 
@@ -1912,6 +1934,11 @@ struct GalleryView: View {
     @State private var selectedTooth: ToothEntry? = nil
     @State private var expandedAngleStack: String? = nil
 
+    // Optional initial selection (for navigation from camera)
+    var initialProcedure: String? = nil
+    var initialToothNumber: Int? = nil
+    var initialToothDate: Date? = nil
+
     // Folder management state
     @State private var showAddFolderSheet = false
     @State private var newFolderName = ""
@@ -2234,7 +2261,21 @@ struct GalleryView: View {
                 }
             }
             .navigationBarHidden(true)
-            .onAppear { library.fetchAssets() }
+            .onAppear {
+                library.fetchAssets()
+                // Apply initial selection if provided (from camera navigation)
+                if let proc = initialProcedure {
+                    selectedProcedure = proc
+                    if let toothNum = initialToothNumber, let toothDate = initialToothDate {
+                        // Find matching tooth entry
+                        let entries = metadataManager.getToothEntries(for: proc)
+                        selectedTooth = entries.first { entry in
+                            entry.toothNumber == toothNum &&
+                            Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                        }
+                    }
+                }
+            }
             // Add Folder Sheet
             .sheet(isPresented: $showAddFolderSheet) {
                 NavigationView {
