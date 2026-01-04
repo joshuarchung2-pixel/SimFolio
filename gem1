@@ -1352,6 +1352,29 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Computed properties for pill styling (helps Swift type-checker)
+    var pillStrokeColor: Color {
+        if hasIncompleteFields {
+            return Color.red.opacity(0.8)
+        } else if isDropdownOpen {
+            return Color.blue
+        } else {
+            return Color.white.opacity(0.3)
+        }
+    }
+
+    var pillStrokeWidth: CGFloat {
+        hasIncompleteFields ? 1.5 : 1
+    }
+
+    var pillGlowColor: Color {
+        hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear
+    }
+
+    var pillGlowColorOuter: Color {
+        hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Main pill button
@@ -1409,14 +1432,10 @@ struct PhotoInfoPillView: View {
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            hasIncompleteFields ? Color.red.opacity(0.8) :
-                            (isDropdownOpen ? Color.blue : Color.white.opacity(0.3)),
-                            lineWidth: hasIncompleteFields ? 1.5 : 1
-                        )
+                        .stroke(pillStrokeColor, lineWidth: pillStrokeWidth)
                 )
-                .shadow(color: hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear, radius: 8)
-                .shadow(color: hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear, radius: 16)
+                .shadow(color: pillGlowColor, radius: 8)
+                .shadow(color: pillGlowColorOuter, radius: 16)
             }
             .foregroundColor(.white)
 
