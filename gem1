@@ -786,7 +786,7 @@ struct DentalCameraSetupView: View {
                 .position(loc)
                 .id(loc)
                 .transition(.opacity.animation(.easeInOut(duration: 0.2)))
-                .onChange(of: loc) { _ in
+                .onChange(of: loc) {
                     showFocusSquare = true
                     if !isAELocked {
                         focusSquareTimer?.cancel()
@@ -1090,7 +1090,7 @@ struct CameraPreview: UIViewRepresentable {
         view.backgroundColor = .black
         view.videoPreviewLayer.session = session
         view.videoPreviewLayer.videoGravity = .resizeAspectFill
-        view.videoPreviewLayer.connection?.videoOrientation = .portrait
+        view.videoPreviewLayer.connection?.videoRotationAngle = 90
         
         // Tap Gesture
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
@@ -1945,7 +1945,7 @@ struct GalleryView: View {
             assets = assets.filter { asset in
                 guard let meta = metadataManager.getMetadata(for: asset.localIdentifier) else { return false }
                 return meta.toothNumber == tooth.toothNumber &&
-                       meta.toothDate != nil && tooth.date != nil &&
+                       meta.toothDate != nil &&
                        Calendar.current.isDate(meta.toothDate!, inSameDayAs: tooth.date)
             }
         }
@@ -3024,10 +3024,10 @@ struct PhotoEditorView: View {
                 displayedImage = inputImage
                 applyProcessing()
             }
-            .onChange(of: brightness) { _ in applyProcessing() }
-            .onChange(of: contrast) { _ in applyProcessing() }
-            .onChange(of: saturation) { _ in applyProcessing() }
-            .onChange(of: sharpness) { _ in applyProcessing() }
+            .onChange(of: brightness) { applyProcessing() }
+            .onChange(of: contrast) { applyProcessing() }
+            .onChange(of: saturation) { applyProcessing() }
+            .onChange(of: sharpness) { applyProcessing() }
         }
     }
 
