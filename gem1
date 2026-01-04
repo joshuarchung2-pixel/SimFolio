@@ -817,6 +817,7 @@ struct DentalCameraSetupView: View {
     // Photo Preview State
     @State private var lastSavedPhoto: UIImage? = nil
     @State private var lastSavedMetadata: PhotoMetadata? = nil
+    @State private var lastSavedPhotoId: String? = nil
     @State private var showSuccessMessage = false
     @State private var showThumbnailGlow = false
     @State private var isPhotoFading = false
@@ -1097,8 +1098,10 @@ struct DentalCameraSetupView: View {
                         .foregroundColor(.white).cornerRadius(10)
 
                         Button(action: {
-                            // Save the photo
-                            PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
+                            // Save the photo and capture the photo ID
+                            PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata) { photoId in
+                                lastSavedPhotoId = photoId
+                            }
 
                             // Update preview and store metadata for navigation
                             lastSavedPhoto = captured
@@ -1178,7 +1181,9 @@ struct DentalCameraSetupView: View {
                                 NavigationLink(destination: GalleryView(
                                     initialProcedure: lastSavedMetadata?.procedure,
                                     initialToothNumber: lastSavedMetadata?.toothNumber,
-                                    initialToothDate: lastSavedMetadata?.toothDate
+                                    initialToothDate: lastSavedMetadata?.toothDate,
+                                    highlightPhotoId: lastSavedPhotoId,
+                                    navigatedFromCamera: true
                                 )) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
@@ -2137,6 +2142,12 @@ struct GalleryView: View {
     var initialProcedure: String? = nil
     var initialToothNumber: Int? = nil
     var initialToothDate: Date? = nil
+    var highlightPhotoId: String? = nil
+    var navigatedFromCamera: Bool = false
+
+    // State for photo highlight animation
+    @State private var showPhotoHighlight = false
+    @State private var highlightedPhotoId: String? = nil
 
     // Folder management state
     @State private var showAddFolderSheet = false
@@ -2290,7 +2301,9 @@ struct GalleryView: View {
                                                     collapsedStages.insert(stage)
                                                 }
                                             }
-                                        }
+                                        },
+                                        highlightedPhotoId: highlightedPhotoId,
+                                        showPhotoHighlight: showPhotoHighlight
                                     )
                                 }
                             }
@@ -2310,10 +2323,20 @@ struct GalleryView: View {
                             // Show flat grid for procedure-level view
                             LazyVGrid(columns: columns, spacing: 15) {
                                 ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                                    let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                                     NavigationLink(destination: PhotoDetailView(asset: asset)) {
                                         AssetThumbnail(asset: asset)
                                             .frame(height: 120)
                                             .clipped()
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                            )
+                                            .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                            .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                            .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                            .animation(.easeInOut(duration: 0.3), value: isHighlighted)
                                     }
                                 }
                             }
@@ -2460,6 +2483,7 @@ struct GalleryView: View {
                 }
             }
             .navigationBarHidden(true)
+            .navigationBarBackButtonHidden(navigatedFromCamera)
             .onAppear {
                 library.fetchAssets()
                 // Apply initial selection if provided (from camera navigation)
@@ -2471,6 +2495,25 @@ struct GalleryView: View {
                         selectedTooth = entries.first { entry in
                             entry.toothNumber == toothNum &&
                             Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                        }
+                    }
+                }
+                // Trigger photo highlight animation if navigated from camera
+                if let photoId = highlightPhotoId {
+                    highlightedPhotoId = photoId
+                    showPhotoHighlight = true
+
+                    // Auto-expand the angle group containing the highlighted photo
+                    if let metadata = metadataManager.getMetadata(for: photoId),
+                       let stage = metadata.stage,
+                       let angle = metadata.angle {
+                        expandedAngleStack = "\(stage)-\(angle)"
+                    }
+
+                    // Remove highlight after 1 second
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showPhotoHighlight = false
                         }
                     }
                 }
@@ -2794,6 +2837,8 @@ struct StageSection: View {
     @ObservedObject var metadataManager: MetadataManager
     var isCollapsed: Bool = false
     var onToggleCollapse: (() -> Void)? = nil
+    var highlightedPhotoId: String? = nil
+    var showPhotoHighlight: Bool = false
 
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -2865,7 +2910,9 @@ struct StageSection: View {
                                         }
                                     }
                                 },
-                                metadataManager: metadataManager
+                                metadataManager: metadataManager,
+                                highlightedPhotoId: highlightedPhotoId,
+                                showPhotoHighlight: showPhotoHighlight
                             )
                         }
                     }
@@ -2878,7 +2925,9 @@ struct StageSection: View {
                         ExpandedAngleView(
                             angle: group.angle,
                             assets: group.assets,
-                            metadataManager: metadataManager
+                            metadataManager: metadataManager,
+                            highlightedPhotoId: highlightedPhotoId,
+                            showPhotoHighlight: showPhotoHighlight
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
@@ -2896,6 +2945,14 @@ struct AngleStackView: View {
     let isExpanded: Bool
     let onTap: () -> Void
     @ObservedObject var metadataManager: MetadataManager
+    var highlightedPhotoId: String? = nil
+    var showPhotoHighlight: Bool = false
+
+    // Check if this angle group contains the highlighted photo
+    var containsHighlightedPhoto: Bool {
+        guard showPhotoHighlight, let highlightId = highlightedPhotoId else { return false }
+        return assets.contains { $0.localIdentifier == highlightId }
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -2938,6 +2995,14 @@ struct AngleStackView: View {
         .padding(12)
         .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.blue, lineWidth: containsHighlightedPhoto ? 3 : 0)
+        )
+        .shadow(color: .blue.opacity(containsHighlightedPhoto ? 0.8 : 0), radius: 12)
+        .shadow(color: .blue.opacity(containsHighlightedPhoto ? 0.5 : 0), radius: 20)
+        .scaleEffect(containsHighlightedPhoto ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.3), value: containsHighlightedPhoto)
     }
 }
 
@@ -2946,6 +3011,8 @@ struct ExpandedAngleView: View {
     let angle: String
     let assets: [PHAsset]
     @ObservedObject var metadataManager: MetadataManager
+    var highlightedPhotoId: String? = nil
+    var showPhotoHighlight: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2984,6 +3051,7 @@ struct ExpandedAngleView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: spacing) {
                         ForEach(assets, id: \.localIdentifier) { asset in
+                            let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                             NavigationLink(destination: PhotoDetailView(asset: asset)) {
                                 VStack(spacing: 6) {
                                     AssetThumbnail(asset: asset)
@@ -3003,6 +3071,14 @@ struct ExpandedAngleView: View {
                                 .padding(itemPadding)
                                 .background(Color.gray.opacity(0.15))
                                 .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                )
+                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
                             }
                         }
                     }
@@ -3649,7 +3725,7 @@ class PhotoLibraryManager: ObservableObject {
         }
     }
 
-    func saveWithMetadata(image: UIImage, metadata: PhotoMetadata) {
+    func saveWithMetadata(image: UIImage, metadata: PhotoMetadata, completion: ((String?) -> Void)? = nil) {
         createAlbumIfNeeded()
         var placeholder: PHObjectPlaceholder?
         PHPhotoLibrary.shared().performChanges({
@@ -3664,6 +3740,11 @@ class PhotoLibraryManager: ObservableObject {
                 DispatchQueue.main.async {
                     MetadataManager.shared.assignMetadata(metadata, to: id)
                     self.fetchAssets()
+                    completion?(id)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion?(nil)
                 }
             }
         }
