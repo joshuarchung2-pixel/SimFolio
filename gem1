@@ -656,6 +656,7 @@ struct DentalCameraSetupView: View {
     @State private var lastSavedMetadata: PhotoMetadata? = nil
     @State private var showSuccessMessage = false
     @State private var showThumbnailGlow = false
+    @State private var isPhotoFading = false
     
     // Computed property for visual slider position
     // Maps actual exposure bias [min, max] to visual slider height [-70, 70]
@@ -740,6 +741,8 @@ struct DentalCameraSetupView: View {
                 }
                 .ignoresSafeArea()
                 .zIndex(1)
+                .opacity(isPhotoFading ? 0 : 1)
+                .animation(.easeOut(duration: 0.25), value: isPhotoFading)
             }
             
             // 2. FOCUS INDICATOR
@@ -916,7 +919,13 @@ struct DentalCameraSetupView: View {
                 if let captured = cameraService.capturedImage {
                     // REVIEW MODE
                     HStack(alignment: .center, spacing: 50) {
-                        Button(action: { cameraService.retake() }) {
+                        Button(action: {
+                            isPhotoFading = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                cameraService.retake()
+                                isPhotoFading = false
+                            }
+                        }) {
                             Text("Retake")
                                 .font(.headline)
                                 .frame(width: 120, height: 50)
@@ -932,14 +941,18 @@ struct DentalCameraSetupView: View {
                             lastSavedPhoto = captured
                             lastSavedMetadata = currentMetadata
 
+                            // Trigger fade-out animation
+                            isPhotoFading = true
+
                             // Trigger thumbnail glow
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showThumbnailGlow = true
                             }
 
-                            // Return to camera after brief delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            // Return to camera after fade animation completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                 cameraService.retake()
+                                isPhotoFading = false
                             }
 
                             // Show success message
