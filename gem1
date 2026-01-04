@@ -55,7 +55,7 @@ struct PhotoMetadata: Codable {
     var toothDate: Date?
     var stage: String?  // "Preparation" or "Restoration"
     var angle: String?  // "Occlusal", "Buccal/Facial", etc.
-    var rating: Int?    // 1-10
+    var rating: Int?    // 1-5 stars
 
     var toothEntry: ToothEntry? {
         guard let proc = procedure, let num = toothNumber, let date = toothDate else { return nil }
@@ -247,7 +247,7 @@ class MetadataManager: ObservableObject {
 
     func setRating(_ rating: Int, for assetID: String) {
         var metadata = assetMetadata[assetID] ?? PhotoMetadata()
-        metadata.rating = max(1, min(10, rating))
+        metadata.rating = max(1, min(5, rating))
         assetMetadata[assetID] = metadata
         saveAssetMetadata()
     }
@@ -653,6 +653,7 @@ struct DentalCameraSetupView: View {
 
     // Photo Preview State
     @State private var lastSavedPhoto: UIImage? = nil
+    @State private var lastSavedMetadata: PhotoMetadata? = nil
     @State private var showSuccessMessage = false
     @State private var showThumbnailGlow = false
     
@@ -667,11 +668,12 @@ struct DentalCameraSetupView: View {
     }
     
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
-            
-            // 1. CAMERA PREVIEW (Always active)
-            CameraPreview(
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                // 1. CAMERA PREVIEW (Always active)
+                CameraPreview(
                 session: cameraService.session,
                 onTap: { point in
                     isAELocked = false
@@ -729,11 +731,15 @@ struct DentalCameraSetupView: View {
             
             // 1.5 CAPTURED IMAGE OVERLAY (Review Mode)
             if let captured = cameraService.capturedImage {
-                Image(uiImage: captured)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill) // Matches camera preview
-                    .ignoresSafeArea()
-                    .zIndex(1)
+                GeometryReader { geometry in
+                    Image(uiImage: captured)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .zIndex(1)
             }
             
             // 2. FOCUS INDICATOR
@@ -922,8 +928,11 @@ struct DentalCameraSetupView: View {
                             // Save the photo
                             PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata)
 
-                            // Update preview immediately and trigger thumbnail glow
+                            // Update preview and store metadata for navigation
                             lastSavedPhoto = captured
+                            lastSavedMetadata = currentMetadata
+
+                            // Trigger thumbnail glow
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showThumbnailGlow = true
                             }
@@ -990,7 +999,11 @@ struct DentalCameraSetupView: View {
                         HStack {
                             // Last Photo Preview (bottom-left)
                             if let lastPhoto = lastSavedPhoto {
-                                NavigationLink(destination: GalleryView()) {
+                                NavigationLink(destination: GalleryView(
+                                    initialProcedure: lastSavedMetadata?.procedure,
+                                    initialToothNumber: lastSavedMetadata?.toothNumber,
+                                    initialToothDate: lastSavedMetadata?.toothDate
+                                )) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
@@ -1064,10 +1077,13 @@ struct DentalCameraSetupView: View {
                 Color.black.ignoresSafeArea().zIndex(20)
             }
         }
-        .ignoresSafeArea()
-        .sheet(isPresented: $isGhostPickerPresented) {
-            CustomGhostPicker(selectedImage: $ghostImage)
+            .ignoresSafeArea()
+            .sheet(isPresented: $isGhostPickerPresented) {
+                CustomGhostPicker(selectedImage: $ghostImage)
+            }
+            .navigationBarHidden(true)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 
@@ -1332,6 +1348,37 @@ struct PhotoInfoPillView: View {
         .angle: .purple
     ]
 
+    // Check if any required metadata field is blank
+    var hasIncompleteFields: Bool {
+        metadata.procedure == nil ||
+        metadata.toothNumber == nil ||
+        metadata.stage == nil ||
+        metadata.angle == nil
+    }
+
+    // Computed properties for pill styling (helps Swift type-checker)
+    var pillStrokeColor: Color {
+        if hasIncompleteFields {
+            return Color.red.opacity(0.8)
+        } else if isDropdownOpen {
+            return Color.blue
+        } else {
+            return Color.white.opacity(0.3)
+        }
+    }
+
+    var pillStrokeWidth: CGFloat {
+        hasIncompleteFields ? 1.5 : 1
+    }
+
+    var pillGlowColor: Color {
+        hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear
+    }
+
+    var pillGlowColorOuter: Color {
+        hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Main pill button
@@ -1389,8 +1436,10 @@ struct PhotoInfoPillView: View {
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(isDropdownOpen ? Color.blue : Color.white.opacity(0.3), lineWidth: 1)
+                        .stroke(pillStrokeColor, lineWidth: pillStrokeWidth)
                 )
+                .shadow(color: pillGlowColor, radius: 8)
+                .shadow(color: pillGlowColorOuter, radius: 16)
             }
             .foregroundColor(.white)
 
@@ -1908,6 +1957,11 @@ struct GalleryView: View {
     @State private var selectedTooth: ToothEntry? = nil
     @State private var expandedAngleStack: String? = nil
 
+    // Optional initial selection (for navigation from camera)
+    var initialProcedure: String? = nil
+    var initialToothNumber: Int? = nil
+    var initialToothDate: Date? = nil
+
     // Folder management state
     @State private var showAddFolderSheet = false
     @State private var newFolderName = ""
@@ -1924,6 +1978,7 @@ struct GalleryView: View {
 
     // Swipe gesture state
     @State private var dragOffset: CGFloat = 0
+    @GestureState private var isDraggingFromEdge = false
 
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -2034,7 +2089,7 @@ struct GalleryView: View {
                             Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).foregroundColor(.blue)
                         }
                     }
-                    .padding()
+                    .padding(16)
                     .background(Color.black)
                     .zIndex(20)
 
@@ -2063,7 +2118,7 @@ struct GalleryView: View {
                                     )
                                 }
                             }
-                            .padding()
+                            .padding(16)
                         } else if filteredAssets.isEmpty {
                             VStack(spacing: 20) {
                                 Image(systemName: "folder")
@@ -2072,6 +2127,8 @@ struct GalleryView: View {
                                 Text("Select a procedure")
                                     .foregroundColor(.gray)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
                             .padding(.top, 100)
                         } else {
                             // Show flat grid for procedure-level view
@@ -2084,32 +2141,39 @@ struct GalleryView: View {
                                     }
                                 }
                             }
-                            .padding()
+                            .padding(16)
                         }
                     }
                 }
                 .offset(x: isSidebarOpen ? 250 : 0)
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            // Only track horizontal drags
-                            if abs(value.translation.width) > abs(value.translation.height) {
-                                dragOffset = value.translation.width
-                            }
+
+                // Edge swipe gesture overlay (left edge for opening, below header)
+                if !isSidebarOpen {
+                    VStack(spacing: 0) {
+                        // Spacer for header height (approx 60pt)
+                        Color.clear.frame(height: 60)
+
+                        HStack {
+                            Color.clear
+                                .frame(width: 60)
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(
+                                    DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                        .onChanged { value in
+                                            dragOffset = value.translation.width
+                                        }
+                                        .onEnded { value in
+                                            // Open sidebar if swiped right with enough distance
+                                            if value.translation.width > 20 {
+                                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
+                                            }
+                                            dragOffset = 0
+                                        }
+                                )
+                            Spacer()
                         }
-                        .onEnded { value in
-                            let threshold: CGFloat = 50
-                            // Open sidebar: swipe right from left edge
-                            if value.startLocation.x < 50 && value.translation.width > threshold && !isSidebarOpen {
-                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
-                            }
-                            // Close sidebar: swipe left
-                            else if value.translation.width < -threshold && isSidebarOpen {
-                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
-                            }
-                            dragOffset = 0
-                        }
-                )
+                    }
+                }
 
                 // Sidebar
                 if isSidebarOpen {
@@ -2192,17 +2256,49 @@ struct GalleryView: View {
                         .background(Color(UIColor.systemGray6).opacity(0.98))
                         .edgesIgnoringSafeArea(.vertical)
 
-                        // Tap outside to close
-                        Color.clear
+                        // Tap or swipe outside to close
+                        Color.black.opacity(0.3)
                             .contentShape(Rectangle())
-                            .onTapGesture { withAnimation { isSidebarOpen = false } }
+                            .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                    .onEnded { value in
+                                        // Close sidebar if swiped left
+                                        if value.translation.width < -20 {
+                                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                                        }
+                                    }
+                            )
                     }
                     .zIndex(2)
                     .transition(.move(edge: .leading))
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                            .onEnded { value in
+                                // Close sidebar if swiped left anywhere
+                                if value.translation.width < -20 {
+                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                                }
+                            }
+                    )
                 }
             }
             .navigationBarHidden(true)
-            .onAppear { library.fetchAssets() }
+            .onAppear {
+                library.fetchAssets()
+                // Apply initial selection if provided (from camera navigation)
+                if let proc = initialProcedure {
+                    selectedProcedure = proc
+                    if let toothNum = initialToothNumber, let toothDate = initialToothDate {
+                        // Find matching tooth entry
+                        let entries = metadataManager.getToothEntries(for: proc)
+                        selectedTooth = entries.first { entry in
+                            entry.toothNumber == toothNum &&
+                            Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                        }
+                    }
+                }
+            }
             // Add Folder Sheet
             .sheet(isPresented: $showAddFolderSheet) {
                 NavigationView {
@@ -2550,8 +2646,8 @@ struct StageSection: View {
                         .foregroundColor(.gray)
                         .padding(.leading, 8)
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
                 .background(Color.gray.opacity(0.2))
                 .cornerRadius(8)
             }
@@ -2576,7 +2672,7 @@ struct StageSection: View {
                     .background(Color.gray.opacity(0.05))
                     .cornerRadius(8)
                 } else {
-                    // Angle stacks
+                    // Angle stacks in grid
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(angleGroups, id: \.angle) { group in
                             AngleStackView(
@@ -2597,13 +2693,26 @@ struct StageSection: View {
                             )
                         }
                     }
+                    .padding(.horizontal, 4)
+
+                    // Expanded view - renders outside grid at full width
+                    if let expanded = expandedAngle,
+                       expanded.hasPrefix("\(stage)-"),
+                       let group = angleGroups.first(where: { "\(stage)-\($0.angle)" == expanded }) {
+                        ExpandedAngleView(
+                            angle: group.angle,
+                            assets: group.assets,
+                            metadataManager: metadataManager
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Angle Stack View (collated images by angle)
+// MARK: - Angle Stack View (collated images by angle - collapsed preview only)
 struct AngleStackView: View {
     let angle: String
     let assets: [PHAsset]
@@ -2613,80 +2722,122 @@ struct AngleStackView: View {
     @ObservedObject var metadataManager: MetadataManager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Stack header
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 4) {
-                    // Stacked preview (shows multiple overlapping thumbnails)
-                    ZStack {
-                        ForEach(Array(assets.prefix(3).enumerated().reversed()), id: \.element.localIdentifier) { index, asset in
-                            AssetThumbnail(asset: asset)
-                                .frame(height: 80)
-                                .cornerRadius(6)
-                                .shadow(radius: 2)
-                                .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 4)
-                        }
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Stacked preview (shows multiple overlapping thumbnails)
+                ZStack {
+                    ForEach(Array(assets.prefix(3).enumerated().reversed()), id: \.element.localIdentifier) { index, asset in
+                        AssetThumbnail(asset: asset)
+                            .frame(height: 80)
+                            .cornerRadius(6)
+                            .shadow(radius: 2)
+                            .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 4)
                     }
-                    .frame(height: 90)
-                    .clipped()
+                }
+                .frame(height: 90)
+                .clipped()
 
-                    HStack {
-                        Text(angle)
-                            .font(.caption2).bold()
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text("\(assets.count)")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
+                HStack {
+                    Text(angle)
+                        .font(.caption2).bold()
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text("\(assets.count)")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
 
-                    // Rating stars
-                    if avgRating > 0 {
-                        HStack(spacing: 2) {
-                            ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= Int(avgRating / 2) ? "star.fill" : "star")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.yellow)
-                            }
+                // Rating stars
+                if avgRating > 0 {
+                    HStack(spacing: 2) {
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= Int(avgRating) ? "star.fill" : "star")
+                                .font(.system(size: 8))
+                                .foregroundColor(.yellow)
                         }
                     }
                 }
             }
+        }
+        .padding(12)
+        .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
 
-            // Expanded view showing all images in horizontal scroll
-            if isExpanded {
+// MARK: - Expanded Angle View (full-width horizontal scroll)
+struct ExpandedAngleView: View {
+    let angle: String
+    let assets: [PHAsset]
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header showing angle name
+            HStack {
+                Text(angle)
+                    .font(.caption).bold()
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(assets.count) photos")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 4)
+
+            // Horizontally scrolling photos
+            GeometryReader { geometry in
+                let spacing: CGFloat = 12
+                let itemPadding: CGFloat = 8
+                let ratingHeight: CGFloat = 20
+                let itemHeight: CGFloat = 120
+                let totalItemHeight = itemHeight + ratingHeight + itemPadding * 2
+                let itemCount = assets.count
+                let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
+                let horizontalPadding: CGFloat = 16
+                let availableWidth = geometry.size.width - totalSpacing - horizontalPadding * 2
+
+                // Calculate item width: expand to fit all items, max 150pt each, min based on available space
+                let idealItemWidth = availableWidth / CGFloat(max(1, itemCount))
+                let itemWidth = min(max(idealItemWidth, 80), 150)
+
+                // Determine if scrolling is needed
+                let totalContentWidth = (itemWidth + itemPadding * 2) * CGFloat(itemCount) + totalSpacing
+                let needsScroll = totalContentWidth > geometry.size.width - horizontalPadding * 2
+
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: spacing) {
                         ForEach(assets, id: \.localIdentifier) { asset in
                             NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                VStack(spacing: 4) {
+                                VStack(spacing: 6) {
                                     AssetThumbnail(asset: asset)
-                                        .frame(width: 80, height: 80)
-                                        .cornerRadius(6)
+                                        .frame(width: itemWidth, height: itemHeight)
+                                        .cornerRadius(8)
 
-                                    // Rating display (horizontal)
-                                    HStack(spacing: 1) {
+                                    // Rating display
+                                    HStack(spacing: 2) {
                                         ForEach(1...5, id: \.self) { star in
                                             let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
-                                            Image(systemName: star <= (currentRating / 2) ? "star.fill" : "star")
-                                                .font(.system(size: 8))
+                                            Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                .font(.system(size: 10))
                                                 .foregroundColor(.yellow)
                                         }
                                     }
                                 }
-                                .padding(6)
+                                .padding(itemPadding)
                                 .background(Color.gray.opacity(0.15))
-                                .cornerRadius(8)
+                                .cornerRadius(10)
                             }
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, horizontalPadding)
+                    .frame(minWidth: needsScroll ? nil : geometry.size.width, alignment: .center)
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+            .frame(height: 180)
         }
-        .padding(8)
-        .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+        .padding(12)
+        .background(Color.blue.opacity(0.1))
         .cornerRadius(8)
     }
 }
@@ -2698,14 +2849,14 @@ struct RatingView: View {
     @ObservedObject var metadataManager: MetadataManager
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(1...10, id: \.self) { value in
+        HStack(spacing: 4) {
+            ForEach(1...5, id: \.self) { value in
                 Button(action: {
                     metadataManager.setRating(value, for: assetID)
                 }) {
-                    Circle()
-                        .fill(value <= rating ? Color.yellow : Color.gray.opacity(0.3))
-                        .frame(width: 12, height: 12)
+                    Image(systemName: value <= rating ? "star.fill" : "star")
+                        .font(.system(size: 16))
+                        .foregroundColor(value <= rating ? .yellow : .gray.opacity(0.5))
                 }
             }
         }
@@ -2845,6 +2996,9 @@ struct PhotoEditorView: View {
     @State private var cropRect: CGRect = .zero
     @State private var cropScale: CGFloat = 1.0
     @State private var cropOffset: CGSize = .zero
+    // For smooth gesture handling
+    @State private var lastCropScale: CGFloat = 1.0
+    @State private var lastCropOffset: CGSize = .zero
 
     private let context = CIContext()
 
@@ -2870,13 +3024,27 @@ struct PhotoEditorView: View {
                                     .gesture(
                                         MagnificationGesture()
                                             .onChanged { value in
-                                                cropScale = max(0.5, min(3.0, value))
+                                                // Apply relative scale change from last scale
+                                                let newScale = lastCropScale * value
+                                                cropScale = max(0.5, min(3.0, newScale))
+                                            }
+                                            .onEnded { _ in
+                                                // Store the final scale for next gesture
+                                                lastCropScale = cropScale
                                             }
                                     )
                                     .simultaneousGesture(
                                         DragGesture()
                                             .onChanged { value in
-                                                cropOffset = value.translation
+                                                // Apply relative offset from last position
+                                                cropOffset = CGSize(
+                                                    width: lastCropOffset.width + value.translation.width,
+                                                    height: lastCropOffset.height + value.translation.height
+                                                )
+                                            }
+                                            .onEnded { _ in
+                                                // Store the final offset for next gesture
+                                                lastCropOffset = cropOffset
                                             }
                                     )
 
@@ -2904,7 +3072,7 @@ struct PhotoEditorView: View {
                         // Crop controls with fine rotation
                         VStack(spacing: 16) {
                             HStack(spacing: 30) {
-                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0 }) {
+                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero }) {
                                     VStack {
                                         Image(systemName: "arrow.counterclockwise").font(.title2)
                                         Text("Reset").font(.caption)
@@ -3035,6 +3203,8 @@ struct PhotoEditorView: View {
         cropRotation = 0
         cropScale = 1.0
         cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
         withAnimation { isCropping = true }
     }
 
@@ -3043,6 +3213,8 @@ struct PhotoEditorView: View {
         cropRotation = 0
         cropScale = 1.0
         cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
     }
 
     func applyCrop() {
@@ -3076,6 +3248,8 @@ struct PhotoEditorView: View {
         cropRotation = 0
         cropScale = 1.0
         cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
     }
 
     func applyProcessing() {
