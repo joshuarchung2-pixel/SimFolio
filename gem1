@@ -668,11 +668,12 @@ struct DentalCameraSetupView: View {
     }
     
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-            // 1. CAMERA PREVIEW (Always active)
-            CameraPreview(
+                // 1. CAMERA PREVIEW (Always active)
+                CameraPreview(
                 session: cameraService.session,
                 onTap: { point in
                     isAELocked = false
@@ -1076,10 +1077,13 @@ struct DentalCameraSetupView: View {
                 Color.black.ignoresSafeArea().zIndex(20)
             }
         }
-        .ignoresSafeArea()
-        .sheet(isPresented: $isGhostPickerPresented) {
-            CustomGhostPicker(selectedImage: $ghostImage)
+            .ignoresSafeArea()
+            .sheet(isPresented: $isGhostPickerPresented) {
+                CustomGhostPicker(selectedImage: $ghostImage)
+            }
+            .navigationBarHidden(true)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 
