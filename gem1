@@ -88,19 +88,31 @@ struct PortfolioRequirement: Codable, Identifiable, Hashable {
     var procedure: String           // e.g., "Class 1", "Crown"
     var stages: [String]            // e.g., ["Preparation", "Restoration"]
     var angles: [String]            // e.g., ["Occlusal", "Buccal/Facial"]
-    var requiredCount: Int          // How many photos needed per stage/angle combo
+    var angleCounts: [String: Int]  // Per-angle photo counts, e.g., ["Occlusal": 2, "Buccal/Facial": 1]
 
-    init(id: String = UUID().uuidString, procedure: String, stages: [String], angles: [String], requiredCount: Int = 1) {
+    init(id: String = UUID().uuidString, procedure: String, stages: [String], angles: [String], angleCounts: [String: Int] = [:]) {
         self.id = id
         self.procedure = procedure
         self.stages = stages
         self.angles = angles
-        self.requiredCount = requiredCount
+        // Default to 1 for any angle without a specified count
+        var counts = angleCounts
+        for angle in angles {
+            if counts[angle] == nil {
+                counts[angle] = 1
+            }
+        }
+        self.angleCounts = counts
     }
 
     // Total number of photos required for this requirement
     var totalRequired: Int {
-        stages.count * angles.count * requiredCount
+        var total = 0
+        for angle in angles {
+            let count = angleCounts[angle] ?? 1
+            total += stages.count * count
+        }
+        return total
     }
 
     // Display string for the requirement
@@ -370,7 +382,8 @@ class MetadataManager: ObservableObject {
         for stage in requirement.stages {
             for angle in requirement.angles {
                 let photoCount = getPhotoCount(for: requirement, stage: stage, angle: angle)
-                count += min(photoCount, requirement.requiredCount)
+                let needed = requirement.angleCounts[angle] ?? 1
+                count += min(photoCount, needed)
             }
         }
         return count
@@ -381,7 +394,8 @@ class MetadataManager: ObservableObject {
         for stage in requirement.stages {
             for angle in requirement.angles {
                 let photoCount = getPhotoCount(for: requirement, stage: stage, angle: angle)
-                if photoCount < requirement.requiredCount {
+                let needed = requirement.angleCounts[angle] ?? 1
+                if photoCount < needed {
                     return false
                 }
             }
@@ -3938,33 +3952,157 @@ struct AddPortfolioSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var portfolioName = ""
+    @State private var currentStep = 0  // 0 = name entry, 1 = add requirements
+    @State private var createdPortfolioId: String? = nil
 
     var body: some View {
         NavigationView {
-            Form {
-                Section(header: Text("Portfolio Name")) {
-                    TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
+            if currentStep == 0 {
+                // Step 1: Enter portfolio name
+                Form {
+                    Section(header: Text("Portfolio Name")) {
+                        TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
+                    }
+
+                    Section {
+                        Text("After naming your portfolio, you'll be prompted to add photo requirements.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+                .navigationTitle("New Portfolio")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isPresented = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Next") {
+                            let portfolio = Portfolio(name: portfolioName)
+                            metadataManager.addPortfolio(portfolio)
+                            createdPortfolioId = portfolio.id
+                            withAnimation { currentStep = 1 }
+                        }
+                        .disabled(portfolioName.isEmpty)
+                    }
+                }
+            } else {
+                // Step 2: Add requirements
+                AddRequirementsStepView(
+                    portfolioId: createdPortfolioId ?? "",
+                    portfolioName: portfolioName,
+                    isPresented: $isPresented
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Add Requirements Step View
+struct AddRequirementsStepView: View {
+    let portfolioId: String
+    let portfolioName: String
+    @Binding var isPresented: Bool
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var showAddRequirementSheet = false
+
+    var currentPortfolio: Portfolio? {
+        metadataManager.getPortfolio(by: portfolioId)
+    }
+
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.green)
+                    Text("Portfolio Created!")
+                        .font(.title2).bold()
+                    Text("\"\(portfolioName)\"")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 30)
+
+                // Requirements section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Add Requirements")
+                        .font(.headline)
+                        .padding(.horizontal)
+
+                    if let portfolio = currentPortfolio, !portfolio.requirements.isEmpty {
+                        // Show added requirements
+                        ForEach(portfolio.requirements) { req in
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                VStack(alignment: .leading) {
+                                    Text(req.procedure)
+                                        .font(.subheadline).bold()
+                                    Text("\(req.stages.count) stages • \(req.angles.count) angles")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding()
+                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                        }
+                    } else {
+                        // Empty state
+                        VStack(spacing: 8) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 30))
+                                .foregroundColor(.gray)
+                            Text("No requirements added yet")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    }
+
+                    // Add requirement button
+                    Button(action: { showAddRequirementSheet = true }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Requirement")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
                 }
 
-                Section(footer: Text("You can add requirements after creating the portfolio.")) {
-                    EmptyView()
+                Spacer()
+
+                // Done button
+                Button(action: { isPresented = false }) {
+                    Text(currentPortfolio?.requirements.isEmpty == true ? "Skip for Now" : "Done")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(UIColor.secondarySystemGroupedBackground))
+                        .foregroundColor(.primary)
+                        .cornerRadius(10)
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 30)
             }
-            .navigationTitle("New Portfolio")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        let portfolio = Portfolio(name: portfolioName)
-                        metadataManager.addPortfolio(portfolio)
-                        isPresented = false
-                    }
-                    .disabled(portfolioName.isEmpty)
-                }
-            }
+        }
+        .navigationTitle("Add Requirements")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .sheet(isPresented: $showAddRequirementSheet) {
+            AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolioId)
         }
     }
 }
@@ -4113,6 +4251,40 @@ struct PortfolioDetailView: View {
     }
 }
 
+// MARK: - Pie Progress View
+struct PieProgressView: View {
+    let progress: Double  // 0.0 to 1.0
+    let isFulfilled: Bool
+
+    var body: some View {
+        ZStack {
+            // Background circle
+            Circle()
+                .stroke(Color.gray.opacity(0.3), lineWidth: 3)
+
+            // Progress arc
+            Circle()
+                .trim(from: 0, to: min(1.0, progress))
+                .stroke(
+                    isFulfilled ? Color.green : Color.blue,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            // Center content
+            if isFulfilled {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.green)
+            } else if progress > 0 {
+                Text(String(format: "%.0f", progress * 100))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.blue)
+            }
+        }
+    }
+}
+
 // MARK: - Requirement Status View
 struct RequirementStatusView: View {
     let requirement: PortfolioRequirement
@@ -4128,6 +4300,11 @@ struct RequirementStatusView: View {
         requirement.totalRequired
     }
 
+    var progress: Double {
+        guard total > 0 else { return 0 }
+        return Double(fulfilled) / Double(total)
+    }
+
     var isFulfilled: Bool {
         metadataManager.isRequirementFulfilled(requirement)
     }
@@ -4137,10 +4314,9 @@ struct RequirementStatusView: View {
             // Header row
             Button(action: { withAnimation { isExpanded.toggle() } }) {
                 HStack {
-                    // Status indicator
-                    Image(systemName: isFulfilled ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isFulfilled ? .green : .orange)
-                        .font(.title3)
+                    // Pie chart progress indicator
+                    PieProgressView(progress: progress, isFulfilled: isFulfilled)
+                        .frame(width: 28, height: 28)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(requirement.procedure)
@@ -4179,7 +4355,7 @@ struct RequirementStatusView: View {
 
                             ForEach(requirement.angles, id: \.self) { angle in
                                 let count = metadataManager.getPhotoCount(for: requirement, stage: stage, angle: angle)
-                                let needed = requirement.requiredCount
+                                let needed = requirement.angleCounts[angle] ?? 1
                                 let satisfied = count >= needed
 
                                 HStack {
@@ -4239,10 +4415,19 @@ struct AddRequirementSheet: View {
     @State private var selectedProcedure: String = ""
     @State private var selectedStages: Set<String> = []
     @State private var selectedAngles: Set<String> = []
-    @State private var requiredCount: Int = 1
+    @State private var angleCounts: [String: Int] = [:]  // Per-angle photo counts
 
     var canAdd: Bool {
         !selectedProcedure.isEmpty && !selectedStages.isEmpty && !selectedAngles.isEmpty
+    }
+
+    var totalPhotos: Int {
+        var total = 0
+        for angle in selectedAngles {
+            let count = angleCounts[angle] ?? 1
+            total += selectedStages.count * count
+        }
+        return total
     }
 
     var body: some View {
@@ -4296,27 +4481,63 @@ struct AddRequirementSheet: View {
                     }
                 }
 
-                // Angle selection
+                // Angle selection with per-angle counters
                 Section(header: Text("Angles Required")) {
                     ForEach(metadataManager.angles, id: \.self) { angle in
-                        Button(action: {
-                            if selectedAngles.contains(angle) {
-                                selectedAngles.remove(angle)
-                            } else {
-                                selectedAngles.insert(angle)
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: angleIcon(for: angle))
-                                    .foregroundColor(.purple)
-                                    .frame(width: 20)
-                                Text(angle)
-                                    .foregroundColor(.primary)
-                                Spacer()
+                        HStack {
+                            Button(action: {
                                 if selectedAngles.contains(angle) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
+                                    selectedAngles.remove(angle)
+                                    angleCounts.removeValue(forKey: angle)
+                                } else {
+                                    selectedAngles.insert(angle)
+                                    angleCounts[angle] = 1
                                 }
+                            }) {
+                                HStack {
+                                    Image(systemName: angleIcon(for: angle))
+                                        .foregroundColor(.purple)
+                                        .frame(width: 20)
+                                    Text(angle)
+                                        .foregroundColor(.primary)
+                                }
+                            }
+
+                            Spacer()
+
+                            if selectedAngles.contains(angle) {
+                                // Photo count stepper for selected angles
+                                HStack(spacing: 8) {
+                                    Button(action: {
+                                        let current = angleCounts[angle] ?? 1
+                                        if current > 1 {
+                                            angleCounts[angle] = current - 1
+                                        }
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(angleCounts[angle] ?? 1 > 1 ? .blue : .gray)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+
+                                    Text("\(angleCounts[angle] ?? 1)")
+                                        .font(.subheadline).bold()
+                                        .foregroundColor(.blue)
+                                        .frame(minWidth: 20)
+
+                                    Button(action: {
+                                        let current = angleCounts[angle] ?? 1
+                                        if current < 10 {
+                                            angleCounts[angle] = current + 1
+                                        }
+                                    }) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundColor(angleCounts[angle] ?? 1 < 10 ? .blue : .gray)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                }
+                            } else {
+                                Image(systemName: "circle")
+                                    .foregroundColor(.gray.opacity(0.3))
                             }
                         }
                     }
@@ -4324,8 +4545,14 @@ struct AddRequirementSheet: View {
                     Button(action: {
                         if selectedAngles.count == metadataManager.angles.count {
                             selectedAngles.removeAll()
+                            angleCounts.removeAll()
                         } else {
                             selectedAngles = Set(metadataManager.angles)
+                            for angle in metadataManager.angles {
+                                if angleCounts[angle] == nil {
+                                    angleCounts[angle] = 1
+                                }
+                            }
                         }
                     }) {
                         Text(selectedAngles.count == metadataManager.angles.count ? "Deselect All" : "Select All")
@@ -4334,34 +4561,21 @@ struct AddRequirementSheet: View {
                     }
                 }
 
-                // Required count
-                Section(header: Text("Photos Per Combination")) {
-                    Stepper(value: $requiredCount, in: 1...10) {
-                        HStack {
-                            Text("Required count:")
-                            Spacer()
-                            Text("\(requiredCount)")
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-
                 // Summary
                 if canAdd {
                     Section(header: Text("Summary")) {
-                        let totalPhotos = selectedStages.count * selectedAngles.count * requiredCount
                         VStack(alignment: .leading, spacing: 8) {
                             Text("This will require \(totalPhotos) photo\(totalPhotos == 1 ? "" : "s"):")
                                 .font(.subheadline)
                             Text("• \(selectedStages.count) stage\(selectedStages.count == 1 ? "" : "s")")
                                 .font(.caption)
                                 .foregroundColor(.gray)
-                            Text("• \(selectedAngles.count) angle\(selectedAngles.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("• \(requiredCount) photo\(requiredCount == 1 ? "" : "s") per combination")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                            ForEach(Array(selectedAngles).sorted(), id: \.self) { angle in
+                                let count = angleCounts[angle] ?? 1
+                                Text("• \(angle): \(count) photo\(count == 1 ? "" : "s") per stage")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
                         }
                     }
                 }
@@ -4378,7 +4592,7 @@ struct AddRequirementSheet: View {
                             procedure: selectedProcedure,
                             stages: Array(selectedStages),
                             angles: Array(selectedAngles),
-                            requiredCount: requiredCount
+                            angleCounts: angleCounts
                         )
                         metadataManager.addRequirement(to: portfolioId, requirement: requirement)
                         isPresented = false
