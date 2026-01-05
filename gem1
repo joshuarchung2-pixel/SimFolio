@@ -5267,7 +5267,6 @@ struct PhotoDetailView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                         }
-                    }
 
                     // Rating row (always visible)
                     HStack {
