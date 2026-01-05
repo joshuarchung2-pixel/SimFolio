@@ -4880,6 +4880,7 @@ struct RequirementStatusView: View {
                             .font(.title3)
                     }
                     .buttonStyle(BorderlessButtonStyle())
+                    .padding(.trailing, 12)
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .foregroundColor(AppColors.textSecondary)
@@ -4915,21 +4916,120 @@ struct RequirementStatusView: View {
                                     angle: angle
                                 )
                                 let matchingAssets = library.assets.filter { assetIDs.contains($0.localIdentifier) }
+                                let sortedAssets = matchingAssets.sorted { a, b in
+                                    let ratingA = metadataManager.getRating(for: a.localIdentifier) ?? 0
+                                    let ratingB = metadataManager.getRating(for: b.localIdentifier) ?? 0
+                                    return ratingA > ratingB
+                                }
+                                let primaryAssets = Array(sortedAssets.prefix(needed))
+                                let alternateAssets = Array(sortedAssets.dropFirst(needed))
 
-                                HStack {
-                                    Image(systemName: satisfied ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
-                                        .font(.system(size: 12))
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Image(systemName: satisfied ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
+                                            .font(.system(size: 12))
 
-                                    Text(angle)
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(AppColors.textPrimary.opacity(0.8))
+                                        Text(angle)
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(AppColors.textPrimary.opacity(0.8))
 
                                         Spacer()
 
-                                    Text("\(min(count, needed))/\(needed)")
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
+                                        Text("\(min(count, needed))/\(needed)")
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
+                                    }
+
+                                    // Photo thumbnails section
+                                    if !matchingAssets.isEmpty {
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 6) {
+                                                // Primary photos (up to minimum needed)
+                                                ForEach(primaryAssets, id: \.localIdentifier) { asset in
+                                                    Button(action: {
+                                                        selectedPhotoStack = PhotoStackSelection(
+                                                            procedure: requirement.procedure,
+                                                            stage: stage,
+                                                            angle: angle,
+                                                            assets: sortedAssets
+                                                        )
+                                                    }) {
+                                                        ZStack(alignment: .bottomTrailing) {
+                                                            AssetThumbnail(asset: asset)
+                                                                .frame(width: 48, height: 48)
+                                                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 6)
+                                                                        .stroke(AppColors.success, lineWidth: 2)
+                                                                )
+
+                                                            // Rating indicator
+                                                            if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
+                                                                HStack(spacing: 0) {
+                                                                    Image(systemName: "star.fill")
+                                                                        .font(.system(size: 6))
+                                                                        .foregroundColor(.yellow)
+                                                                    Text("\(rating)")
+                                                                        .font(.system(size: 8, weight: .bold))
+                                                                        .foregroundColor(.white)
+                                                                }
+                                                                .padding(.horizontal, 3)
+                                                                .padding(.vertical, 1)
+                                                                .background(Color.black.opacity(0.7))
+                                                                .cornerRadius(4)
+                                                                .offset(x: 2, y: 2)
+                                                            }
+                                                        }
+                                                    }
+                                                    .buttonStyle(BorderlessButtonStyle())
+                                                }
+
+                                                // Alternate photos (exceeding minimum)
+                                                if !alternateAssets.isEmpty {
+                                                    // Divider between primary and alternates
+                                                    Rectangle()
+                                                        .fill(AppColors.textSecondary.opacity(0.3))
+                                                        .frame(width: 1, height: 40)
+                                                        .padding(.horizontal, 4)
+
+                                                    ForEach(alternateAssets, id: \.localIdentifier) { asset in
+                                                        Button(action: {
+                                                            selectedPhotoStack = PhotoStackSelection(
+                                                                procedure: requirement.procedure,
+                                                                stage: stage,
+                                                                angle: angle,
+                                                                assets: sortedAssets
+                                                            )
+                                                        }) {
+                                                            ZStack(alignment: .bottomTrailing) {
+                                                                AssetThumbnail(asset: asset)
+                                                                    .frame(width: 48, height: 48)
+                                                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                                                    .overlay(
+                                                                        RoundedRectangle(cornerRadius: 6)
+                                                                            .stroke(AppColors.textSecondary.opacity(0.5), lineWidth: 1)
+                                                                    )
+                                                                    .opacity(0.8)
+
+                                                                // "Alt" badge for alternates
+                                                                Text("Alt")
+                                                                    .font(.system(size: 7, weight: .bold))
+                                                                    .foregroundColor(.white)
+                                                                    .padding(.horizontal, 3)
+                                                                    .padding(.vertical, 1)
+                                                                    .background(AppColors.secondary.opacity(0.8))
+                                                                    .cornerRadius(3)
+                                                                    .offset(x: 2, y: 2)
+                                                            }
+                                                        }
+                                                        .buttonStyle(BorderlessButtonStyle())
+                                                    }
+                                                }
+                                            }
+                                            .padding(.vertical, 4)
+                                        }
+                                    }
                                 }
                                 .padding(.leading, 20)
                             }
