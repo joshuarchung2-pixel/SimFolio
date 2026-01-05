@@ -5,6 +5,7 @@ import Combine
 import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import UserNotifications
 
 // MARK: - CUSTOM FONT SYSTEM
 // Typography using Inter for headings, Geist for body/subheadings
@@ -109,6 +110,234 @@ class ThemeManager: ObservableObject {
     }
 }
 
+// MARK: - NOTIFICATION MANAGER
+enum NotificationFrequency: String, CaseIterable, Codable {
+    case once = "Once"
+    case daily = "Daily"
+    case twiceDaily = "Twice Daily"
+
+    var description: String { rawValue }
+}
+
+class NotificationManager: ObservableObject {
+    static let shared = NotificationManager()
+
+    private let notificationsEnabledKey = "DentalPortfolio_NotificationsEnabled"
+    private let notificationDaysBeforeKey = "DentalPortfolio_NotificationDaysBefore"
+    private let notificationFrequencyKey = "DentalPortfolio_NotificationFrequency"
+
+    @Published var notificationsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: notificationsEnabledKey)
+            if notificationsEnabled {
+                requestNotificationPermission()
+            } else {
+                cancelAllNotifications()
+            }
+        }
+    }
+
+    @Published var daysBefore: Int {
+        didSet {
+            UserDefaults.standard.set(daysBefore, forKey: notificationDaysBeforeKey)
+            rescheduleAllNotifications()
+        }
+    }
+
+    @Published var frequency: NotificationFrequency {
+        didSet {
+            UserDefaults.standard.set(frequency.rawValue, forKey: notificationFrequencyKey)
+            rescheduleAllNotifications()
+        }
+    }
+
+    @Published var permissionGranted: Bool = false
+
+    init() {
+        self.notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsEnabledKey)
+        self.daysBefore = UserDefaults.standard.object(forKey: notificationDaysBeforeKey) as? Int ?? 7
+        if let freqStr = UserDefaults.standard.string(forKey: notificationFrequencyKey),
+           let freq = NotificationFrequency(rawValue: freqStr) {
+            self.frequency = freq
+        } else {
+            self.frequency = .daily
+        }
+        checkNotificationPermission()
+    }
+
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            DispatchQueue.main.async {
+                self.permissionGranted = granted
+                if granted {
+                    self.rescheduleAllNotifications()
+                }
+            }
+        }
+    }
+
+    func checkNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.permissionGranted = settings.authorizationStatus == .authorized
+            }
+        }
+    }
+
+    func scheduleNotification(for portfolio: Portfolio) {
+        guard notificationsEnabled, permissionGranted else { return }
+        guard let dueDate = portfolio.dueDate else { return }
+
+        // Check if portfolio has outstanding requirements
+        let stats = MetadataManager.shared.getPortfolioStats(portfolio)
+        guard stats.fulfilled < stats.total else { return }
+
+        // Calculate notification date based on daysBefore setting
+        let calendar = Calendar.current
+        guard let notificationDate = calendar.date(byAdding: .day, value: -daysBefore, to: dueDate) else { return }
+
+        // Don't schedule if notification date is in the past
+        let now = Date()
+        if notificationDate < now && dueDate > now {
+            // Due date is still in future but notification date passed - schedule for today
+            scheduleImmediateNotification(for: portfolio, dueDate: dueDate)
+        } else if notificationDate >= now {
+            scheduleTimedNotification(for: portfolio, dueDate: dueDate, notificationDate: notificationDate)
+        }
+    }
+
+    private func scheduleImmediateNotification(for portfolio: Portfolio, dueDate: Date) {
+        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
+
+        // Schedule based on frequency
+        switch frequency {
+        case .once:
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_once", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .daily:
+            // Schedule for 9 AM daily
+            var dateComponents = DateComponents()
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .twiceDaily:
+            // Schedule for 9 AM and 6 PM
+            var morningComponents = DateComponents()
+            morningComponents.hour = 9
+            morningComponents.minute = 0
+            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
+            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
+            UNUserNotificationCenter.current().add(morningRequest)
+
+            var eveningComponents = DateComponents()
+            eveningComponents.hour = 18
+            eveningComponents.minute = 0
+            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
+            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
+            UNUserNotificationCenter.current().add(eveningRequest)
+        }
+    }
+
+    private func scheduleTimedNotification(for portfolio: Portfolio, dueDate: Date, notificationDate: Date) {
+        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
+        let calendar = Calendar.current
+
+        switch frequency {
+        case .once:
+            var dateComponents = calendar.dateComponents([.year, .month, .day], from: notificationDate)
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_once", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .daily:
+            var dateComponents = DateComponents()
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .twiceDaily:
+            var morningComponents = DateComponents()
+            morningComponents.hour = 9
+            morningComponents.minute = 0
+            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
+            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
+            UNUserNotificationCenter.current().add(morningRequest)
+
+            var eveningComponents = DateComponents()
+            eveningComponents.hour = 18
+            eveningComponents.minute = 0
+            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
+            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
+            UNUserNotificationCenter.current().add(eveningRequest)
+        }
+    }
+
+    private func createNotificationContent(for portfolio: Portfolio, dueDate: Date) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        let stats = MetadataManager.shared.getPortfolioStats(portfolio)
+        let remaining = stats.total - stats.fulfilled
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+
+        if let days = portfolio.daysUntilDue {
+            if days == 0 {
+                content.title = "Portfolio Due Today!"
+                content.body = "\"\(portfolio.name)\" is due today. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else if days == 1 {
+                content.title = "Portfolio Due Tomorrow"
+                content.body = "\"\(portfolio.name)\" is due tomorrow. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else if days < 0 {
+                content.title = "Portfolio Overdue!"
+                content.body = "\"\(portfolio.name)\" was due \(abs(days)) day\(abs(days) == 1 ? "" : "s") ago. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else {
+                content.title = "Portfolio Due in \(days) Days"
+                content.body = "\"\(portfolio.name)\" is due \(formatter.string(from: dueDate)). You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            }
+        }
+
+        content.sound = .default
+        return content
+    }
+
+    func cancelNotifications(for portfolioId: String) {
+        let identifiers = [
+            "\(portfolioId)_once",
+            "\(portfolioId)_daily",
+            "\(portfolioId)_morning",
+            "\(portfolioId)_evening"
+        ]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    func cancelAllNotifications() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
+
+    func rescheduleAllNotifications() {
+        guard notificationsEnabled, permissionGranted else { return }
+        cancelAllNotifications()
+
+        for portfolio in MetadataManager.shared.portfolios {
+            scheduleNotification(for: portfolio)
+        }
+    }
+
+    func rescheduleNotification(for portfolio: Portfolio) {
+        cancelNotifications(for: portfolio.id)
+        scheduleNotification(for: portfolio)
+    }
+}
+
 // Dynamic color helper for theme-aware colors
 struct AppColors {
     static var primary: Color { Color.blue }
@@ -142,6 +371,235 @@ struct AppColors {
     }
     static var navBarBorder: Color {
         ThemeManager.shared.isDarkMode ? Color.gray.opacity(0.2) : Color.gray.opacity(0.3)
+    }
+}
+
+// MARK: - CALENDAR DATE PICKER
+struct CalendarDatePicker: View {
+    @Binding var selectedDate: Date?
+    @State private var displayedMonth: Date
+    let minDate: Date?
+    let onDateSelected: ((Date?) -> Void)?
+
+    private let calendar = Calendar.current
+    private let daysOfWeek = ["S", "M", "T", "W", "T", "F", "S"]
+
+    init(selectedDate: Binding<Date?>, minDate: Date? = nil, onDateSelected: ((Date?) -> Void)? = nil) {
+        self._selectedDate = selectedDate
+        self.minDate = minDate
+        self.onDateSelected = onDateSelected
+        // Initialize displayedMonth based on selectedDate or current date
+        if let date = selectedDate.wrappedValue {
+            self._displayedMonth = State(initialValue: date)
+        } else {
+            self._displayedMonth = State(initialValue: Date())
+        }
+    }
+
+    private var monthYearString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: displayedMonth)
+    }
+
+    private var daysInMonth: [Date?] {
+        guard let range = calendar.range(of: .day, in: .month, for: displayedMonth),
+              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth)) else {
+            return []
+        }
+
+        let firstWeekday = calendar.component(.weekday, from: firstDay)
+        var days: [Date?] = Array(repeating: nil, count: firstWeekday - 1)
+
+        for day in range {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) {
+                days.append(date)
+            }
+        }
+
+        // Fill remaining cells to complete the grid
+        while days.count % 7 != 0 {
+            days.append(nil)
+        }
+
+        return days
+    }
+
+    private func isDateSelected(_ date: Date) -> Bool {
+        guard let selected = selectedDate else { return false }
+        return calendar.isDate(date, inSameDayAs: selected)
+    }
+
+    private func isDateDisabled(_ date: Date) -> Bool {
+        guard let min = minDate else { return false }
+        return date < calendar.startOfDay(for: min)
+    }
+
+    private func isToday(_ date: Date) -> Bool {
+        calendar.isDateInToday(date)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Month navigation header
+            HStack {
+                Button(action: previousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 36, height: 36)
+                        .background(AppColors.surface)
+                        .cornerRadius(8)
+                }
+
+                Spacer()
+
+                Text(monthYearString)
+                    .font(AppFonts.headline)
+                    .foregroundColor(AppColors.textPrimary)
+
+                Spacer()
+
+                Button(action: nextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 36, height: 36)
+                        .background(AppColors.surface)
+                        .cornerRadius(8)
+                }
+            }
+            .padding(.horizontal, 4)
+
+            // Days of week header
+            HStack(spacing: 0) {
+                ForEach(daysOfWeek, id: \.self) { day in
+                    Text(day)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Calendar grid
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, date in
+                    if let date = date {
+                        let disabled = isDateDisabled(date)
+                        let selected = isDateSelected(date)
+                        let today = isToday(date)
+
+                        Button(action: {
+                            if !disabled {
+                                selectedDate = date
+                                onDateSelected?(date)
+                            }
+                        }) {
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(AppFonts.body)
+                                .foregroundColor(
+                                    disabled ? AppColors.textSecondary.opacity(0.4) :
+                                    selected ? .white :
+                                    today ? AppColors.primary :
+                                    AppColors.textPrimary
+                                )
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    selected ? AppColors.primary :
+                                    today ? AppColors.primary.opacity(0.15) :
+                                    Color.clear
+                                )
+                                .cornerRadius(8)
+                        }
+                        .disabled(disabled)
+                    } else {
+                        Color.clear
+                            .frame(width: 36, height: 36)
+                    }
+                }
+            }
+
+            // Clear date button
+            if selectedDate != nil {
+                Button(action: {
+                    selectedDate = nil
+                    onDateSelected?(nil)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                        Text("Clear Due Date")
+                            .font(AppFonts.caption)
+                    }
+                    .foregroundColor(AppColors.error)
+                    .padding(.top, 8)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppColors.surface)
+        .cornerRadius(16)
+    }
+
+    private func previousMonth() {
+        if let newDate = calendar.date(byAdding: .month, value: -1, to: displayedMonth) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                displayedMonth = newDate
+            }
+        }
+    }
+
+    private func nextMonth() {
+        if let newDate = calendar.date(byAdding: .month, value: 1, to: displayedMonth) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                displayedMonth = newDate
+            }
+        }
+    }
+}
+
+// MARK: - Due Date Display Helper
+struct DueDateBadge: View {
+    let portfolio: Portfolio
+
+    var body: some View {
+        if let dueDate = portfolio.dueDate {
+            let days = portfolio.daysUntilDue ?? 0
+            let isOverdue = portfolio.isOverdue
+            let isDueSoon = portfolio.isDueSoon
+
+            HStack(spacing: 4) {
+                Image(systemName: isOverdue ? "exclamationmark.circle.fill" : "calendar")
+                    .font(.system(size: 10))
+
+                if isOverdue {
+                    Text("Overdue")
+                        .font(AppFonts.caption2)
+                } else if days == 0 {
+                    Text("Due Today")
+                        .font(AppFonts.caption2)
+                } else if days == 1 {
+                    Text("Due Tomorrow")
+                        .font(AppFonts.caption2)
+                } else {
+                    Text("Due in \(days)d")
+                        .font(AppFonts.caption2)
+                }
+            }
+            .foregroundColor(
+                isOverdue ? AppColors.error :
+                isDueSoon ? AppColors.warning :
+                AppColors.textSecondary
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                (isOverdue ? AppColors.error :
+                isDueSoon ? AppColors.warning :
+                AppColors.textSecondary).opacity(0.15)
+            )
+            .cornerRadius(6)
+        }
     }
 }
 
@@ -314,6 +772,7 @@ struct CameraLoadingView: View {
 // MARK: - SETTINGS VIEW
 struct SettingsView: View {
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var notificationManager = NotificationManager.shared
 
     var themeIcon: String {
         switch themeManager.themeMode {
@@ -325,6 +784,8 @@ struct SettingsView: View {
             return "gear"
         }
     }
+
+    private let daysBeforeOptions = [1, 2, 3, 5, 7, 14, 30]
 
     var body: some View {
         NavigationView {
@@ -381,6 +842,164 @@ struct SettingsView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
+                            .background(AppColors.surface)
+                            .cornerRadius(12)
+                        }
+
+                        // Notifications Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Notifications")
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.textPrimary)
+                                .padding(.horizontal, 4)
+
+                            VStack(spacing: 0) {
+                                // Enable notifications toggle
+                                HStack {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(AppColors.primary)
+                                        .frame(width: 28)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Due Date Reminders")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+                                        Text("Get notified about upcoming portfolio due dates")
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(AppColors.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    Toggle("", isOn: $notificationManager.notificationsEnabled)
+                                        .labelsHidden()
+                                        .tint(AppColors.primary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+
+                                if notificationManager.notificationsEnabled {
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    // Days before due date
+                                    HStack {
+                                        Image(systemName: "calendar.badge.clock")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.primary)
+                                            .frame(width: 28)
+
+                                        Text("Remind me")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+
+                                        Spacer()
+
+                                        Menu {
+                                            ForEach(daysBeforeOptions, id: \.self) { days in
+                                                Button(action: {
+                                                    notificationManager.daysBefore = days
+                                                }) {
+                                                    HStack {
+                                                        Text("\(days) day\(days == 1 ? "" : "s") before")
+                                                        if notificationManager.daysBefore == days {
+                                                            Image(systemName: "checkmark")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Text("\(notificationManager.daysBefore) day\(notificationManager.daysBefore == 1 ? "" : "s") before")
+                                                    .font(AppFonts.body)
+                                                    .foregroundColor(AppColors.textSecondary)
+                                                Image(systemName: "chevron.up.chevron.down")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(AppColors.textSecondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    // Notification frequency
+                                    HStack {
+                                        Image(systemName: "repeat")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.primary)
+                                            .frame(width: 28)
+
+                                        Text("Frequency")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+
+                                        Spacer()
+
+                                        Menu {
+                                            ForEach(NotificationFrequency.allCases, id: \.self) { freq in
+                                                Button(action: {
+                                                    notificationManager.frequency = freq
+                                                }) {
+                                                    HStack {
+                                                        Text(freq.description)
+                                                        if notificationManager.frequency == freq {
+                                                            Image(systemName: "checkmark")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Text(notificationManager.frequency.description)
+                                                    .font(AppFonts.body)
+                                                    .foregroundColor(AppColors.textSecondary)
+                                                Image(systemName: "chevron.up.chevron.down")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(AppColors.textSecondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                }
+
+                                if notificationManager.notificationsEnabled && !notificationManager.permissionGranted {
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.warning)
+                                            .frame(width: 28)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Permission Required")
+                                                .font(AppFonts.body)
+                                                .foregroundColor(AppColors.textPrimary)
+                                            Text("Enable notifications in Settings to receive reminders")
+                                                .font(AppFonts.caption)
+                                                .foregroundColor(AppColors.textSecondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button("Open Settings") {
+                                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        }
+                                        .font(AppFonts.caption)
+                                        .foregroundColor(AppColors.primary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                }
+                            }
                             .background(AppColors.surface)
                             .cornerRadius(12)
                         }
@@ -564,13 +1183,15 @@ struct Portfolio: Codable, Identifiable, Hashable {
     let id: String
     var name: String
     var createdDate: Date
+    var dueDate: Date?
     var requirements: [PortfolioRequirement]
     var notes: String?
 
-    init(id: String = UUID().uuidString, name: String, createdDate: Date = Date(), requirements: [PortfolioRequirement] = [], notes: String? = nil) {
+    init(id: String = UUID().uuidString, name: String, createdDate: Date = Date(), dueDate: Date? = nil, requirements: [PortfolioRequirement] = [], notes: String? = nil) {
         self.id = id
         self.name = name
         self.createdDate = createdDate
+        self.dueDate = dueDate
         self.requirements = requirements
         self.notes = notes
     }
@@ -579,6 +1200,31 @@ struct Portfolio: Codable, Identifiable, Hashable {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: createdDate)
+    }
+
+    var dueDateString: String? {
+        guard let dueDate = dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: dueDate)
+    }
+
+    var daysUntilDue: Int? {
+        guard let dueDate = dueDate else { return nil }
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfDueDate = calendar.startOfDay(for: dueDate)
+        return calendar.dateComponents([.day], from: startOfToday, to: startOfDueDate).day
+    }
+
+    var isOverdue: Bool {
+        guard let days = daysUntilDue else { return false }
+        return days < 0
+    }
+
+    var isDueSoon: Bool {
+        guard let days = daysUntilDue else { return false }
+        return days >= 0 && days <= 7
     }
 }
 
@@ -881,16 +1527,24 @@ class MetadataManager: ObservableObject {
     func addPortfolio(_ portfolio: Portfolio) {
         portfolios.append(portfolio)
         savePortfolios()
+        // Schedule notification if due date is set
+        if portfolio.dueDate != nil {
+            NotificationManager.shared.scheduleNotification(for: portfolio)
+        }
     }
 
     func updatePortfolio(_ portfolio: Portfolio) {
         if let index = portfolios.firstIndex(where: { $0.id == portfolio.id }) {
             portfolios[index] = portfolio
             savePortfolios()
+            // Reschedule notification when portfolio is updated
+            NotificationManager.shared.rescheduleNotification(for: portfolio)
         }
     }
 
     func deletePortfolio(_ portfolio: Portfolio) {
+        // Cancel notifications before deleting
+        NotificationManager.shared.cancelNotifications(for: portfolio.id)
         portfolios.removeAll { $0.id == portfolio.id }
         savePortfolios()
     }
@@ -904,6 +1558,8 @@ class MetadataManager: ObservableObject {
         if let index = portfolios.firstIndex(where: { $0.id == portfolioId }) {
             portfolios[index].requirements.append(requirement)
             savePortfolios()
+            // Reschedule notification since requirements changed
+            NotificationManager.shared.rescheduleNotification(for: portfolios[index])
         }
     }
 
@@ -912,6 +1568,8 @@ class MetadataManager: ObservableObject {
         if let index = portfolios.firstIndex(where: { $0.id == portfolioId }) {
             portfolios[index].requirements.removeAll { $0.id == requirementId }
             savePortfolios()
+            // Reschedule notification since requirements changed
+            NotificationManager.shared.rescheduleNotification(for: portfolios[index])
         }
     }
 
@@ -939,6 +1597,8 @@ class MetadataManager: ObservableObject {
             if let reqIndex = portfolios[index].requirements.firstIndex(where: { $0.id == requirement.id }) {
                 portfolios[index].requirements[reqIndex] = requirement
                 savePortfolios()
+                // Reschedule notification since requirements changed
+                NotificationManager.shared.rescheduleNotification(for: portfolios[index])
             }
         }
     }
@@ -5296,7 +5956,29 @@ struct PortfoliosView: View {
                                     selectedPortfolioId = portfolio.id
                                 }) {
                                     HStack {
-                                        Text(portfolio.name)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(portfolio.name)
+                                            if let dueDate = portfolio.dueDate {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: portfolio.isOverdue ? "exclamationmark.circle.fill" : "calendar")
+                                                        .font(.caption2)
+                                                    if let days = portfolio.daysUntilDue {
+                                                        if portfolio.isOverdue {
+                                                            Text("Overdue by \(abs(days))d")
+                                                                .font(.caption2)
+                                                        } else if days == 0 {
+                                                            Text("Due today")
+                                                                .font(.caption2)
+                                                        } else {
+                                                            Text("Due in \(days)d")
+                                                                .font(.caption2)
+                                                        }
+                                                    }
+                                                }
+                                                .foregroundColor(portfolio.isOverdue ? .red : portfolio.isDueSoon ? .orange : .secondary)
+                                            }
+                                        }
+                                        Spacer()
                                         if portfolio.id == currentPortfolio?.id {
                                             Image(systemName: "checkmark")
                                         }
@@ -5305,10 +5987,15 @@ struct PortfoliosView: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Text(currentPortfolio?.name ?? "Select Portfolio")
-                                    .font(AppFonts.largeTitle)
-                                    .foregroundColor(AppColors.textPrimary)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(currentPortfolio?.name ?? "Select Portfolio")
+                                        .font(AppFonts.largeTitle)
+                                        .foregroundColor(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                    if let portfolio = currentPortfolio, let _ = portfolio.dueDate {
+                                        DueDateBadge(portfolio: portfolio)
+                                    }
+                                }
                                 Image(systemName: "chevron.down")
                                     .font(.body)
                                     .foregroundColor(AppColors.textSecondary)
@@ -5691,9 +6378,17 @@ struct PortfolioCardView: View {
                     Text(portfolio.name)
                         .font(AppFonts.headline)
                         .foregroundColor(AppColors.textPrimary)
-                    Text(portfolio.dateString)
-                        .font(AppFonts.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                    HStack(spacing: 8) {
+                        Text(portfolio.dateString)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                        if portfolio.dueDate != nil {
+                            Text("•")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                            DueDateBadge(portfolio: portfolio)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -5765,18 +6460,54 @@ struct AddPortfolioSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var portfolioName = ""
+    @State private var dueDate: Date? = nil
+    @State private var showDueDatePicker = false
     @State private var currentStep = 0  // 0 = name entry, 1 = add requirements
     @State private var createdPortfolioId: String? = nil
+
+    private var dueDateDisplayString: String {
+        guard let date = dueDate else { return "No due date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
 
     var body: some View {
         NavigationView {
             if currentStep == 0 {
-                // Step 1: Enter portfolio name
+                // Step 1: Enter portfolio name and due date
                 VStack(spacing: 0) {
                     List {
                         Section(header: Text("Portfolio Name")) {
                             TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
                                 .textInputAutocapitalization(.words)
+                        }
+
+                        Section(header: Text("Due Date (Optional)")) {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showDueDatePicker.toggle()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "calendar")
+                                        .foregroundColor(AppColors.primary)
+                                    Text(dueDateDisplayString)
+                                        .foregroundColor(dueDate != nil ? AppColors.textPrimary : AppColors.textSecondary)
+                                    Spacer()
+                                    Image(systemName: showDueDatePicker ? "chevron.up" : "chevron.down")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
+                            }
+
+                            if showDueDatePicker {
+                                CalendarDatePicker(
+                                    selectedDate: $dueDate,
+                                    minDate: Date()
+                                )
+                                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                            }
                         }
 
                         Section {
@@ -5795,9 +6526,13 @@ struct AddPortfolioSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Next") {
-                            let portfolio = Portfolio(name: portfolioName)
+                            let portfolio = Portfolio(name: portfolioName, dueDate: dueDate)
                             metadataManager.addPortfolio(portfolio)
                             createdPortfolioId = portfolio.id
+                            // Schedule notification if due date is set
+                            if dueDate != nil {
+                                NotificationManager.shared.scheduleNotification(for: portfolio)
+                            }
                             withAnimation { currentStep = 1 }
                         }
                         .disabled(portfolioName.isEmpty)
@@ -5933,6 +6668,7 @@ struct PortfolioDetailView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showEditDueDateSheet = false
     @Environment(\.presentationMode) var presentationMode
 
     var currentPortfolio: Portfolio {
@@ -5949,7 +6685,7 @@ struct PortfolioDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            AppColors.background.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -5994,6 +6730,45 @@ struct PortfolioDetailView: View {
                     .padding()
                     .background(AppColors.surface.opacity(0.5))
                     .cornerRadius(12)
+
+                    // Due Date section
+                    Button(action: { showEditDueDateSheet = true }) {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 20))
+                                .foregroundColor(AppColors.primary)
+                                .frame(width: 32)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Due Date")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+
+                                if let dueDate = currentPortfolio.dueDate {
+                                    HStack(spacing: 8) {
+                                        Text(currentPortfolio.dueDateString ?? "")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.textPrimary)
+
+                                        DueDateBadge(portfolio: currentPortfolio)
+                                    }
+                                } else {
+                                    Text("No due date set")
+                                        .font(AppFonts.headline)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        .padding()
+                        .background(AppColors.surface.opacity(0.5))
+                        .cornerRadius(12)
+                    }
 
                     // Requirements section
                     VStack(alignment: .leading, spacing: 12) {
@@ -6059,6 +6834,12 @@ struct PortfolioDetailView: View {
         .sheet(isPresented: $showAddRequirementSheet) {
             AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolio.id)
         }
+        .sheet(isPresented: $showEditDueDateSheet) {
+            EditDueDateSheet(
+                isPresented: $showEditDueDateSheet,
+                portfolio: currentPortfolio
+            )
+        }
         .alert("Delete Portfolio", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -6067,6 +6848,65 @@ struct PortfolioDetailView: View {
             }
         } message: {
             Text("Are you sure you want to delete \"\(currentPortfolio.name)\"? This cannot be undone.")
+        }
+    }
+}
+
+// MARK: - Edit Due Date Sheet
+struct EditDueDateSheet: View {
+    @Binding var isPresented: Bool
+    let portfolio: Portfolio
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var selectedDueDate: Date?
+
+    init(isPresented: Binding<Bool>, portfolio: Portfolio) {
+        self._isPresented = isPresented
+        self.portfolio = portfolio
+        self._selectedDueDate = State(initialValue: portfolio.dueDate)
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppColors.background.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    CalendarDatePicker(
+                        selectedDate: $selectedDueDate,
+                        minDate: nil
+                    )
+
+                    if let date = selectedDueDate {
+                        let formatter = DateFormatter()
+                        let _ = formatter.dateStyle = .full
+                        Text("Selected: \(formatter.string(from: date))")
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+
+                    Spacer()
+                }
+                .padding()
+            }
+            .navigationTitle("Edit Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        var updatedPortfolio = portfolio
+                        updatedPortfolio.dueDate = selectedDueDate
+                        metadataManager.updatePortfolio(updatedPortfolio)
+                        // Reschedule notification
+                        NotificationManager.shared.rescheduleNotification(for: updatedPortfolio)
+                        isPresented = false
+                    }
+                }
+            }
         }
     }
 }
