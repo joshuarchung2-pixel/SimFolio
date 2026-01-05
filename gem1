@@ -721,6 +721,53 @@ class MetadataManager: ObservableObject {
         saveToothHistory()
     }
 
+    // Move selected photos to a specific procedure folder
+    func movePhotos(assetIds: Set<String>, to procedure: String) {
+        for assetID in assetIds {
+            if var metadata = assetMetadata[assetID] {
+                metadata.procedure = procedure
+                // Clear tooth-specific data when moving between folders
+                metadata.toothNumber = nil
+                metadata.toothDate = nil
+                metadata.stage = nil
+                metadata.angle = nil
+                assetMetadata[assetID] = metadata
+            }
+        }
+        saveAssetMetadata()
+        cleanupEmptyToothEntries()
+    }
+
+    // Delete metadata for removed photos
+    func deleteMetadata(for assetIds: Set<String>) {
+        for assetID in assetIds {
+            assetMetadata.removeValue(forKey: assetID)
+        }
+        saveAssetMetadata()
+        cleanupEmptyToothEntries()
+    }
+
+    // Cleanup tooth entries that no longer have any photos
+    private func cleanupEmptyToothEntries() {
+        for (procedure, entries) in toothHistory {
+            let remainingEntries = entries.filter { entry in
+                // Check if any photos still belong to this tooth entry
+                assetMetadata.values.contains { metadata in
+                    metadata.procedure == procedure &&
+                    metadata.toothNumber == entry.toothNumber &&
+                    metadata.toothDate != nil &&
+                    Calendar.current.isDate(metadata.toothDate!, inSameDayAs: entry.date)
+                }
+            }
+            if remainingEntries.isEmpty {
+                toothHistory.removeValue(forKey: procedure)
+            } else if remainingEntries.count != entries.count {
+                toothHistory[procedure] = remainingEntries
+            }
+        }
+        saveToothHistory()
+    }
+
     // Rename a procedure
     func renameProcedure(_ oldName: String, to newName: String) {
         guard canRenameProcedure(oldName), !newName.isEmpty, !procedures.contains(newName) else { return }
@@ -2146,9 +2193,19 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Check if all fields are complete
+    var hasAllFieldsComplete: Bool {
+        metadata.procedure != nil &&
+        metadata.toothNumber != nil &&
+        metadata.stage != nil &&
+        metadata.angle != nil
+    }
+
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
-        if hasIncompleteFields {
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.8)
+        } else if hasIncompleteFields && metadata.procedure == nil {
             return Color.red.opacity(0.8)
         } else if isDropdownOpen {
             return Color.blue
@@ -2158,15 +2215,33 @@ struct PhotoInfoPillView: View {
     }
 
     var pillStrokeWidth: CGFloat {
-        hasIncompleteFields ? 1.5 : 1
+        if hasAllFieldsComplete {
+            return 1.5
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return 1.5
+        } else {
+            return 1
+        }
     }
 
     var pillGlowColor: Color {
-        hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.4)
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return Color.red.opacity(0.4)
+        } else {
+            return Color.clear
+        }
     }
 
     var pillGlowColorOuter: Color {
-        hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.2)
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return Color.red.opacity(0.2)
+        } else {
+            return Color.clear
+        }
     }
 
     var body: some View {
@@ -2178,7 +2253,7 @@ struct PhotoInfoPillView: View {
                     if metadata.procedure == nil {
                         Text("Choose procedure")
                             .font(AppFonts.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(Color.red)
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
@@ -2218,7 +2293,7 @@ struct PhotoInfoPillView: View {
 
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
                         .font(AppFonts.caption2)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(Color.black.opacity(0.6))
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
@@ -2774,6 +2849,12 @@ struct GalleryView: View {
     // Stage collapse state
     @State private var collapsedStages: Set<String> = []
 
+    // Multi-select state
+    @State private var isSelectMode = false
+    @State private var selectedAssetIds: Set<String> = []
+    @State private var showMoveSheet = false
+    @State private var showDeleteAlert = false
+
     // Swipe gesture state
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDraggingFromEdge = false
@@ -2863,12 +2944,18 @@ struct GalleryView: View {
 
                         // Current section name (centered header)
                         VStack(spacing: 2) {
-                            Text(currentSectionTitle)
-                                .font(AppFonts.largeTitle)
-                                .foregroundColor(AppColors.textPrimary)
+                            if isSelectMode {
+                                Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                                    .font(AppFonts.interBold(22))
+                                    .foregroundColor(AppColors.primary)
+                            } else {
+                                Text(currentSectionTitle)
+                                    .font(AppFonts.interBold(22))
+                                    .foregroundColor(AppColors.textPrimary)
+                            }
 
-                            // Breadcrumb for tooth selection
-                            if selectedTooth != nil, let proc = selectedProcedure {
+                            // Breadcrumb for tooth selection (only show when not in select mode)
+                            if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
                                 HStack(spacing: 4) {
                                     Text(proc)
                                         .font(AppFonts.caption2)
@@ -2885,13 +2972,20 @@ struct GalleryView: View {
 
                         Spacer()
 
-                        // Filter/sort button (placeholder for future functionality)
-                        Button(action: { }) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        // Select mode toggle button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isSelectMode.toggle()
+                                if !isSelectMode {
+                                    selectedAssetIds.removeAll()
+                                }
+                            }
+                        }) {
+                            Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
                                 .font(.system(size: 22))
-                                .foregroundColor(AppColors.primary)
+                                .foregroundColor(isSelectMode ? AppColors.primary : AppColors.primary)
                         }
-                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 60)
@@ -2922,7 +3016,9 @@ struct GalleryView: View {
                                             }
                                         },
                                         highlightedPhotoId: highlightedPhotoId,
-                                        showPhotoHighlight: showPhotoHighlight
+                                        showPhotoHighlight: showPhotoHighlight,
+                                        isSelectMode: isSelectMode,
+                                        selectedAssetIds: $selectedAssetIds
                                     )
                                 }
                             }
@@ -2944,19 +3040,64 @@ struct GalleryView: View {
                             LazyVGrid(columns: columns, spacing: 15) {
                                 ForEach(filteredAssets, id: \.localIdentifier) { asset in
                                     let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                                    NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                        AssetThumbnail(asset: asset)
-                                            .frame(height: 120)
-                                            .clipped()
-                                            .cornerRadius(8)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                            )
-                                            .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                            .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                            .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                            .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                    let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+
+                                    if isSelectMode {
+                                        // Selection mode - tap to select/deselect
+                                        Button(action: {
+                                            withAnimation(.easeInOut(duration: 0.15)) {
+                                                if selectedAssetIds.contains(asset.localIdentifier) {
+                                                    selectedAssetIds.remove(asset.localIdentifier)
+                                                } else {
+                                                    selectedAssetIds.insert(asset.localIdentifier)
+                                                }
+                                            }
+                                        }) {
+                                            AssetThumbnail(asset: asset)
+                                                .frame(height: 120)
+                                                .clipped()
+                                                .cornerRadius(8)
+                                                .overlay(
+                                                    // Selection checkbox overlay
+                                                    ZStack {
+                                                        Circle()
+                                                            .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                            .frame(width: 24, height: 24)
+                                                        if isSelected {
+                                                            Image(systemName: "checkmark")
+                                                                .font(.system(size: 12, weight: .bold))
+                                                                .foregroundColor(.white)
+                                                        } else {
+                                                            Circle()
+                                                                .stroke(Color.white, lineWidth: 2)
+                                                                .frame(width: 22, height: 22)
+                                                        }
+                                                    }
+                                                    .padding(6),
+                                                    alignment: .topTrailing
+                                                )
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                                )
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    } else {
+                                        // Normal mode - navigate to detail view
+                                        NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                            AssetThumbnail(asset: asset)
+                                                .frame(height: 120)
+                                                .clipped()
+                                                .cornerRadius(8)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                                )
+                                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                        }
                                     }
                                 }
                             }
@@ -3084,9 +3225,13 @@ struct GalleryView: View {
                                         }
                                     }
                             )
+                            .transition(.opacity)
                     }
                     .zIndex(2)
-                    .transition(.move(edge: .leading))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading),
+                        removal: .move(edge: .leading)
+                    ))
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 5, coordinateSpace: .global)
                             .onEnded { value in
@@ -3096,6 +3241,48 @@ struct GalleryView: View {
                                 }
                             }
                     )
+                }
+
+                // Bottom action bar for multi-select mode
+                if isSelectMode && !selectedAssetIds.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 0) {
+                            // Delete button
+                            Button(action: {
+                                showDeleteAlert = true
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 22))
+                                    Text("Delete")
+                                        .font(AppFonts.caption2)
+                                }
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                            }
+
+                            // Move button
+                            Button(action: {
+                                showMoveSheet = true
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "arrow.right.doc.on.clipboard")
+                                        .font(.system(size: 22))
+                                    Text("Move")
+                                        .font(AppFonts.caption2)
+                                }
+                                .foregroundColor(AppColors.primary)
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .background(
+                            AppColors.background
+                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
+                        )
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .navigationBarHidden(true)
@@ -3217,6 +3404,93 @@ struct GalleryView: View {
                         Text("Images in this folder will be moved to \"Unsorted Photos\".")
                     } else {
                         Text("Are you sure you want to delete \"\(folder)\"?")
+                    }
+                }
+            }
+            // Delete Photos Alert
+            .alert("Delete Photos", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    library.deleteAssets(identifiers: selectedAssetIds) { success in
+                        if success {
+                            selectedAssetIds.removeAll()
+                            isSelectMode = false
+                        }
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete \(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s")? This cannot be undone.")
+            }
+            // Move Photos Sheet
+            .sheet(isPresented: $showMoveSheet) {
+                MoveToFolderSheet(
+                    selectedAssetIds: selectedAssetIds,
+                    metadataManager: metadataManager,
+                    isPresented: $showMoveSheet,
+                    onComplete: {
+                        selectedAssetIds.removeAll()
+                        isSelectMode = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Move to Folder Sheet
+struct MoveToFolderSheet: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header showing count
+                HStack {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppColors.primary)
+                    Text("\(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s") selected")
+                        .font(AppFonts.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(AppColors.secondary.opacity(0.1))
+
+                List {
+                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                        Button(action: {
+                            metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
+                            isPresented = false
+                            onComplete()
+                        }) {
+                            HStack {
+                                Circle()
+                                    .fill(metadataManager.getFolderColor(for: procedure))
+                                    .frame(width: 12, height: 12)
+                                Text(procedure)
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.textPrimary)
+                                Spacer()
+                                Image(systemName: "folder")
+                                    .foregroundColor(AppColors.textSecondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+                .listStyle(PlainListStyle())
+            }
+            .navigationTitle("Move to Folder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
                     }
                 }
             }
@@ -3460,6 +3734,8 @@ struct StageSection: View {
     var onToggleCollapse: (() -> Void)? = nil
     var highlightedPhotoId: String? = nil
     var showPhotoHighlight: Bool = false
+    var isSelectMode: Bool = false
+    @Binding var selectedAssetIds: Set<String>
 
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -3548,7 +3824,9 @@ struct StageSection: View {
                             assets: group.assets,
                             metadataManager: metadataManager,
                             highlightedPhotoId: highlightedPhotoId,
-                            showPhotoHighlight: showPhotoHighlight
+                            showPhotoHighlight: showPhotoHighlight,
+                            isSelectMode: isSelectMode,
+                            selectedAssetIds: $selectedAssetIds
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
@@ -3634,6 +3912,8 @@ struct ExpandedAngleView: View {
     @ObservedObject var metadataManager: MetadataManager
     var highlightedPhotoId: String? = nil
     var showPhotoHighlight: Bool = false
+    var isSelectMode: Bool = false
+    @Binding var selectedAssetIds: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3673,33 +3953,92 @@ struct ExpandedAngleView: View {
                     HStack(spacing: spacing) {
                         ForEach(assets, id: \.localIdentifier) { asset in
                             let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                VStack(spacing: 6) {
-                                    AssetThumbnail(asset: asset)
-                                        .frame(width: itemWidth, height: itemHeight)
-                                        .cornerRadius(8)
+                            let isSelected = selectedAssetIds.contains(asset.localIdentifier)
 
-                                    // Rating display
-                                    HStack(spacing: 2) {
-                                        ForEach(1...5, id: \.self) { star in
-                                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
-                                            Image(systemName: star <= currentRating ? "star.fill" : "star")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.yellow)
+                            if isSelectMode {
+                                // Selection mode - tap to select/deselect
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        if selectedAssetIds.contains(asset.localIdentifier) {
+                                            selectedAssetIds.remove(asset.localIdentifier)
+                                        } else {
+                                            selectedAssetIds.insert(asset.localIdentifier)
                                         }
                                     }
+                                }) {
+                                    VStack(spacing: 6) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(width: itemWidth, height: itemHeight)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                // Selection checkbox overlay
+                                                ZStack {
+                                                    Circle()
+                                                        .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                        .frame(width: 24, height: 24)
+                                                    if isSelected {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.system(size: 12, weight: .bold))
+                                                            .foregroundColor(.white)
+                                                    } else {
+                                                        Circle()
+                                                            .stroke(Color.white, lineWidth: 2)
+                                                            .frame(width: 22, height: 22)
+                                                    }
+                                                }
+                                                .padding(6),
+                                                alignment: .topTrailing
+                                            )
+
+                                        // Rating display
+                                        HStack(spacing: 2) {
+                                            ForEach(1...5, id: \.self) { star in
+                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.yellow)
+                                            }
+                                        }
+                                    }
+                                    .padding(itemPadding)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                    )
                                 }
-                                .padding(itemPadding)
-                                .background(Color.gray.opacity(0.15))
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                )
-                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                .buttonStyle(PlainButtonStyle())
+                            } else {
+                                // Normal mode - navigate to detail view
+                                NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                    VStack(spacing: 6) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(width: itemWidth, height: itemHeight)
+                                            .cornerRadius(8)
+
+                                        // Rating display
+                                        HStack(spacing: 2) {
+                                            ForEach(1...5, id: \.self) { star in
+                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.yellow)
+                                            }
+                                        }
+                                    }
+                                    .padding(itemPadding)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                    )
+                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                }
                             }
                         }
                     }
@@ -3875,8 +4214,9 @@ struct PhotoEditorView: View {
     // Adjustable crop frame dimensions
     @State private var cropFrameWidth: CGFloat = 0
     @State private var cropFrameHeight: CGFloat = 0
-    @State private var initialCropFrameWidth: CGFloat = 0
-    @State private var initialCropFrameHeight: CGFloat = 0
+    // Track displayed image size for crop calculations
+    @State private var displayedImageWidth: CGFloat = 0
+    @State private var displayedImageHeight: CGFloat = 0
 
     private let context = CIContext()
 
@@ -3888,11 +4228,27 @@ struct PhotoEditorView: View {
                     // Crop mode view
                     GeometryReader { geo in
                         if let img = displayedImage {
+                            let imageAspect = img.size.width / img.size.height
+                            let containerAspect = geo.size.width / geo.size.height
+
+                            // Calculate actual displayed image size
+                            let calcDisplayWidth: CGFloat
+                            let calcDisplayHeight: CGFloat
+                            if imageAspect > containerAspect {
+                                // Image is wider than container - width constrained
+                                calcDisplayWidth = geo.size.width
+                                calcDisplayHeight = geo.size.width / imageAspect
+                            } else {
+                                // Image is taller than container - height constrained
+                                calcDisplayHeight = geo.size.height
+                                calcDisplayWidth = geo.size.height * imageAspect
+                            }
+
                             ZStack {
                                 // Darkened background
                                 Color.black.opacity(0.7)
 
-                                // Rotated image
+                                // The image (user can pan/zoom to position within crop frame)
                                 Image(uiImage: img)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
@@ -3902,37 +4258,44 @@ struct PhotoEditorView: View {
                                     .gesture(
                                         MagnificationGesture()
                                             .onChanged { value in
-                                                // Apply relative scale change from last scale
                                                 let newScale = lastCropScale * value
                                                 cropScale = max(0.5, min(3.0, newScale))
                                             }
                                             .onEnded { _ in
-                                                // Store the final scale for next gesture
                                                 lastCropScale = cropScale
                                             }
                                     )
                                     .simultaneousGesture(
                                         DragGesture()
                                             .onChanged { value in
-                                                // Apply relative offset from last position
                                                 cropOffset = CGSize(
                                                     width: lastCropOffset.width + value.translation.width,
                                                     height: lastCropOffset.height + value.translation.height
                                                 )
                                             }
                                             .onEnded { _ in
-                                                // Store the final offset for next gesture
                                                 lastCropOffset = cropOffset
                                             }
                                     )
 
-                                // Crop frame overlay
+                                // Crop frame overlay - starts at exact image dimensions
                                 CropOverlayView(
-                                    size: geo.size,
+                                    containerSize: geo.size,
+                                    displayedImageWidth: calcDisplayWidth,
+                                    displayedImageHeight: calcDisplayHeight,
                                     cropWidth: $cropFrameWidth,
-                                    cropHeight: $cropFrameHeight,
-                                    imageAspectRatio: img.size.width / img.size.height
+                                    cropHeight: $cropFrameHeight
                                 )
+                            }
+                            .onAppear {
+                                // Store displayed dimensions for applyCrop
+                                displayedImageWidth = calcDisplayWidth
+                                displayedImageHeight = calcDisplayHeight
+                            }
+                            .onChange(of: geo.size) { _ in
+                                // Update if container resizes
+                                displayedImageWidth = calcDisplayWidth
+                                displayedImageHeight = calcDisplayHeight
                             }
                         }
                     }
@@ -3955,7 +4318,7 @@ struct PhotoEditorView: View {
                         // Crop controls with fine rotation
                         VStack(spacing: 16) {
                             HStack(spacing: 30) {
-                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero }) {
+                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero; cropFrameWidth = 0; cropFrameHeight = 0 }) {
                                     VStack {
                                         Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
                                         Text("Reset").font(AppFonts.caption)
@@ -4115,14 +4478,36 @@ struct PhotoEditorView: View {
             }
         }
 
-        // Apply scale crop (center crop based on scale)
-        if cropScale != 1.0 {
-            let scaleFactor = 1.0 / cropScale
-            let newWidth = processedImage.size.width * scaleFactor
-            let newHeight = processedImage.size.height * scaleFactor
-            let xOffset = (processedImage.size.width - newWidth) / 2.0
-            let yOffset = (processedImage.size.height - newHeight) / 2.0
-            let cropRect = CGRect(x: xOffset, y: yOffset, width: newWidth, height: newHeight)
+        // Apply crop based on the adjustable crop frame
+        // Only crop if the frame has been adjusted from the full image
+        if cropFrameWidth > 0 && cropFrameHeight > 0 &&
+           displayedImageWidth > 0 && displayedImageHeight > 0 {
+
+            // Calculate the ratio of crop frame to displayed image
+            let widthRatio = cropFrameWidth / displayedImageWidth
+            let heightRatio = cropFrameHeight / displayedImageHeight
+
+            // Apply to original image dimensions
+            let cropWidth = processedImage.size.width * widthRatio
+            let cropHeight = processedImage.size.height * heightRatio
+
+            // Center the crop (accounting for scale and offset)
+            let scaledImageWidth = displayedImageWidth * cropScale
+            let scaledImageHeight = displayedImageHeight * cropScale
+
+            // Calculate offset in terms of the scaled image
+            let offsetXRatio = cropOffset.width / scaledImageWidth
+            let offsetYRatio = cropOffset.height / scaledImageHeight
+
+            // Map offset to original image coordinates
+            let xOffset = (processedImage.size.width - cropWidth) / 2.0 - (offsetXRatio * processedImage.size.width)
+            let yOffset = (processedImage.size.height - cropHeight) / 2.0 - (offsetYRatio * processedImage.size.height)
+
+            // Clamp to valid bounds
+            let clampedX = max(0, min(processedImage.size.width - cropWidth, xOffset))
+            let clampedY = max(0, min(processedImage.size.height - cropHeight, yOffset))
+
+            let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
 
             if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
                 processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
@@ -4139,6 +4524,8 @@ struct PhotoEditorView: View {
         lastCropOffset = .zero
         cropFrameWidth = 0
         cropFrameHeight = 0
+        displayedImageWidth = 0
+        displayedImageHeight = 0
     }
 
     func applyProcessing() {
@@ -4213,53 +4600,50 @@ struct PhotoEditorView: View {
 
 // MARK: - Crop Overlay View
 struct CropOverlayView: View {
-    let size: CGSize
+    let containerSize: CGSize
+    let displayedImageWidth: CGFloat
+    let displayedImageHeight: CGFloat
     @Binding var cropWidth: CGFloat
     @Binding var cropHeight: CGFloat
-    let imageAspectRatio: CGFloat
 
     // Minimum crop dimensions
-    private let minCropSize: CGFloat = 80
+    private let minCropSize: CGFloat = 50
 
     var body: some View {
-        let maxWidth = size.width * 0.9
-        let maxHeight = size.height * 0.9
-
-        // Initialize dimensions on first render if not set
-        let displayWidth = cropWidth > 0 ? cropWidth : calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-        let displayHeight = cropHeight > 0 ? cropHeight : calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+        // Use exact displayed image dimensions, or current crop dimensions if already adjusted
+        let frameWidth = cropWidth > 0 ? cropWidth : displayedImageWidth
+        let frameHeight = cropHeight > 0 ? cropHeight : displayedImageHeight
 
         ZStack {
             // Transparent center (crop area)
             Rectangle()
                 .fill(Color.clear)
-                .frame(width: displayWidth, height: displayHeight)
+                .frame(width: frameWidth, height: frameHeight)
                 .overlay(
                     Rectangle()
                         .stroke(Color.white, lineWidth: 2)
                 )
                 .overlay(
-                    // Grid lines - vertical
-                    VStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - horizontal dividers
+                    VStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
                 .overlay(
-                    // Grid lines - horizontal
-                    HStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - vertical dividers
+                    HStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .frame(width: 1)
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
 
@@ -4271,10 +4655,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4285,10 +4667,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4301,10 +4681,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4315,43 +4693,24 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
                         )
                 }
             }
-            .frame(width: displayWidth, height: displayHeight)
+            .frame(width: frameWidth, height: frameHeight)
         }
         .onAppear {
-            if cropWidth == 0 || cropHeight == 0 {
-                cropWidth = calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-                cropHeight = calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+            // Initialize crop frame to exact image dimensions
+            if cropWidth == 0 {
+                cropWidth = displayedImageWidth
             }
-        }
-    }
-
-    private func calculateInitialWidth(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        }
-    }
-
-    private func calculateInitialHeight(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxHeight, maxWidth / imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxHeight, maxWidth / imageAspectRatio)
+            if cropHeight == 0 {
+                cropHeight = displayedImageHeight
+            }
         }
     }
 }
@@ -4499,6 +4858,28 @@ class PhotoLibraryManager: ObservableObject {
         let options = PHImageRequestOptions(); options.isSynchronous = false; options.deliveryMode = .highQualityFormat
         manager.requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { img, _ in completion(img) }
     }
+
+    func deleteAssets(identifiers: Set<String>, completion: @escaping (Bool) -> Void) {
+        // Find assets with matching identifiers
+        let assetsToDelete = assets.filter { identifiers.contains($0.localIdentifier) }
+        guard !assetsToDelete.isEmpty else {
+            completion(false)
+            return
+        }
+
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
+        }) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    // Delete metadata for these assets
+                    MetadataManager.shared.deleteMetadata(for: identifiers)
+                    self.fetchAssets()
+                }
+                completion(success)
+            }
+        }
+    }
 }
 
 // MARK: - 6. PORTFOLIOS TAB
@@ -4588,9 +4969,7 @@ struct PortfoliosView: View {
                             .padding(8)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 60)
-                .padding(.bottom, 16)
+                .padding(16)
 
                 // Main content
                 if metadataManager.portfolios.isEmpty {
