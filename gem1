@@ -4532,7 +4532,7 @@ struct PortfoliosView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            AppColors.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Custom header bar
@@ -4619,7 +4619,7 @@ struct PortfoliosView: View {
                                     VStack(alignment: .leading) {
                                         Text("Progress")
                                             .font(.subheadline)
-                                            .foregroundColor(.gray)
+                                            .foregroundColor(AppColors.textSecondary)
                                         Text(String(format: "%.0f%%", completionPercentage))
                                             .font(.system(size: 36, weight: .bold))
                                             .foregroundColor(completionPercentage >= 100 ? .green : .blue)
@@ -4643,10 +4643,10 @@ struct PortfoliosView: View {
                                         VStack(spacing: 0) {
                                             Text("\(stats.fulfilled)")
                                                 .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(AppColors.textPrimary)
                                             Text("of \(stats.total)")
                                                 .font(.system(size: 10))
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(AppColors.textSecondary)
                                         }
                                     }
                                 }
@@ -4692,12 +4692,12 @@ struct PortfoliosView: View {
                                 HStack {
                                     Text("Created \(portfolio.dateString)")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppColors.textSecondary)
                                     Spacer()
                                 }
                             }
                             .padding()
-                            .background(Color(UIColor.systemGray6).opacity(0.3))
+                            .background(AppColors.surface)
                             .cornerRadius(12)
                             .id("stats-\(portfolio.id)")
                             .transition(.opacity)
@@ -4711,7 +4711,7 @@ struct PortfoliosView: View {
                                 HStack {
                                     Text("Requirements")
                                         .font(.headline)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(AppColors.textPrimary)
                                     Spacer()
                                     Button(action: { showAddRequirementSheet = true }) {
                                         HStack(spacing: 4) {
@@ -4729,13 +4729,13 @@ struct PortfoliosView: View {
                                         VStack(spacing: 12) {
                                             Image(systemName: "doc.text")
                                                 .font(.system(size: 40))
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(AppColors.textSecondary)
                                             Text("No requirements yet")
                                                 .font(.subheadline)
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(AppColors.textSecondary)
                                             Text("Add requirements to specify what photos you need")
                                                 .font(.caption)
-                                                .foregroundColor(.gray.opacity(0.8))
+                                                .foregroundColor(AppColors.textSecondary.opacity(0.8))
                                                 .multilineTextAlignment(.center)
                                         }
                                         .frame(maxWidth: .infinity)
@@ -4763,7 +4763,7 @@ struct PortfoliosView: View {
                                 .foregroundColor(.red)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color(UIColor.systemGray6).opacity(0.3))
+                                .background(AppColors.surface)
                                 .cornerRadius(10)
                             }
                             .padding(.top, 20)
@@ -5033,7 +5033,7 @@ struct AddPortfolioSheet: View {
                         Section {
                             Text("After naming your portfolio, you'll be prompted to add photo requirements.")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppColors.textSecondary)
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -5080,7 +5080,7 @@ struct AddRequirementsStepView: View {
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+            AppColors.background.ignoresSafeArea()
 
             VStack(spacing: 20) {
                 // Header
@@ -5090,9 +5090,10 @@ struct AddRequirementsStepView: View {
                         .foregroundColor(.green)
                     Text("Portfolio Created!")
                         .font(.title2).bold()
+                        .foregroundColor(AppColors.textPrimary)
                     Text("\"\(portfolioName)\"")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 .padding(.top, 30)
 
@@ -5100,6 +5101,7 @@ struct AddRequirementsStepView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Add Requirements")
                         .font(.headline)
+                        .foregroundColor(AppColors.textPrimary)
                         .padding(.horizontal)
 
                     if let portfolio = currentPortfolio, !portfolio.requirements.isEmpty {
@@ -5111,14 +5113,15 @@ struct AddRequirementsStepView: View {
                                 VStack(alignment: .leading) {
                                     Text(req.procedure)
                                         .font(.subheadline).bold()
+                                        .foregroundColor(AppColors.textPrimary)
                                     Text("\(req.stages.count) stages • \(req.angles.count) angles")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppColors.textSecondary)
                                 }
                                 Spacer()
                             }
                             .padding()
-                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                            .background(AppColors.surface)
                             .cornerRadius(10)
                             .padding(.horizontal)
                         }
@@ -5127,10 +5130,10 @@ struct AddRequirementsStepView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "doc.text")
                                 .font(.system(size: 30))
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppColors.textSecondary)
                             Text("No requirements added yet")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppColors.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
@@ -5158,8 +5161,8 @@ struct AddRequirementsStepView: View {
                     Text(currentPortfolio?.requirements.isEmpty == true ? "Skip for Now" : "Done")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color(UIColor.secondarySystemGroupedBackground))
-                        .foregroundColor(.primary)
+                        .background(AppColors.surface)
+                        .foregroundColor(AppColors.textPrimary)
                         .cornerRadius(10)
                 }
                 .padding(.horizontal)
@@ -5635,7 +5638,7 @@ struct PhotoStackPopupView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -5643,7 +5646,7 @@ struct PhotoStackPopupView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(selection.procedure)
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.textPrimary)
                             HStack(spacing: 8) {
                                 HStack(spacing: 4) {
                                     Image(systemName: selection.stage == "Preparation" ? "wrench.fill" : "checkmark.seal.fill")
@@ -6210,12 +6213,12 @@ struct AddRequirementSheet: View {
                                 .font(AppFonts.subheadline)
                             Text("• \(selectedStages.count) stage\(selectedStages.count == 1 ? "" : "s")")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppColors.textSecondary)
                             ForEach(Array(selectedAngles).sorted(), id: \.self) { angle in
                                 let count = angleCounts[angle] ?? 1
                                 Text("• \(angle): \(count) photo\(count == 1 ? "" : "s") per stage")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppColors.textSecondary)
                             }
                         }
                     }
