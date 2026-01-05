@@ -216,10 +216,8 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Custom bottom navigation (hidden on camera tab to avoid overlap)
-            if selectedTab != 0 {
-                CustomBottomNavBar(selectedTab: $selectedTab)
-            }
+            // Custom bottom navigation - always visible
+            CustomBottomNavBar(selectedTab: $selectedTab)
         }
         .preferredColorScheme(.dark)
         .ignoresSafeArea(.keyboard)
