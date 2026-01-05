@@ -196,36 +196,100 @@ struct NavBarItem: View {
     }
 }
 
+// MARK: - CAMERA LOADING VIEW
+struct CameraLoadingView: View {
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            AppColors.background
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Text("Launching camera")
+                    .font(AppFonts.headline)
+                    .foregroundColor(AppColors.textPrimary)
+
+                // Pill-shaped progress bar
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppColors.surface)
+                        .frame(width: 200, height: 8)
+
+                    Capsule()
+                        .fill(AppColors.primary)
+                        .frame(width: 200 * progress, height: 8)
+                }
+            }
+        }
+        .onAppear {
+            // Animate progress bar
+            withAnimation(.easeInOut(duration: 1.5)) {
+                progress = 1.0
+            }
+        }
+    }
+}
+
 // MARK: - MAIN ENTRY POINT
 struct ContentView: View {
     @State private var selectedTab = 0 // Track tab selection
+    @StateObject private var sharedCameraService = CameraService()
+    @State private var showCameraLoading = false
+    @State private var cameraHasLoaded = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Main content area - no animation for instant switching
-            Group {
-                switch selectedTab {
-                case 0:
-                    DentalCameraSetupView(selectedTab: $selectedTab)
-                case 1:
-                    PortfoliosView()
-                case 2:
-                    GalleryView()
-                default:
-                    DentalCameraSetupView(selectedTab: $selectedTab)
-                }
+            // Keep all views in ZStack, use opacity for instant switching
+            // This prevents recreating views and losing state
+
+            // Camera view - always exists to maintain session
+            DentalCameraSetupView(selectedTab: $selectedTab, cameraService: sharedCameraService)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(selectedTab == 0 && !showCameraLoading ? 1 : 0)
+                .zIndex(selectedTab == 0 ? 1 : 0)
+
+            // Portfolios view
+            PortfoliosView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(selectedTab == 1 ? 1 : 0)
+                .zIndex(selectedTab == 1 ? 1 : 0)
+
+            // Gallery view
+            GalleryView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(selectedTab == 2 ? 1 : 0)
+                .zIndex(selectedTab == 2 ? 1 : 0)
+
+            // Camera loading view
+            if showCameraLoading {
+                CameraLoadingView()
+                    .zIndex(2)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(nil, value: selectedTab)
 
             // Custom bottom navigation - always visible, instant highlight
             CustomBottomNavBar(selectedTab: $selectedTab)
-                .animation(nil, value: selectedTab)
+                .zIndex(3)
         }
         .preferredColorScheme(.dark)
         .ignoresSafeArea(.keyboard)
         .onAppear {
             PhotoLibraryManager.shared.createAlbumIfNeeded()
+        }
+        .onChange(of: selectedTab) { newTab in
+            // Show loading only when switching TO camera and it hasn't loaded yet
+            if newTab == 0 && !cameraHasLoaded && !sharedCameraService.isSessionReady {
+                showCameraLoading = true
+            }
+        }
+        .onChange(of: sharedCameraService.isSessionReady) { ready in
+            if ready {
+                cameraHasLoaded = true
+                // Small delay to let progress bar complete visually
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showCameraLoading = false
+                }
+            }
         }
     }
 }
@@ -809,7 +873,8 @@ class TagManager: ObservableObject {
 class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     @Published var session = AVCaptureSession()
     @Published var capturedImage: UIImage? = nil
-    
+    @Published var isSessionReady = false
+
     // Exposure & Flash State
     @Published var currentExposure: Float = 0.0
     @Published var minExposure: Float = -2.0
@@ -870,6 +935,9 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             }
             self.session.commitConfiguration()
             self.session.startRunning()
+            DispatchQueue.main.async {
+                self.isSessionReady = true
+            }
         }
     }
 
@@ -1038,9 +1106,8 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
 // MARK: - 1. CAMERA TAB UI
 struct DentalCameraSetupView: View {
     @Binding var selectedTab: Int
-    
-    @StateObject private var cameraService = CameraService()
-    
+    @ObservedObject var cameraService: CameraService
+
     // UI State
     @State private var showGrid = false
     @State private var ghostImage: UIImage? = nil
