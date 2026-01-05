@@ -3110,8 +3110,9 @@ struct GalleryView: View {
                 // Edge swipe gesture overlay (left edge for opening, below header)
                 if !isSidebarOpen {
                     VStack(spacing: 0) {
-                        // Spacer for header height (approx 60pt)
+                        // Spacer for header height (approx 60pt) - disable hit testing so sidebar button works
                         Color.clear.frame(height: 60)
+                            .allowsHitTesting(false)
 
                         HStack {
                             Color.clear
@@ -3131,6 +3132,7 @@ struct GalleryView: View {
                                         }
                                 )
                             Spacer()
+                                .allowsHitTesting(false)
                         }
                     }
                 }
@@ -3212,8 +3214,9 @@ struct GalleryView: View {
                         .background(AppColors.surface.opacity(0.98))
                         .edgesIgnoringSafeArea(.vertical)
 
-                        // Tap or swipe outside to close
+                        // Tap or swipe outside to close - cover entire photo grid area
                         Color.black.opacity(0.3)
+                            .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
                             .highPriorityGesture(
