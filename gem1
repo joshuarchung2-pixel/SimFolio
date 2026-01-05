@@ -5958,24 +5958,22 @@ struct PortfoliosView: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(portfolio.name)
-                                            if let dueDate = portfolio.dueDate {
-                                                HStack(spacing: 4) {
-                                                    Image(systemName: portfolio.isOverdue ? "exclamationmark.circle.fill" : "calendar")
-                                                        .font(.caption2)
-                                                    if let days = portfolio.daysUntilDue {
-                                                        if portfolio.isOverdue {
-                                                            Text("Overdue by \(abs(days))d")
-                                                                .font(.caption2)
-                                                        } else if days == 0 {
-                                                            Text("Due today")
-                                                                .font(.caption2)
-                                                        } else {
-                                                            Text("Due in \(days)d")
-                                                                .font(.caption2)
-                                                        }
+                                            if let _ = portfolio.dueDate {
+                                                if let days = portfolio.daysUntilDue {
+                                                    if portfolio.isOverdue {
+                                                        Text("Overdue by \(abs(days))d")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.red)
+                                                    } else if days == 0 {
+                                                        Text("Due today")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.red)
+                                                    } else {
+                                                        Text("Due in \(days)d")
+                                                            .font(.caption2)
+                                                            .foregroundColor(portfolio.isDueSoon ? .orange : .secondary)
                                                     }
                                                 }
-                                                .foregroundColor(portfolio.isOverdue ? .red : portfolio.isDueSoon ? .orange : .secondary)
                                             }
                                         }
                                         Spacer()
@@ -5987,15 +5985,11 @@ struct PortfoliosView: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(currentPortfolio?.name ?? "Select Portfolio")
-                                        .font(AppFonts.largeTitle)
-                                        .foregroundColor(AppColors.textPrimary)
-                                        .lineLimit(1)
-                                    if let portfolio = currentPortfolio, let _ = portfolio.dueDate {
-                                        DueDateBadge(portfolio: portfolio)
-                                    }
-                                }
+                                Text(currentPortfolio?.name ?? "Select Portfolio")
+                                    .font(AppFonts.largeTitle)
+                                    .foregroundColor(AppColors.textPrimary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
                                 Image(systemName: "chevron.down")
                                     .font(.body)
                                     .foregroundColor(AppColors.textSecondary)
@@ -6731,39 +6725,54 @@ struct PortfolioDetailView: View {
                     .background(AppColors.surface.opacity(0.5))
                     .cornerRadius(12)
 
-                    // Due Date section
+                    // Due Date bento card
                     Button(action: { showEditDueDateSheet = true }) {
                         HStack {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppColors.primary)
-                                .frame(width: 32)
-
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Due Date")
                                     .font(AppFonts.subheadline)
                                     .foregroundColor(AppColors.textSecondary)
-
-                                if let dueDate = currentPortfolio.dueDate {
-                                    HStack(spacing: 8) {
-                                        Text(currentPortfolio.dueDateString ?? "")
-                                            .font(AppFonts.headline)
-                                            .foregroundColor(AppColors.textPrimary)
-
-                                        DueDateBadge(portfolio: currentPortfolio)
-                                    }
+                                if let dueDateStr = currentPortfolio.dueDateString {
+                                    Text(dueDateStr)
+                                        .font(AppFonts.title2)
+                                        .foregroundColor(AppColors.textPrimary)
                                 } else {
-                                    Text("No due date set")
-                                        .font(AppFonts.headline)
-                                        .foregroundColor(AppColors.textSecondary)
+                                    Text("Tap to set")
+                                        .font(AppFonts.title2)
+                                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
                                 }
                             }
 
                             Spacer()
 
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Status")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+                                if let days = currentPortfolio.daysUntilDue {
+                                    if currentPortfolio.isOverdue {
+                                        Text("Overdue by \(abs(days))d")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.error)
+                                    } else if days == 0 {
+                                        Text("Due Today")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.error)
+                                    } else if days == 1 {
+                                        Text("Due Tomorrow")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.warning)
+                                    } else {
+                                        Text("Due in \(days)d")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(currentPortfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
+                                    }
+                                } else {
+                                    Text("No deadline")
+                                        .font(AppFonts.headline)
+                                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                }
+                            }
                         }
                         .padding()
                         .background(AppColors.surface.opacity(0.5))
