@@ -5031,7 +5031,11 @@ struct RequirementStatusView: View {
                                         }
                                     }
                                 }
-                                .padding(.leading, 20)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(AppColors.surface.opacity(0.4))
+                                .cornerRadius(8)
+                                .padding(.leading, 16)
                             }
                         }
                     }
@@ -5083,13 +5087,23 @@ struct PhotoStackSelection: Identifiable {
     let assets: [PHAsset]
 }
 
+// MARK: - Identifiable wrapper for PHAsset
+struct IdentifiableAsset: Identifiable {
+    let id: String
+    let asset: PHAsset
+
+    init(_ asset: PHAsset) {
+        self.id = asset.localIdentifier
+        self.asset = asset
+    }
+}
+
 // MARK: - Photo Stack Popup View
 struct PhotoStackPopupView: View {
     let selection: PhotoStackSelection
     @ObservedObject var metadataManager = MetadataManager.shared
     @Environment(\.presentationMode) var presentationMode
-    @State private var selectedAsset: PHAsset? = nil
-    @State private var showPhotoDetail = false
+    @State private var selectedAssetWrapper: IdentifiableAsset? = nil
 
     var body: some View {
         NavigationView {
@@ -5127,36 +5141,39 @@ struct PhotoStackPopupView: View {
 
                         // Photo grid
                         LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 4),
-                            GridItem(.flexible(), spacing: 4),
-                            GridItem(.flexible(), spacing: 4)
-                        ], spacing: 4) {
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8)
+                        ], spacing: 8) {
                             ForEach(selection.assets, id: \.localIdentifier) { asset in
                                 Button(action: {
-                                    selectedAsset = asset
-                                    showPhotoDetail = true
+                                    selectedAssetWrapper = IdentifiableAsset(asset)
                                 }) {
-                                    ZStack(alignment: .bottomTrailing) {
-                                        AssetThumbnail(asset: asset)
-                                            .aspectRatio(1, contentMode: .fill)
-                                            .clipped()
+                                    GeometryReader { geometry in
+                                        ZStack(alignment: .bottomTrailing) {
+                                            AssetThumbnail(asset: asset)
+                                                .frame(width: geometry.size.width, height: geometry.size.width)
+                                                .clipped()
 
-                                        // Rating stars overlay
-                                        if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
-                                            HStack(spacing: 1) {
-                                                ForEach(1...rating, id: \.self) { _ in
-                                                    Image(systemName: "star.fill")
-                                                        .font(.system(size: 8))
-                                                        .foregroundColor(.yellow)
+                                            // Rating stars overlay
+                                            if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
+                                                HStack(spacing: 1) {
+                                                    ForEach(1...rating, id: \.self) { _ in
+                                                        Image(systemName: "star.fill")
+                                                            .font(.system(size: 8))
+                                                            .foregroundColor(.yellow)
+                                                    }
                                                 }
+                                                .padding(4)
+                                                .background(Color.black.opacity(0.6))
+                                                .cornerRadius(4)
+                                                .padding(4)
                                             }
-                                            .padding(4)
-                                            .background(Color.black.opacity(0.6))
-                                            .cornerRadius(4)
-                                            .padding(4)
                                         }
                                     }
+                                    .aspectRatio(1, contentMode: .fit)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                         .padding(.horizontal)
@@ -5170,10 +5187,8 @@ struct PhotoStackPopupView: View {
                     Button("Done") { presentationMode.wrappedValue.dismiss() }
                 }
             }
-            .sheet(isPresented: $showPhotoDetail) {
-                if let asset = selectedAsset {
-                    PortfolioPhotoDetailView(asset: asset)
-                }
+            .sheet(item: $selectedAssetWrapper) { wrapper in
+                PortfolioPhotoDetailView(asset: wrapper.asset)
             }
         }
     }
