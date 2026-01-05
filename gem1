@@ -151,8 +151,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 20) // Extra padding for safe area at bottom
+        .padding(.bottom, 8) // Reduced padding - maintains safe area buffer while allowing 6pt gap to camera thumbnail
         .background(
             AppColors.surface
                 .overlay(
