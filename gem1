@@ -6778,6 +6778,7 @@ struct PortfolioDetailView: View {
                         .background(AppColors.surface.opacity(0.5))
                         .cornerRadius(12)
                     }
+                    .buttonStyle(.plain)
 
                     // Requirements section
                     VStack(alignment: .leading, spacing: 12) {
