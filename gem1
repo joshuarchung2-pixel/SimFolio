@@ -2522,7 +2522,7 @@ struct DentalCameraSetupView: View {
                                         toothDate: lastSavedMetadata?.toothDate,
                                         photoId: lastSavedPhotoId
                                     )
-                                    selectedTab = 1
+                                    selectedTab = 2
                                 }) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
