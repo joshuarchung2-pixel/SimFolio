@@ -3099,6 +3099,7 @@ struct GalleryView: View {
                 }
             }
             .navigationBarHidden(true)
+            .ignoresSafeArea(edges: .top)
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
@@ -4539,13 +4540,7 @@ struct PortfoliosView: View {
             VStack(spacing: 0) {
                 // Custom header bar
                 HStack {
-                    Text("Portfolios")
-                        .font(AppFonts.largeTitle)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    Spacer()
-
-                    // Portfolio dropdown selector (only show if portfolios exist)
+                    // Portfolio dropdown selector acting as header
                     if !metadataManager.portfolios.isEmpty {
                         Menu {
                             ForEach(metadataManager.portfolios) { portfolio in
@@ -4563,19 +4558,19 @@ struct PortfoliosView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Text(currentPortfolio?.name ?? "Select Portfolio")
-                                    .font(.title2).bold()
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.largeTitle)
+                                    .foregroundColor(AppColors.textPrimary)
                                     .lineLimit(1)
                                 Image(systemName: "chevron.down")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                                    .font(.body)
+                                    .foregroundColor(AppColors.textSecondary)
                             }
                         }
                         .id(currentPortfolio?.id)  // Force redraw on portfolio change
                     } else {
                         Text("Portfolios")
-                            .font(.title2).bold()
-                            .foregroundColor(.white)
+                            .font(AppFonts.largeTitle)
+                            .foregroundColor(AppColors.textPrimary)
                     }
 
                     Spacer()
