@@ -151,7 +151,8 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 8) // Reduced padding - maintains safe area buffer while allowing 6pt gap to camera thumbnail
+        .padding(.top, 18) // 18pt padding between nav bar top edge and highlight area
+        .padding(.bottom, 0) // Minimal bottom padding - safe area handled by background extension
         .background(
             AppColors.surface
                 .overlay(
@@ -183,7 +184,7 @@ struct NavBarItem: View {
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
             .background(
                 isSelected ?
                     AppColors.primary.opacity(0.1)
@@ -1544,7 +1545,7 @@ struct DentalCameraSetupView: View {
                             }
                             .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 60)
+                        .padding(.bottom, 76) // Positioned to maintain 18pt gap to nav bar top
                     }
                 }
             }
