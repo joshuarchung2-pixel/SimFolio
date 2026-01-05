@@ -6,31 +6,223 @@ import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
+// MARK: - CUSTOM FONT SYSTEM
+// Typography using Inter for headings, Geist for body/subheadings
+struct AppFonts {
+    // Inter - Headings (requires Inter font to be added to app bundle)
+    static func interBold(_ size: CGFloat) -> Font {
+        .custom("Inter-Bold", size: size, relativeTo: .headline)
+    }
+
+    static func interSemiBold(_ size: CGFloat) -> Font {
+        .custom("Inter-SemiBold", size: size, relativeTo: .headline)
+    }
+
+    static func interMedium(_ size: CGFloat) -> Font {
+        .custom("Inter-Medium", size: size, relativeTo: .headline)
+    }
+
+    static func interRegular(_ size: CGFloat) -> Font {
+        .custom("Inter-Regular", size: size, relativeTo: .body)
+    }
+
+    // Geist - Body/Subheadings (requires Geist font to be added to app bundle)
+    static func geistBold(_ size: CGFloat) -> Font {
+        .custom("Geist-Bold", size: size, relativeTo: .body)
+    }
+
+    static func geistSemiBold(_ size: CGFloat) -> Font {
+        .custom("Geist-SemiBold", size: size, relativeTo: .body)
+    }
+
+    static func geistMedium(_ size: CGFloat) -> Font {
+        .custom("Geist-Medium", size: size, relativeTo: .body)
+    }
+
+    static func geistRegular(_ size: CGFloat) -> Font {
+        .custom("Geist-Regular", size: size, relativeTo: .body)
+    }
+
+    // Semantic typography styles
+    static var largeTitle: Font { interBold(34) }
+    static var title: Font { interBold(28) }
+    static var title2: Font { interSemiBold(22) }
+    static var title3: Font { interSemiBold(20) }
+    static var headline: Font { interSemiBold(17) }
+    static var subheadline: Font { geistMedium(15) }
+    static var body: Font { geistRegular(17) }
+    static var callout: Font { geistRegular(16) }
+    static var footnote: Font { geistRegular(13) }
+    static var caption: Font { geistMedium(12) }
+    static var caption2: Font { geistRegular(11) }
+}
+
+// MARK: - CUSTOM UI COMPONENTS
+// Custom color scheme
+struct AppColors {
+    static let primary = Color.blue
+    static let secondary = Color.gray
+    static let accent = Color.blue
+    static let background = Color.black
+    static let surface = Color(white: 0.12)
+    static let surfaceElevated = Color(white: 0.18)
+    static let textPrimary = Color.white
+    static let textSecondary = Color.gray
+    static let success = Color.green
+    static let warning = Color.orange
+    static let error = Color.red
+}
+
+// Custom button styles
+struct CustomPrimaryButtonStyle: ButtonStyle {
+    var backgroundColor: Color = AppColors.primary
+    var foregroundColor: Color = AppColors.textPrimary
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppFonts.headline)
+            .foregroundColor(foregroundColor)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(backgroundColor.opacity(configuration.isPressed ? 0.8 : 1.0))
+            .cornerRadius(12)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+struct CustomSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppFonts.subheadline)
+            .foregroundColor(AppColors.textPrimary)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(AppColors.surface.opacity(configuration.isPressed ? 0.6 : 0.8))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(AppColors.secondary.opacity(0.3), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+struct CustomIconButtonStyle: ButtonStyle {
+    var size: CGFloat = 44
+    var backgroundColor: Color = AppColors.surface
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: size, height: size)
+            .background(backgroundColor.opacity(configuration.isPressed ? 0.6 : 0.8))
+            .cornerRadius(size / 2)
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: - CUSTOM BOTTOM NAVIGATION BAR
+struct CustomBottomNavBar: View {
+    @Binding var selectedTab: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            NavBarItem(
+                icon: "camera.fill",
+                label: "Camera",
+                isSelected: selectedTab == 0,
+                action: { selectedTab = 0 }
+            )
+
+            NavBarItem(
+                icon: "photo.on.rectangle",
+                label: "Gallery",
+                isSelected: selectedTab == 1,
+                action: { selectedTab = 1 }
+            )
+
+            NavBarItem(
+                icon: "folder.fill",
+                label: "Portfolios",
+                isSelected: selectedTab == 2,
+                action: { selectedTab = 2 }
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 28)
+        .background(
+            AppColors.surface
+                .overlay(
+                    Rectangle()
+                        .fill(AppColors.secondary.opacity(0.2))
+                        .frame(height: 1),
+                    alignment: .top
+                )
+        )
+    }
+}
+
+struct NavBarItem: View {
+    let icon: String
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
+
+                Text(label)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                isSelected ?
+                    AppColors.primary.opacity(0.1)
+                        .cornerRadius(12)
+                    : Color.clear.cornerRadius(12)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // MARK: - MAIN ENTRY POINT
 struct ContentView: View {
     @State private var selectedTab = 0 // Track tab selection
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DentalCameraSetupView(selectedTab: $selectedTab)
-                .tabItem {
-                    Label("Camera", systemImage: "camera.fill")
+        ZStack(alignment: .bottom) {
+            // Main content area
+            Group {
+                switch selectedTab {
+                case 0:
+                    DentalCameraSetupView(selectedTab: $selectedTab)
+                case 1:
+                    GalleryView()
+                case 2:
+                    PortfoliosView()
+                default:
+                    DentalCameraSetupView(selectedTab: $selectedTab)
                 }
-                .tag(0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            GalleryView()
-                .tabItem {
-                    Label("Gallery", systemImage: "photo.on.rectangle")
-                }
-                .tag(1)
-
-            PortfoliosView()
-                .tabItem {
-                    Label("Portfolios", systemImage: "folder.fill")
-                }
-                .tag(2)
+            // Custom bottom navigation (hidden on camera tab to avoid overlap)
+            if selectedTab != 0 {
+                CustomBottomNavBar(selectedTab: $selectedTab)
+            }
         }
         .preferredColorScheme(.dark)
+        .ignoresSafeArea(.keyboard)
         .onAppear {
             PhotoLibraryManager.shared.createAlbumIfNeeded()
         }
@@ -977,7 +1169,7 @@ struct DentalCameraSetupView: View {
                 
                 if isAELocked {
                     Text("AE/AF LOCK")
-                        .font(.caption).fontWeight(.bold).foregroundColor(.black)
+                        .font(AppFonts.caption).foregroundColor(.black)
                         .padding(.vertical, 4).padding(.horizontal, 8)
                         .background(Color.yellow).cornerRadius(4)
                         .padding(.top, 120)
@@ -1091,11 +1283,10 @@ struct DentalCameraSetupView: View {
                             }
                         }) {
                             Text("Retake")
-                                .font(.headline)
+                                .font(AppFonts.headline)
                                 .frame(width: 120, height: 50)
                         }
-                        .background(Color.black.opacity(0.6))
-                        .foregroundColor(.white).cornerRadius(10)
+                        .buttonStyle(CustomSecondaryButtonStyle())
 
                         Button(action: {
                             // Save the photo and capture the photo ID
@@ -1141,11 +1332,10 @@ struct DentalCameraSetupView: View {
                             }
                         }) {
                             Text("Use Photo")
-                                .font(.headline)
+                                .font(AppFonts.headline)
                                 .frame(width: 120, height: 50)
                         }
-                        .background(Color.blue)
-                        .foregroundColor(.white).cornerRadius(10)
+                        .buttonStyle(CustomPrimaryButtonStyle())
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 100)
@@ -1237,12 +1427,12 @@ struct DentalCameraSetupView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.white)
                         Text("Photo stored successfully")
-                            .font(.caption).bold()
+                            .font(AppFonts.caption)
                             .foregroundColor(.white)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color.green)
+                    .background(AppColors.success)
                     .cornerRadius(20)
                     .shadow(radius: 5)
 
@@ -1409,7 +1599,7 @@ struct ZoomDialView: View {
         VStack(spacing: 4) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(.system(size: 14, weight: .bold))
+                .font(AppFonts.interSemiBold(14))
                 .foregroundColor(.yellow)
 
             // Horizontal strip with tick marks
@@ -1432,7 +1622,7 @@ struct ZoomDialView: View {
                             if isMainTick {
                                 let zoomValue = Int(displayMin) + (i / 10)
                                 Text("\(zoomValue)")
-                                    .font(.system(size: 8, weight: .medium))
+                                    .font(AppFonts.geistMedium(8))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                         }
@@ -1568,38 +1758,38 @@ struct PhotoInfoPillView: View {
                     // Show current selections with visual hierarchy
                     if metadata.procedure == nil {
                         Text("Choose procedure")
-                            .font(.caption)
+                            .font(AppFonts.caption)
                             .foregroundColor(.white.opacity(0.7))
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
-                            .font(.caption2).bold()
+                            .font(AppFonts.geistSemiBold(11))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.8))
+                            .background(AppColors.primary.opacity(0.8))
                             .cornerRadius(4)
 
                         if let tooth = metadata.toothNumber {
                             Text("#\(tooth)")
-                                .font(.caption2).bold()
+                                .font(AppFonts.geistSemiBold(11))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
-                                .background(Color.green.opacity(0.8))
+                                .background(AppColors.success.opacity(0.8))
                                 .cornerRadius(4)
                         }
 
                         if let stage = metadata.stage {
                             Text(String(stage.prefix(4)))
-                                .font(.caption2)
+                                .font(AppFonts.caption2)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.8))
+                                .background(AppColors.warning.opacity(0.8))
                                 .cornerRadius(4)
                         }
 
                         if let angle = metadata.angle {
                             Text(angle)
-                                .font(.caption2)
+                                .font(AppFonts.caption2)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
                                 .background(Color.purple.opacity(0.8))
@@ -1608,12 +1798,12 @@ struct PhotoInfoPillView: View {
                     }
 
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
+                        .font(AppFonts.caption2)
                         .foregroundColor(.white.opacity(0.7))
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.black.opacity(0.8))
+                .background(AppColors.surface.opacity(0.9))
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
@@ -1639,17 +1829,17 @@ struct PhotoInfoPillView: View {
     var dropdownContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             stageTabsView
-            Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 8)
+            Divider().background(AppColors.secondary.opacity(0.3)).padding(.vertical, 8)
             currentStageContentView
-            Divider().background(Color.gray.opacity(0.3))
+            Divider().background(AppColors.secondary.opacity(0.3))
             bottomButtonsView
         }
         .frame(width: 340)
-        .background(Color.black.opacity(0.95))
+        .background(AppColors.surface.opacity(0.98))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(AppColors.secondary.opacity(0.3), lineWidth: 1)
         )
         .onAppear { updateCurrentStage() }
     }
@@ -1671,16 +1861,16 @@ struct PhotoInfoPillView: View {
         }) {
             VStack(spacing: 4) {
                 Text(stageName(for: stage))
-                    .font(.caption2).bold()
-                    .foregroundColor(currentStage == stage ? .white : .gray)
+                    .font(AppFonts.geistSemiBold(11))
+                    .foregroundColor(currentStage == stage ? AppColors.textPrimary : AppColors.textSecondary)
                 Text(stageValue(for: stage))
-                    .font(.system(size: 9))
+                    .font(AppFonts.geistRegular(9))
                     .foregroundColor(stageColor(for: stage))
                     .lineLimit(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : Color.gray.opacity(0.1))
+            .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : AppColors.secondary.opacity(0.1))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -1715,8 +1905,8 @@ struct PhotoInfoPillView: View {
                     Image(systemName: "xmark.circle")
                     Text("Clear all")
                 }
-                .font(.caption)
-                .foregroundColor(.red)
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.error)
             }
 
             Spacer()
@@ -1724,16 +1914,16 @@ struct PhotoInfoPillView: View {
             if currentStage.rawValue > 0 {
                 Button(action: { navigateToPreviousStage() }) {
                     Image(systemName: "chevron.left")
-                        .font(.caption)
-                        .foregroundColor(.blue)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.primary)
                 }
             }
 
             if currentStage.rawValue < 3 {
                 Button(action: { navigateToNextStage() }) {
                     Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.blue)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.primary)
                 }
             }
         }
@@ -1810,25 +2000,29 @@ struct PhotoInfoPillView: View {
                 }) {
                     HStack {
                         Image(systemName: metadata.procedure == procedure ? "circle.inset.filled" : "circle")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.primary)
                         Text(procedure)
-                            .foregroundColor(.white)
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textPrimary)
                         Spacer()
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 8)
-                    .background(metadata.procedure == procedure ? Color.blue.opacity(0.2) : Color.clear)
+                    .background(metadata.procedure == procedure ? AppColors.primary.opacity(0.2) : Color.clear)
                     .cornerRadius(6)
                 }
             }
 
             // Add new procedure
-            Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 4)
+            Divider().background(AppColors.secondary.opacity(0.3)).padding(.vertical, 4)
             HStack(spacing: 8) {
                 TextField("Add new...", text: $newProcedureText)
-                    .font(.caption)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .foregroundColor(.black)
+                    .font(AppFonts.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppColors.surfaceElevated)
+                    .cornerRadius(8)
+                    .foregroundColor(AppColors.textPrimary)
 
                 Button(action: {
                     if !newProcedureText.isEmpty {
@@ -1839,7 +2033,7 @@ struct PhotoInfoPillView: View {
                     }
                 }) {
                     Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(AppColors.success)
                 }
                 .disabled(newProcedureText.isEmpty)
             }
@@ -1855,8 +2049,8 @@ struct PhotoInfoPillView: View {
             if !existingTeeth.isEmpty && !showNewToothEntry {
                 // Show previously entered teeth
                 Text("Previous teeth:")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(AppColors.textSecondary)
                     .padding(.horizontal, 4)
 
                 ForEach(existingTeeth) { entry in
@@ -1867,26 +2061,28 @@ struct PhotoInfoPillView: View {
                     }) {
                         HStack {
                             Image(systemName: "tooth")
-                                .foregroundColor(.green)
+                                .foregroundColor(AppColors.success)
                             Text(entry.displayString)
-                                .foregroundColor(.white)
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.textPrimary)
                             Spacer()
                         }
                         .padding(.vertical, 8)
                         .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.1))
+                        .background(AppColors.success.opacity(0.1))
                         .cornerRadius(6)
                     }
                 }
 
-                Divider().background(Color.gray.opacity(0.3)).padding(.vertical, 4)
+                Divider().background(AppColors.secondary.opacity(0.3)).padding(.vertical, 4)
 
                 Button(action: { showNewToothEntry = true }) {
                     HStack {
                         Image(systemName: "plus.circle")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.primary)
                         Text("Enter new tooth")
-                            .foregroundColor(.blue)
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.primary)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 8)
@@ -1903,8 +2099,8 @@ struct PhotoInfoPillView: View {
             // Tooth number picker - Static label with number wheel and name on right
             HStack(spacing: 8) {
                 Text("Tooth #")
-                    .font(.title3).bold()
-                    .foregroundColor(.white)
+                    .font(AppFonts.title3)
+                    .foregroundColor(AppColors.textPrimary)
 
                 Picker("", selection: $selectedToothNumber) {
                     ForEach(1...32, id: \.self) { num in
@@ -1918,11 +2114,11 @@ struct PhotoInfoPillView: View {
 
                 // Tooth name display with fade animation
                 Text(toothName(for: selectedToothNumber))
-                    .font(.caption)
-                    .foregroundColor(.green)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.success)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.green.opacity(0.15))
+                    .background(AppColors.success.opacity(0.15))
                     .cornerRadius(6)
                     .id(selectedToothNumber) // Forces view recreation for animation
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
@@ -1932,8 +2128,8 @@ struct PhotoInfoPillView: View {
             // Date picker
             VStack(alignment: .leading, spacing: 4) {
                 Text("Date")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(AppColors.textSecondary)
 
                 DatePicker("", selection: $selectedToothDate, displayedComponents: .date)
                     .labelsHidden()
@@ -1948,19 +2144,18 @@ struct PhotoInfoPillView: View {
                 advanceToNextStage()
             }) {
                 Text("Confirm Tooth #\(selectedToothNumber)")
-                    .font(.caption).bold()
-                    .foregroundColor(.white)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.green)
-                    .cornerRadius(8)
             }
+            .buttonStyle(CustomPrimaryButtonStyle(backgroundColor: AppColors.success))
 
             if metadataManager.getToothEntries(for: metadata.procedure ?? "").count > 0 {
                 Button(action: { showNewToothEntry = false }) {
                     Text("Cancel")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -2016,18 +2211,19 @@ struct PhotoInfoPillView: View {
                 }) {
                     HStack {
                         Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                            .foregroundColor(stage == "Preparation" ? .orange : .green)
+                            .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                         Text(stage)
-                            .foregroundColor(.white)
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textPrimary)
                         Spacer()
                         if metadata.stage == stage {
                             Image(systemName: "checkmark")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppColors.primary)
                         }
                     }
                     .padding(.vertical, 10)
                     .padding(.horizontal, 8)
-                    .background(metadata.stage == stage ? Color.blue.opacity(0.2) : Color.clear)
+                    .background(metadata.stage == stage ? AppColors.primary.opacity(0.2) : Color.clear)
                     .cornerRadius(6)
                 }
             }
@@ -2046,16 +2242,17 @@ struct PhotoInfoPillView: View {
                         Image(systemName: angleIcon(for: angle))
                             .foregroundColor(.purple)
                         Text(angle)
-                            .foregroundColor(.white)
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textPrimary)
                         Spacer()
                         if metadata.angle == angle {
                             Image(systemName: "checkmark")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppColors.primary)
                         }
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 8)
-                    .background(metadata.angle == angle ? Color.blue.opacity(0.2) : Color.clear)
+                    .background(metadata.angle == angle ? AppColors.primary.opacity(0.2) : Color.clear)
                     .cornerRadius(6)
                 }
             }
@@ -2242,29 +2439,32 @@ struct GalleryView: View {
                     // Header bar
                     HStack {
                         Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                            Image(systemName: "sidebar.left").font(.title2).foregroundColor(.blue)
+                            Image(systemName: "sidebar.left")
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.primary)
                         }
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
 
                         Spacer()
 
                         // Current section name (centered header)
                         VStack(spacing: 2) {
                             Text(currentSectionTitle)
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.textPrimary)
 
                             // Breadcrumb for tooth selection
                             if selectedTooth != nil, let proc = selectedProcedure {
                                 HStack(spacing: 4) {
                                     Text(proc)
-                                        .font(.caption2)
-                                        .foregroundColor(.gray)
+                                        .font(AppFonts.caption2)
+                                        .foregroundColor(AppColors.textSecondary)
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppColors.textSecondary)
                                     Text("Tooth \(selectedTooth!.toothNumber)")
-                                        .font(.caption2)
-                                        .foregroundColor(.gray)
+                                        .font(AppFonts.caption2)
+                                        .foregroundColor(AppColors.textSecondary)
                                 }
                             }
                         }
@@ -2273,11 +2473,14 @@ struct GalleryView: View {
 
                         // Filter/sort button (placeholder for future functionality)
                         Button(action: { }) {
-                            Image(systemName: "line.3.horizontal.decrease.circle").font(.title2).foregroundColor(.blue)
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.primary)
                         }
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
                     }
                     .padding(16)
-                    .background(Color.black)
+                    .background(AppColors.background)
                     .zIndex(20)
 
                     // Main content
@@ -2312,9 +2515,10 @@ struct GalleryView: View {
                             VStack(spacing: 20) {
                                 Image(systemName: "folder")
                                     .font(.system(size: 50))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppColors.textSecondary)
                                 Text("Select a procedure")
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
@@ -2379,8 +2583,8 @@ struct GalleryView: View {
                     HStack(spacing: 0) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("Procedures")
-                                .font(.title3).bold()
-                                .foregroundColor(.white)
+                                .font(AppFonts.title3)
+                                .foregroundColor(AppColors.textPrimary)
                                 .padding(.top, 50)
                                 .padding(.horizontal)
 
@@ -2393,14 +2597,15 @@ struct GalleryView: View {
                                 HStack {
                                     Image(systemName: "square.grid.2x2")
                                     Text("All Photos")
+                                        .font(AppFonts.subheadline)
                                     Spacer()
                                 }
                                 .padding()
-                                .foregroundColor(selectedProcedure == nil ? .blue : .white)
-                                .background(selectedProcedure == nil ? Color.white.opacity(0.1) : Color.clear)
+                                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
+                                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                             }
 
-                            Divider().background(Color.gray)
+                            Divider().background(AppColors.secondary)
 
                             // Procedure folders with tooth subfolders
                             ScrollView {
@@ -2432,7 +2637,7 @@ struct GalleryView: View {
                                 }
                             }
 
-                            Divider().background(Color.gray)
+                            Divider().background(AppColors.secondary)
 
                             // Add Folder button
                             Button(action: {
@@ -2441,9 +2646,10 @@ struct GalleryView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "folder.badge.plus")
-                                        .foregroundColor(.green)
+                                        .foregroundColor(AppColors.success)
                                     Text("Add Folder")
-                                        .foregroundColor(.white)
+                                        .font(AppFonts.subheadline)
+                                        .foregroundColor(AppColors.textPrimary)
                                     Spacer()
                                 }
                                 .padding()
@@ -2452,7 +2658,7 @@ struct GalleryView: View {
                             Spacer()
                         }
                         .frame(width: 250)
-                        .background(Color(UIColor.systemGray6).opacity(0.98))
+                        .background(AppColors.surface.opacity(0.98))
                         .edgesIgnoringSafeArea(.vertical)
 
                         // Tap or swipe outside to close
@@ -2704,20 +2910,21 @@ struct ProcedureFolderView: View {
                     Image(systemName: isExpanded ? "folder.fill" : "folder")
                         .foregroundColor(metadataManager.getFolderColor(for: procedure))
                     Text(procedure)
-                        .foregroundColor(selectedProcedure == procedure ? .blue : .white)
+                        .font(AppFonts.subheadline)
+                        .foregroundColor(selectedProcedure == procedure ? AppColors.primary : AppColors.textPrimary)
                     Spacer()
                     Text("\(photoCount)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                     if !toothEntries.isEmpty {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
                     }
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 10)
-                .background(selectedProcedure == procedure && selectedTooth == nil ? Color.white.opacity(0.1) : Color.clear)
+                .background(selectedProcedure == procedure && selectedTooth == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
             }
             .contextMenu {
                 // Color option available for all folders
@@ -2748,10 +2955,10 @@ struct ProcedureFolderView: View {
                     }) {
                         HStack {
                             Image(systemName: "photo.on.rectangle.angled")
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppColors.textSecondary)
                             Text("All \(procedure)")
-                                .font(.caption)
-                                .foregroundColor(selectedProcedure == procedure && selectedTooth == nil ? .blue : .white)
+                                .font(AppFonts.caption)
+                                .foregroundColor(selectedProcedure == procedure && selectedTooth == nil ? AppColors.primary : AppColors.textPrimary)
                             Spacer()
                         }
                         .padding(.leading, 40)
@@ -2809,22 +3016,22 @@ struct ToothSubfolderRow: View {
         }) {
             HStack {
                 Image(systemName: "tooth")
-                    .font(.caption)
-                    .foregroundColor(.green)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.success)
                 Text("#\(entry.toothNumber)")
-                    .font(.caption).bold()
-                    .foregroundColor(isSelected ? .blue : .white)
+                    .font(AppFonts.geistSemiBold(12))
+                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textPrimary)
                 Text(entry.dateString)
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(AppColors.textSecondary)
                 Spacer()
                 Text("\(photoCount)")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(AppColors.textSecondary)
             }
             .padding(.leading, 40)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.white.opacity(0.1) : Color.clear)
+            .background(isSelected ? AppColors.textPrimary.opacity(0.1) : Color.clear)
         }
     }
 }
@@ -2852,24 +3059,24 @@ struct StageSection: View {
             Button(action: { onToggleCollapse?() }) {
                 HStack {
                     Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                        .foregroundColor(stage == "Preparation" ? .orange : .green)
+                        .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                     Text(stage)
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(photoCount) photos")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
 
                     // Collapse/expand arrow button
                     Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                         .padding(.leading, 8)
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 16)
-                .background(Color.gray.opacity(0.2))
+                .background(AppColors.secondary.opacity(0.2))
                 .cornerRadius(8)
             }
 
@@ -2881,16 +3088,16 @@ struct StageSection: View {
                         Spacer()
                         VStack(spacing: 8) {
                             Image(systemName: "photo.badge.plus")
-                                .font(.title2)
-                                .foregroundColor(.gray.opacity(0.5))
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.textSecondary.opacity(0.5))
                             Text("No \(stage.lowercased()) photos")
-                                .font(.caption)
-                                .foregroundColor(.gray.opacity(0.5))
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary.opacity(0.5))
                         }
                         .padding(.vertical, 20)
                         Spacer()
                     }
-                    .background(Color.gray.opacity(0.05))
+                    .background(AppColors.secondary.opacity(0.05))
                     .cornerRadius(8)
                 } else {
                     // Angle stacks in grid
@@ -2972,12 +3179,12 @@ struct AngleStackView: View {
 
                 HStack {
                     Text(angle)
-                        .font(.caption2).bold()
-                        .foregroundColor(.white)
+                        .font(AppFonts.geistSemiBold(11))
+                        .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(assets.count)")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption2)
+                        .foregroundColor(AppColors.textSecondary)
                 }
 
                 // Rating stars
@@ -2993,7 +3200,7 @@ struct AngleStackView: View {
             }
         }
         .padding(12)
-        .background(isExpanded ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+        .background(isExpanded ? AppColors.primary.opacity(0.1) : AppColors.secondary.opacity(0.1))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -3019,12 +3226,12 @@ struct ExpandedAngleView: View {
             // Header showing angle name
             HStack {
                 Text(angle)
-                    .font(.caption).bold()
-                    .foregroundColor(.white)
+                    .font(AppFonts.geistSemiBold(12))
+                    .foregroundColor(AppColors.textPrimary)
                 Spacer()
                 Text("\(assets.count) photos")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .font(AppFonts.caption2)
+                    .foregroundColor(AppColors.textSecondary)
             }
             .padding(.horizontal, 4)
 
@@ -3144,30 +3351,30 @@ struct PhotoDetailView: View {
                         HStack(spacing: 8) {
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(.caption).bold()
+                                    .font(AppFonts.geistSemiBold(12))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color.blue.opacity(0.8))
+                                    .background(AppColors.primary.opacity(0.8))
                                     .cornerRadius(4)
                             }
                             if let tooth = meta.toothNumber {
                                 HStack(spacing: 2) {
                                     Image(systemName: "tooth")
-                                        .font(.caption2)
+                                        .font(AppFonts.caption2)
                                     Text("#\(tooth)")
-                                        .font(.caption).bold()
+                                        .font(AppFonts.geistSemiBold(12))
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.green.opacity(0.8))
+                                .background(AppColors.success.opacity(0.8))
                                 .cornerRadius(4)
                             }
                             if let date = meta.toothDate {
                                 let formatter = DateFormatter()
                                 let _ = formatter.dateStyle = .short
                                 Text(formatter.string(from: date))
-                                    .font(.caption2)
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.caption2)
+                                    .foregroundColor(AppColors.textSecondary)
                             }
                         }
 
@@ -3176,18 +3383,18 @@ struct PhotoDetailView: View {
                             if let stage = meta.stage {
                                 HStack(spacing: 4) {
                                     Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                        .font(.caption2)
+                                        .font(AppFonts.caption2)
                                     Text(stage)
-                                        .font(.caption)
+                                        .font(AppFonts.caption)
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(stage == "Preparation" ? Color.orange.opacity(0.8) : Color.green.opacity(0.8))
+                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.8) : AppColors.success.opacity(0.8))
                                 .cornerRadius(4)
                             }
                             if let angle = meta.angle {
                                 Text(angle)
-                                    .font(.caption)
+                                    .font(AppFonts.caption)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(Color.purple.opacity(0.8))
@@ -3198,8 +3405,8 @@ struct PhotoDetailView: View {
                         // Rating row
                         HStack {
                             Text("Rating:")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
                             RatingView(
                                 rating: meta.rating ?? 0,
                                 assetID: asset.localIdentifier,
@@ -3208,7 +3415,7 @@ struct PhotoDetailView: View {
                         }
                     }
                     .padding()
-                    .background(Color.black.opacity(0.7))
+                    .background(AppColors.surface.opacity(0.9))
                     .cornerRadius(10)
                     .padding()
                 }
@@ -3326,43 +3533,43 @@ struct PhotoEditorView: View {
                             HStack(spacing: 30) {
                                 Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero }) {
                                     VStack {
-                                        Image(systemName: "arrow.counterclockwise").font(.title2)
-                                        Text("Reset").font(.caption)
+                                        Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
+                                        Text("Reset").font(AppFonts.caption)
                                     }
                                 }
                                 Button(action: { applyCrop() }) {
                                     VStack {
-                                        Image(systemName: "checkmark.circle.fill").font(.title2)
-                                        Text("Apply").font(.caption)
+                                        Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
+                                        Text("Apply").font(AppFonts.caption)
                                     }
                                 }
-                                .foregroundColor(.green)
+                                .foregroundColor(AppColors.success)
                                 Button(action: { cancelCrop() }) {
                                     VStack {
-                                        Image(systemName: "xmark.circle").font(.title2)
-                                        Text("Cancel").font(.caption)
+                                        Image(systemName: "xmark.circle").font(.system(size: 22))
+                                        Text("Cancel").font(AppFonts.caption)
                                     }
                                 }
-                                .foregroundColor(.red)
+                                .foregroundColor(AppColors.error)
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
 
                             // Fine rotation slider (only in crop mode)
                             VStack(spacing: 8) {
                                 Text("Rotation")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.textSecondary)
                                 HStack {
                                     Image(systemName: "rotate.left")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppColors.textSecondary)
                                     Slider(value: $cropRotation, in: -45...45, step: 0.5)
-                                        .accentColor(.blue)
+                                        .accentColor(AppColors.primary)
                                     Image(systemName: "rotate.right")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppColors.textSecondary)
                                 }
                                 Text("\(String(format: "%.1f", cropRotation))°")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.textPrimary)
                             }
                             .padding(.horizontal)
                         }
@@ -3373,18 +3580,18 @@ struct PhotoEditorView: View {
                             HStack(spacing: 30) {
                                 Button(action: { rotateImage() }) {
                                     VStack {
-                                        Image(systemName: "rotate.right").font(.title2)
-                                        Text("90°").font(.caption)
+                                        Image(systemName: "rotate.right").font(.system(size: 22))
+                                        Text("90°").font(AppFonts.caption)
                                     }
                                 }
                                 Button(action: { startCropping() }) {
                                     VStack {
-                                        Image(systemName: "crop").font(.title2)
-                                        Text("Crop").font(.caption)
+                                        Image(systemName: "crop").font(.system(size: 22))
+                                        Text("Crop").font(AppFonts.caption)
                                     }
                                 }
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                         }
                         .padding()
                     } else {
@@ -3399,31 +3606,31 @@ struct PhotoEditorView: View {
                     }
 
                     if !isCropping {
-                        Divider().background(Color.gray)
+                        Divider().background(AppColors.secondary)
                         HStack {
                             Button(action: { selectedTab = 0 }) {
                                 VStack {
                                     Image(systemName: "crop.rotate")
-                                    Text("Transform").font(.caption2)
+                                    Text("Transform").font(AppFonts.caption2)
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 0 ? .blue : .gray)
+                            .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
 
                             Button(action: { selectedTab = 1 }) {
                                 VStack {
                                     Image(systemName: "slider.horizontal.3")
-                                    Text("Adjust").font(.caption2)
+                                    Text("Adjust").font(AppFonts.caption2)
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 1 ? .blue : .gray)
+                            .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
                         }
                         .padding(.top, 10)
                     }
                 }
                 .padding(.bottom)
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(AppColors.surface)
             }
             .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
             .navigationBarTitleDisplayMode(.inline)
@@ -3649,7 +3856,7 @@ struct CropCornerHandle: View {
 struct AdjustmentRow: View {
     let icon: String; let label: String; @Binding var value: Double; let range: ClosedRange<Double>
     var body: some View {
-        HStack { Image(systemName: icon).frame(width: 25); Text(label).font(.caption).frame(width: 50, alignment: .leading); Slider(value: $value, in: range) }.foregroundColor(.primary)
+        HStack { Image(systemName: icon).frame(width: 25); Text(label).font(AppFonts.caption).frame(width: 50, alignment: .leading); Slider(value: $value, in: range) }.foregroundColor(.primary)
     }
 }
 
@@ -3787,26 +3994,21 @@ struct PortfoliosView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "folder.badge.plus")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.textSecondary)
                         Text("No Portfolios Yet")
-                            .font(.title2)
-                            .foregroundColor(.gray)
+                            .font(AppFonts.title2)
+                            .foregroundColor(AppColors.textSecondary)
                         Text("Create a portfolio to track\nrequired photos for assignments")
-                            .font(.subheadline)
-                            .foregroundColor(.gray.opacity(0.8))
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
                             .multilineTextAlignment(.center)
                         Button(action: { showAddPortfolioSheet = true }) {
                             HStack {
                                 Image(systemName: "plus.circle.fill")
                                 Text("Create Portfolio")
                             }
-                            .font(.headline)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
                         }
+                        .buttonStyle(CustomPrimaryButtonStyle())
                         .padding(.top, 10)
                     }
                 } else {
@@ -3862,11 +4064,11 @@ struct PortfolioCardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(portfolio.name)
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.textPrimary)
                     Text(portfolio.dateString)
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                 }
 
                 Spacer()
@@ -3874,14 +4076,14 @@ struct PortfolioCardView: View {
                 // Status badge
                 HStack(spacing: 4) {
                     Image(systemName: isComplete ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isComplete ? .green : .orange)
+                        .foregroundColor(isComplete ? AppColors.success : AppColors.warning)
                     Text(isComplete ? "Complete" : "In Progress")
-                        .font(.caption)
-                        .foregroundColor(isComplete ? .green : .orange)
+                        .font(AppFonts.caption)
+                        .foregroundColor(isComplete ? AppColors.success : AppColors.warning)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(isComplete ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
+                .background(isComplete ? AppColors.success.opacity(0.2) : AppColors.warning.opacity(0.2))
                 .cornerRadius(12)
             }
 
@@ -3889,22 +4091,22 @@ struct PortfolioCardView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("\(stats.fulfilled) / \(stats.total) photos")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                     Spacer()
                     Text(String(format: "%.0f%%", completionPercentage))
-                        .font(.caption).bold()
-                        .foregroundColor(isComplete ? .green : .blue)
+                        .font(AppFonts.geistSemiBold(12))
+                        .foregroundColor(isComplete ? AppColors.success : AppColors.primary)
                 }
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.gray.opacity(0.3))
+                            .fill(AppColors.secondary.opacity(0.3))
                             .frame(height: 8)
 
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(isComplete ? Color.green : Color.blue)
+                            .fill(isComplete ? AppColors.success : AppColors.primary)
                             .frame(width: geo.size.width * min(1.0, completionPercentage / 100), height: 8)
                     }
                 }
@@ -3915,20 +4117,20 @@ struct PortfolioCardView: View {
             if !portfolio.requirements.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "list.bullet")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                     Text("\(portfolio.requirements.count) requirement\(portfolio.requirements.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                 }
             }
         }
         .padding()
-        .background(Color(UIColor.systemGray6).opacity(0.3))
+        .background(AppColors.surface.opacity(0.5))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(AppColors.secondary.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -4000,22 +4202,22 @@ struct PortfolioDetailView: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text("Progress")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
                                 Text(String(format: "%.0f%%", completionPercentage))
-                                    .font(.system(size: 36, weight: .bold))
-                                    .foregroundColor(completionPercentage >= 100 ? .green : .blue)
+                                    .font(AppFonts.interBold(36))
+                                    .foregroundColor(completionPercentage >= 100 ? AppColors.success : AppColors.primary)
                             }
 
                             Spacer()
 
                             VStack(alignment: .trailing) {
                                 Text("Photos")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
                                 Text("\(stats.fulfilled) / \(stats.total)")
-                                    .font(.title2).bold()
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.title2)
+                                    .foregroundColor(AppColors.textPrimary)
                             }
                         }
 
@@ -4023,34 +4225,34 @@ struct PortfolioDetailView: View {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.gray.opacity(0.3))
+                                    .fill(AppColors.secondary.opacity(0.3))
                                     .frame(height: 12)
 
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(completionPercentage >= 100 ? Color.green : Color.blue)
+                                    .fill(completionPercentage >= 100 ? AppColors.success : AppColors.primary)
                                     .frame(width: geo.size.width * min(1.0, completionPercentage / 100), height: 12)
                             }
                         }
                         .frame(height: 12)
                     }
                     .padding()
-                    .background(Color(UIColor.systemGray6).opacity(0.3))
+                    .background(AppColors.surface.opacity(0.5))
                     .cornerRadius(12)
 
                     // Requirements section
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("Requirements")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.textPrimary)
                             Spacer()
                             Button(action: { showAddRequirementSheet = true }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "plus.circle.fill")
                                     Text("Add")
                                 }
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.primary)
                             }
                         }
 
@@ -4058,13 +4260,13 @@ struct PortfolioDetailView: View {
                             VStack(spacing: 12) {
                                 Image(systemName: "doc.text")
                                     .font(.system(size: 40))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppColors.textSecondary)
                                 Text("No requirements yet")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
                                 Text("Add requirements to specify what photos you need")
-                                    .font(.caption)
-                                    .foregroundColor(.gray.opacity(0.8))
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.textSecondary.opacity(0.8))
                                     .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity)
@@ -4139,26 +4341,26 @@ struct RequirementStatusView: View {
                 HStack {
                     // Status indicator
                     Image(systemName: isFulfilled ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isFulfilled ? .green : .orange)
-                        .font(.title3)
+                        .foregroundColor(isFulfilled ? AppColors.success : AppColors.warning)
+                        .font(.system(size: 20))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(requirement.procedure)
-                            .font(.subheadline).bold()
-                            .foregroundColor(.white)
+                            .font(AppFonts.geistSemiBold(15))
+                            .foregroundColor(AppColors.textPrimary)
                         Text("\(fulfilled)/\(total) photos")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
                     }
 
                     Spacer()
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .foregroundColor(.gray)
-                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                        .font(AppFonts.caption)
                 }
                 .padding()
-                .background(Color(UIColor.systemGray6).opacity(0.3))
+                .background(AppColors.surface.opacity(0.5))
                 .cornerRadius(isExpanded ? 0 : 10)
             }
 
@@ -4170,11 +4372,11 @@ struct RequirementStatusView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: stage == "Preparation" ? "wrench.fill" : "checkmark.seal.fill")
-                                    .foregroundColor(stage == "Preparation" ? .orange : .green)
-                                    .font(.caption)
+                                    .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
+                                    .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(.caption).bold()
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.geistSemiBold(12))
+                                    .foregroundColor(AppColors.textPrimary)
                             }
 
                             ForEach(requirement.angles, id: \.self) { angle in
@@ -4184,18 +4386,18 @@ struct RequirementStatusView: View {
 
                                 HStack {
                                     Image(systemName: satisfied ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(satisfied ? .green : .gray)
+                                        .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
                                         .font(.system(size: 12))
 
                                     Text(angle)
-                                        .font(.caption)
-                                        .foregroundColor(.white.opacity(0.8))
+                                        .font(AppFonts.caption)
+                                        .foregroundColor(AppColors.textPrimary.opacity(0.8))
 
                                     Spacer()
 
                                     Text("\(min(count, needed))/\(needed)")
-                                        .font(.caption)
-                                        .foregroundColor(satisfied ? .green : .gray)
+                                        .font(AppFonts.caption)
+                                        .foregroundColor(satisfied ? AppColors.success : AppColors.textSecondary)
                                 }
                                 .padding(.leading, 20)
                             }
@@ -4212,20 +4414,20 @@ struct RequirementStatusView: View {
                             Image(systemName: "trash")
                             Text("Remove Requirement")
                         }
-                        .font(.caption)
-                        .foregroundColor(.red)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.error)
                     }
                     .padding(.top, 8)
                 }
                 .padding()
-                .background(Color(UIColor.systemGray6).opacity(0.2))
+                .background(AppColors.surface.opacity(0.3))
             }
         }
-        .background(Color(UIColor.systemGray6).opacity(0.3))
+        .background(AppColors.surface.opacity(0.5))
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isFulfilled ? Color.green.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(isFulfilled ? AppColors.success.opacity(0.5) : AppColors.secondary.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -4352,16 +4554,16 @@ struct AddRequirementSheet: View {
                         let totalPhotos = selectedStages.count * selectedAngles.count * requiredCount
                         VStack(alignment: .leading, spacing: 8) {
                             Text("This will require \(totalPhotos) photo\(totalPhotos == 1 ? "" : "s"):")
-                                .font(.subheadline)
+                                .font(AppFonts.subheadline)
                             Text("• \(selectedStages.count) stage\(selectedStages.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
                             Text("• \(selectedAngles.count) angle\(selectedAngles.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
                             Text("• \(requiredCount) photo\(requiredCount == 1 ? "" : "s") per combination")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
                         }
                     }
                 }
