@@ -1390,6 +1390,19 @@ struct DentalCameraSetupView: View {
             }
             
             // 4. CONTROLS LAYER
+
+            // Tap-outside overlay to dismiss dropdown
+            if isInfoPillOpen {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation {
+                            isInfoPillOpen = false
+                        }
+                    }
+            }
+
             VStack {
                 // TOP BAR
                 ZStack(alignment: .top) {
@@ -1947,23 +1960,26 @@ struct PhotoInfoPillView: View {
         metadata.angle != nil
     }
 
+    // Check if some fields are filled (procedure set but not all complete)
+    var hasSomeFieldsFilled: Bool {
+        metadata.procedure != nil && !hasAllFieldsComplete
+    }
+
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.8)
-        } else if hasIncompleteFields && metadata.procedure == nil {
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.8)
+        } else if metadata.procedure == nil {
             return Color.red.opacity(0.8)
-        } else if isDropdownOpen {
-            return Color.blue
         } else {
             return Color.white.opacity(0.3)
         }
     }
 
     var pillStrokeWidth: CGFloat {
-        if hasAllFieldsComplete {
-            return 1.5
-        } else if hasIncompleteFields && metadata.procedure == nil {
+        if hasAllFieldsComplete || hasSomeFieldsFilled || metadata.procedure == nil {
             return 1.5
         } else {
             return 1
@@ -1973,7 +1989,9 @@ struct PhotoInfoPillView: View {
     var pillGlowColor: Color {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.4)
-        } else if hasIncompleteFields && metadata.procedure == nil {
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.4)
+        } else if metadata.procedure == nil {
             return Color.red.opacity(0.4)
         } else {
             return Color.clear
@@ -1983,7 +2001,9 @@ struct PhotoInfoPillView: View {
     var pillGlowColorOuter: Color {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.2)
-        } else if hasIncompleteFields && metadata.procedure == nil {
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.2)
+        } else if metadata.procedure == nil {
             return Color.red.opacity(0.2)
         } else {
             return Color.clear
