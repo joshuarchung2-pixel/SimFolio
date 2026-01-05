@@ -1141,7 +1141,65 @@ struct DentalCameraSetupView: View {
     @State private var showSuccessMessage = false
     @State private var showThumbnailGlow = false
     @State private var isPhotoFading = false
-    
+
+    // Blank fields warning state
+    @State private var showBlankFieldsWarning = false
+
+    // Check if any metadata field is blank
+    var hasIncompleteMetadata: Bool {
+        currentMetadata.procedure == nil ||
+        currentMetadata.toothNumber == nil ||
+        currentMetadata.stage == nil ||
+        currentMetadata.angle == nil
+    }
+
+    // Save photo helper function
+    func savePhotoWithMetadata() {
+        guard let captured = cameraService.capturedImage else { return }
+
+        // Save the photo and capture the photo ID
+        PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata) { photoId in
+            lastSavedPhotoId = photoId
+        }
+
+        // Update preview and store metadata for navigation
+        lastSavedPhoto = captured
+        lastSavedMetadata = currentMetadata
+
+        // Trigger fade-out animation
+        isPhotoFading = true
+
+        // Trigger thumbnail glow
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+            showThumbnailGlow = true
+        }
+
+        // Return to camera after fade animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            cameraService.retake()
+            isPhotoFading = false
+        }
+
+        // Show success message
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showSuccessMessage = true
+        }
+
+        // Hide thumbnail glow after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showThumbnailGlow = false
+            }
+        }
+
+        // Hide success message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showSuccessMessage = false
+            }
+        }
+    }
+
     // Computed property for visual slider position
     // Maps actual exposure bias [min, max] to visual slider height [-70, 70]
     var exposureVisualOffset: CGFloat {
@@ -1335,11 +1393,67 @@ struct DentalCameraSetupView: View {
             VStack {
                 // TOP BAR
                 ZStack(alignment: .top) {
-                    // Center: Unified Photo Info Pill
-                    PhotoInfoPillView(
-                        metadata: $currentMetadata,
-                        isDropdownOpen: $isInfoPillOpen
-                    )
+                    // Center: Unified Photo Info Pill with Blank Fields Warning
+                    VStack(spacing: 8) {
+                        PhotoInfoPillView(
+                            metadata: $currentMetadata,
+                            isDropdownOpen: $isInfoPillOpen
+                        )
+
+                        // Blank fields warning popup
+                        if showBlankFieldsWarning {
+                            VStack(spacing: 12) {
+                                Text("Blank fields detected")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textPrimary)
+
+                                HStack(spacing: 12) {
+                                    Button(action: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showBlankFieldsWarning = false
+                                            isInfoPillOpen = true
+                                        }
+                                    }) {
+                                        Text("Add fields")
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(AppColors.primary)
+                                            .cornerRadius(8)
+                                    }
+
+                                    Button(action: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showBlankFieldsWarning = false
+                                        }
+                                        savePhotoWithMetadata()
+                                    }) {
+                                        Text("Proceed anyways")
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(AppColors.textSecondary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(AppColors.secondary.opacity(0.3))
+                                            .cornerRadius(8)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .background(AppColors.surface.opacity(0.95))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppColors.warning.opacity(0.5), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
+                                removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                            ))
+                        }
+                    }
                     .zIndex(10)
 
                     // Right: Unified Options Button (Expanding Downward)
@@ -1417,46 +1531,13 @@ struct DentalCameraSetupView: View {
                         .buttonStyle(CustomSecondaryButtonStyle())
 
                         Button(action: {
-                            // Save the photo and capture the photo ID
-                            PhotoLibraryManager.shared.saveWithMetadata(image: captured, metadata: currentMetadata) { photoId in
-                                lastSavedPhotoId = photoId
-                            }
-
-                            // Update preview and store metadata for navigation
-                            lastSavedPhoto = captured
-                            lastSavedMetadata = currentMetadata
-
-                            // Trigger fade-out animation
-                            isPhotoFading = true
-
-                            // Trigger thumbnail glow
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                                showThumbnailGlow = true
-                            }
-
-                            // Return to camera after fade animation completes
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                cameraService.retake()
-                                isPhotoFading = false
-                            }
-
-                            // Show success message
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showSuccessMessage = true
-                            }
-
-                            // Hide thumbnail glow after animation
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                                withAnimation(.easeOut(duration: 0.3)) {
-                                    showThumbnailGlow = false
+                            if hasIncompleteMetadata {
+                                // Show blank fields warning
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showBlankFieldsWarning = true
                                 }
-                            }
-
-                            // Hide success message
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showSuccessMessage = false
-                                }
+                            } else {
+                                savePhotoWithMetadata()
                             }
                         }) {
                             Text("Use Photo")
@@ -1977,12 +2058,12 @@ struct PhotoInfoPillView: View {
 
     // MARK: - Dropdown Sub-views
     var stageTabsView: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             ForEach([PhotoInfoStage.procedure, .tooth, .stage, .angle], id: \.self) { stage in
                 stageTabButton(for: stage)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
         .padding(.top, 8)
     }
 
@@ -1998,8 +2079,9 @@ struct PhotoInfoPillView: View {
                     .font(AppFonts.geistRegular(9))
                     .foregroundColor(stageColor(for: stage))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(currentStage == stage ? stageColor(for: stage).opacity(0.3) : AppColors.secondary.opacity(0.1))
             .cornerRadius(8)
