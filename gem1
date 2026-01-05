@@ -3856,7 +3856,7 @@ struct GalleryView: View {
                                                 }
                                             }
                                         }) {
-                                            VStack(spacing: 4) {
+                                            VStack(alignment: .center, spacing: 4) {
                                                 AssetThumbnail(asset: asset)
                                                     .frame(height: 120)
                                                     .clipped()
@@ -3885,9 +3885,10 @@ struct GalleryView: View {
                                                             .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
                                                     )
 
-                                                // Tag info display (show in All Photos view)
-                                                if selectedProcedure == nil, let meta = metadata {
-                                                    PhotoTagsLabel(metadata: meta)
+                                                // Tag info display (show in All Photos view) - fixed height for alignment
+                                                if selectedProcedure == nil {
+                                                    PhotoTagsLabel(metadata: metadata)
+                                                        .frame(height: 28)
                                                 }
                                             }
                                         }
@@ -3895,7 +3896,7 @@ struct GalleryView: View {
                                     } else {
                                         // Normal mode - navigate to detail view
                                         NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                            VStack(spacing: 4) {
+                                            VStack(alignment: .center, spacing: 4) {
                                                 AssetThumbnail(asset: asset)
                                                     .frame(height: 120)
                                                     .clipped()
@@ -3909,9 +3910,10 @@ struct GalleryView: View {
                                                     .scaleEffect(isHighlighted ? 1.05 : 1.0)
                                                     .animation(.easeInOut(duration: 0.3), value: isHighlighted)
 
-                                                // Tag info display (show in All Photos view)
-                                                if selectedProcedure == nil, let meta = metadata {
-                                                    PhotoTagsLabel(metadata: meta)
+                                                // Tag info display (show in All Photos view) - fixed height for alignment
+                                                if selectedProcedure == nil {
+                                                    PhotoTagsLabel(metadata: metadata)
+                                                        .frame(height: 28)
                                                 }
                                             }
                                         }
@@ -5196,39 +5198,41 @@ struct RatingView: View {
 
 // MARK: - Photo Tags Label (compact tag display for gallery)
 struct PhotoTagsLabel: View {
-    let metadata: PhotoMetadata
+    let metadata: PhotoMetadata?
 
     var body: some View {
         VStack(spacing: 2) {
-            // First row: Procedure and Tooth
-            HStack(spacing: 4) {
-                if let proc = metadata.procedure {
-                    Text(proc)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(AppColors.textSecondary)
+            if let metadata = metadata {
+                // First row: Procedure and Tooth
+                HStack(spacing: 4) {
+                    if let proc = metadata.procedure {
+                        Text(proc)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    if let tooth = metadata.toothNumber {
+                        Text("#\(tooth)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
+                    }
                 }
-                if let tooth = metadata.toothNumber {
-                    Text("#\(tooth)")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(AppColors.textSecondary)
-                }
-            }
-            .lineLimit(1)
+                .lineLimit(1)
 
-            // Second row: Stage and Angle
-            HStack(spacing: 4) {
-                if let stage = metadata.stage {
-                    Text(stage.prefix(4))
-                        .font(.system(size: 8))
-                        .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                // Second row: Stage and Angle
+                HStack(spacing: 4) {
+                    if let stage = metadata.stage {
+                        Text(stage.prefix(4))
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                    }
+                    if let angle = metadata.angle {
+                        Text(angle)
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                    }
                 }
-                if let angle = metadata.angle {
-                    Text(angle)
-                        .font(.system(size: 8))
-                        .foregroundColor(AppColors.textSecondary.opacity(0.8))
-                }
+                .lineLimit(1)
             }
-            .lineLimit(1)
         }
     }
 }
