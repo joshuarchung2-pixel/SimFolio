@@ -6193,7 +6193,7 @@ struct RequirementStatusView: View {
                         .font(AppFonts.caption)
                 }
                 .padding()
-                .background(AppColors.surface.opacity(0.5))
+                .background(Color.blue.opacity(0.15))
                 .cornerRadius(isExpanded ? 0 : 10)
             }
 
@@ -6339,7 +6339,7 @@ struct RequirementStatusView: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
-                                .background(AppColors.surface.opacity(0.4))
+                                .background(Color.gray.opacity(0.15))
                                 .cornerRadius(8)
                                 .padding(.leading, 16)
                             }
