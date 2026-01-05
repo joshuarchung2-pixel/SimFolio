@@ -2290,10 +2290,16 @@ struct DentalCameraSetupView: View {
             // 3. OVERLAYS (Only visible when NOT reviewing)
             if cameraService.capturedImage == nil {
                 if let ghost = ghostImage {
-                    Image(uiImage: ghost)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .opacity(ghostOpacity).allowsHitTesting(false).ignoresSafeArea()
+                    GeometryReader { geometry in
+                        Image(uiImage: ghost)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                            .opacity(ghostOpacity)
+                    }
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
                 }
                 if showGrid { CameraGridOverlay().allowsHitTesting(false) }
 
@@ -2435,9 +2441,15 @@ struct DentalCameraSetupView: View {
                                         if ghostImage != nil { ghostImage = nil }
                                         else { isGhostPickerPresented = true }
                                     }) {
-                                        Image(systemName: ghostImage != nil ? "ghost.fill" : "ghost")
-                                            .font(.title2).padding(10)
-                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(ghostImage != nil ? .yellow : .white)
+                                        Text("👻")
+                                            .font(.title2)
+                                            .padding(10)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Circle())
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                            )
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
                                 }
