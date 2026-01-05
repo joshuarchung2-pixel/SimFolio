@@ -5,6 +5,7 @@ import Combine
 import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import UserNotifications
 
 // MARK: - CUSTOM FONT SYSTEM
 // Typography using Inter for headings, Geist for body/subheadings
@@ -109,6 +110,234 @@ class ThemeManager: ObservableObject {
     }
 }
 
+// MARK: - NOTIFICATION MANAGER
+enum NotificationFrequency: String, CaseIterable, Codable {
+    case once = "Once"
+    case daily = "Daily"
+    case twiceDaily = "Twice Daily"
+
+    var description: String { rawValue }
+}
+
+class NotificationManager: ObservableObject {
+    static let shared = NotificationManager()
+
+    private let notificationsEnabledKey = "DentalPortfolio_NotificationsEnabled"
+    private let notificationDaysBeforeKey = "DentalPortfolio_NotificationDaysBefore"
+    private let notificationFrequencyKey = "DentalPortfolio_NotificationFrequency"
+
+    @Published var notificationsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: notificationsEnabledKey)
+            if notificationsEnabled {
+                requestNotificationPermission()
+            } else {
+                cancelAllNotifications()
+            }
+        }
+    }
+
+    @Published var daysBefore: Int {
+        didSet {
+            UserDefaults.standard.set(daysBefore, forKey: notificationDaysBeforeKey)
+            rescheduleAllNotifications()
+        }
+    }
+
+    @Published var frequency: NotificationFrequency {
+        didSet {
+            UserDefaults.standard.set(frequency.rawValue, forKey: notificationFrequencyKey)
+            rescheduleAllNotifications()
+        }
+    }
+
+    @Published var permissionGranted: Bool = false
+
+    init() {
+        self.notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsEnabledKey)
+        self.daysBefore = UserDefaults.standard.object(forKey: notificationDaysBeforeKey) as? Int ?? 7
+        if let freqStr = UserDefaults.standard.string(forKey: notificationFrequencyKey),
+           let freq = NotificationFrequency(rawValue: freqStr) {
+            self.frequency = freq
+        } else {
+            self.frequency = .daily
+        }
+        checkNotificationPermission()
+    }
+
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            DispatchQueue.main.async {
+                self.permissionGranted = granted
+                if granted {
+                    self.rescheduleAllNotifications()
+                }
+            }
+        }
+    }
+
+    func checkNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.permissionGranted = settings.authorizationStatus == .authorized
+            }
+        }
+    }
+
+    func scheduleNotification(for portfolio: Portfolio) {
+        guard notificationsEnabled, permissionGranted else { return }
+        guard let dueDate = portfolio.dueDate else { return }
+
+        // Check if portfolio has outstanding requirements
+        let stats = MetadataManager.shared.getPortfolioStats(portfolio)
+        guard stats.fulfilled < stats.total else { return }
+
+        // Calculate notification date based on daysBefore setting
+        let calendar = Calendar.current
+        guard let notificationDate = calendar.date(byAdding: .day, value: -daysBefore, to: dueDate) else { return }
+
+        // Don't schedule if notification date is in the past
+        let now = Date()
+        if notificationDate < now && dueDate > now {
+            // Due date is still in future but notification date passed - schedule for today
+            scheduleImmediateNotification(for: portfolio, dueDate: dueDate)
+        } else if notificationDate >= now {
+            scheduleTimedNotification(for: portfolio, dueDate: dueDate, notificationDate: notificationDate)
+        }
+    }
+
+    private func scheduleImmediateNotification(for portfolio: Portfolio, dueDate: Date) {
+        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
+
+        // Schedule based on frequency
+        switch frequency {
+        case .once:
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_once", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .daily:
+            // Schedule for 9 AM daily
+            var dateComponents = DateComponents()
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .twiceDaily:
+            // Schedule for 9 AM and 6 PM
+            var morningComponents = DateComponents()
+            morningComponents.hour = 9
+            morningComponents.minute = 0
+            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
+            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
+            UNUserNotificationCenter.current().add(morningRequest)
+
+            var eveningComponents = DateComponents()
+            eveningComponents.hour = 18
+            eveningComponents.minute = 0
+            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
+            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
+            UNUserNotificationCenter.current().add(eveningRequest)
+        }
+    }
+
+    private func scheduleTimedNotification(for portfolio: Portfolio, dueDate: Date, notificationDate: Date) {
+        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
+        let calendar = Calendar.current
+
+        switch frequency {
+        case .once:
+            var dateComponents = calendar.dateComponents([.year, .month, .day], from: notificationDate)
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_once", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .daily:
+            var dateComponents = DateComponents()
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+
+        case .twiceDaily:
+            var morningComponents = DateComponents()
+            morningComponents.hour = 9
+            morningComponents.minute = 0
+            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
+            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
+            UNUserNotificationCenter.current().add(morningRequest)
+
+            var eveningComponents = DateComponents()
+            eveningComponents.hour = 18
+            eveningComponents.minute = 0
+            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
+            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
+            UNUserNotificationCenter.current().add(eveningRequest)
+        }
+    }
+
+    private func createNotificationContent(for portfolio: Portfolio, dueDate: Date) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        let stats = MetadataManager.shared.getPortfolioStats(portfolio)
+        let remaining = stats.total - stats.fulfilled
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+
+        if let days = portfolio.daysUntilDue {
+            if days == 0 {
+                content.title = "Portfolio Due Today!"
+                content.body = "\"\(portfolio.name)\" is due today. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else if days == 1 {
+                content.title = "Portfolio Due Tomorrow"
+                content.body = "\"\(portfolio.name)\" is due tomorrow. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else if days < 0 {
+                content.title = "Portfolio Overdue!"
+                content.body = "\"\(portfolio.name)\" was due \(abs(days)) day\(abs(days) == 1 ? "" : "s") ago. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            } else {
+                content.title = "Portfolio Due in \(days) Days"
+                content.body = "\"\(portfolio.name)\" is due \(formatter.string(from: dueDate)). You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+            }
+        }
+
+        content.sound = .default
+        return content
+    }
+
+    func cancelNotifications(for portfolioId: String) {
+        let identifiers = [
+            "\(portfolioId)_once",
+            "\(portfolioId)_daily",
+            "\(portfolioId)_morning",
+            "\(portfolioId)_evening"
+        ]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    func cancelAllNotifications() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
+
+    func rescheduleAllNotifications() {
+        guard notificationsEnabled, permissionGranted else { return }
+        cancelAllNotifications()
+
+        for portfolio in MetadataManager.shared.portfolios {
+            scheduleNotification(for: portfolio)
+        }
+    }
+
+    func rescheduleNotification(for portfolio: Portfolio) {
+        cancelNotifications(for: portfolio.id)
+        scheduleNotification(for: portfolio)
+    }
+}
+
 // Dynamic color helper for theme-aware colors
 struct AppColors {
     static var primary: Color { Color.blue }
@@ -142,6 +371,235 @@ struct AppColors {
     }
     static var navBarBorder: Color {
         ThemeManager.shared.isDarkMode ? Color.gray.opacity(0.2) : Color.gray.opacity(0.3)
+    }
+}
+
+// MARK: - CALENDAR DATE PICKER
+struct CalendarDatePicker: View {
+    @Binding var selectedDate: Date?
+    @State private var displayedMonth: Date
+    let minDate: Date?
+    let onDateSelected: ((Date?) -> Void)?
+
+    private let calendar = Calendar.current
+    private let daysOfWeek = ["S", "M", "T", "W", "T", "F", "S"]
+
+    init(selectedDate: Binding<Date?>, minDate: Date? = nil, onDateSelected: ((Date?) -> Void)? = nil) {
+        self._selectedDate = selectedDate
+        self.minDate = minDate
+        self.onDateSelected = onDateSelected
+        // Initialize displayedMonth based on selectedDate or current date
+        if let date = selectedDate.wrappedValue {
+            self._displayedMonth = State(initialValue: date)
+        } else {
+            self._displayedMonth = State(initialValue: Date())
+        }
+    }
+
+    private var monthYearString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: displayedMonth)
+    }
+
+    private var daysInMonth: [Date?] {
+        guard let range = calendar.range(of: .day, in: .month, for: displayedMonth),
+              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth)) else {
+            return []
+        }
+
+        let firstWeekday = calendar.component(.weekday, from: firstDay)
+        var days: [Date?] = Array(repeating: nil, count: firstWeekday - 1)
+
+        for day in range {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) {
+                days.append(date)
+            }
+        }
+
+        // Fill remaining cells to complete the grid
+        while days.count % 7 != 0 {
+            days.append(nil)
+        }
+
+        return days
+    }
+
+    private func isDateSelected(_ date: Date) -> Bool {
+        guard let selected = selectedDate else { return false }
+        return calendar.isDate(date, inSameDayAs: selected)
+    }
+
+    private func isDateDisabled(_ date: Date) -> Bool {
+        guard let min = minDate else { return false }
+        return date < calendar.startOfDay(for: min)
+    }
+
+    private func isToday(_ date: Date) -> Bool {
+        calendar.isDateInToday(date)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Month navigation header
+            HStack {
+                Button(action: previousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 36, height: 36)
+                        .background(AppColors.surface)
+                        .cornerRadius(8)
+                }
+
+                Spacer()
+
+                Text(monthYearString)
+                    .font(AppFonts.headline)
+                    .foregroundColor(AppColors.textPrimary)
+
+                Spacer()
+
+                Button(action: nextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 36, height: 36)
+                        .background(AppColors.surface)
+                        .cornerRadius(8)
+                }
+            }
+            .padding(.horizontal, 4)
+
+            // Days of week header
+            HStack(spacing: 0) {
+                ForEach(daysOfWeek, id: \.self) { day in
+                    Text(day)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Calendar grid
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, date in
+                    if let date = date {
+                        let disabled = isDateDisabled(date)
+                        let selected = isDateSelected(date)
+                        let today = isToday(date)
+
+                        Button(action: {
+                            if !disabled {
+                                selectedDate = date
+                                onDateSelected?(date)
+                            }
+                        }) {
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(AppFonts.body)
+                                .foregroundColor(
+                                    disabled ? AppColors.textSecondary.opacity(0.4) :
+                                    selected ? .white :
+                                    today ? AppColors.primary :
+                                    AppColors.textPrimary
+                                )
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    selected ? AppColors.primary :
+                                    today ? AppColors.primary.opacity(0.15) :
+                                    Color.clear
+                                )
+                                .cornerRadius(8)
+                        }
+                        .disabled(disabled)
+                    } else {
+                        Color.clear
+                            .frame(width: 36, height: 36)
+                    }
+                }
+            }
+
+            // Clear date button
+            if selectedDate != nil {
+                Button(action: {
+                    selectedDate = nil
+                    onDateSelected?(nil)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                        Text("Clear Due Date")
+                            .font(AppFonts.caption)
+                    }
+                    .foregroundColor(AppColors.error)
+                    .padding(.top, 8)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppColors.surface)
+        .cornerRadius(16)
+    }
+
+    private func previousMonth() {
+        if let newDate = calendar.date(byAdding: .month, value: -1, to: displayedMonth) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                displayedMonth = newDate
+            }
+        }
+    }
+
+    private func nextMonth() {
+        if let newDate = calendar.date(byAdding: .month, value: 1, to: displayedMonth) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                displayedMonth = newDate
+            }
+        }
+    }
+}
+
+// MARK: - Due Date Display Helper
+struct DueDateBadge: View {
+    let portfolio: Portfolio
+
+    var body: some View {
+        if let dueDate = portfolio.dueDate {
+            let days = portfolio.daysUntilDue ?? 0
+            let isOverdue = portfolio.isOverdue
+            let isDueSoon = portfolio.isDueSoon
+
+            HStack(spacing: 4) {
+                Image(systemName: isOverdue ? "exclamationmark.circle.fill" : "calendar")
+                    .font(.system(size: 10))
+
+                if isOverdue {
+                    Text("Overdue")
+                        .font(AppFonts.caption2)
+                } else if days == 0 {
+                    Text("Due Today")
+                        .font(AppFonts.caption2)
+                } else if days == 1 {
+                    Text("Due Tomorrow")
+                        .font(AppFonts.caption2)
+                } else {
+                    Text("Due in \(days)d")
+                        .font(AppFonts.caption2)
+                }
+            }
+            .foregroundColor(
+                isOverdue ? AppColors.error :
+                isDueSoon ? AppColors.warning :
+                AppColors.textSecondary
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                (isOverdue ? AppColors.error :
+                isDueSoon ? AppColors.warning :
+                AppColors.textSecondary).opacity(0.15)
+            )
+            .cornerRadius(6)
+        }
     }
 }
 
@@ -198,6 +656,7 @@ struct CustomIconButtonStyle: ButtonStyle {
 // MARK: - CUSTOM BOTTOM NAVIGATION BAR
 struct CustomBottomNavBar: View {
     @Binding var selectedTab: Int
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -230,7 +689,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 18) // 18pt padding between nav bar top edge and highlight area
+        .padding(.top, 10) // 10pt padding between nav bar top edge and highlight area
         .padding(.bottom, 0) // Minimal bottom padding - safe area handled by background extension
         .background(
             AppColors.surface
@@ -313,6 +772,20 @@ struct CameraLoadingView: View {
 // MARK: - SETTINGS VIEW
 struct SettingsView: View {
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var notificationManager = NotificationManager.shared
+
+    var themeIcon: String {
+        switch themeManager.themeMode {
+        case .light:
+            return "sun.max.fill"
+        case .dark:
+            return "moon.fill"
+        case .system:
+            return "gear"
+        }
+    }
+
+    private let daysBeforeOptions = [1, 2, 3, 5, 7, 14, 30]
 
     var body: some View {
         NavigationView {
@@ -329,22 +802,202 @@ struct SettingsView: View {
                                 .foregroundColor(AppColors.textPrimary)
                                 .padding(.horizontal, 4)
 
-                            VStack(spacing: 0) {
-                                ForEach(ThemeMode.allCases, id: \.self) { mode in
-                                    ThemeOptionRow(
-                                        mode: mode,
-                                        isSelected: themeManager.themeMode == mode,
-                                        action: {
+                            HStack {
+                                Image(systemName: themeIcon)
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppColors.primary)
+                                    .frame(width: 28)
+
+                                Text("Theme")
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.textPrimary)
+
+                                Spacer()
+
+                                Menu {
+                                    ForEach(ThemeMode.allCases, id: \.self) { mode in
+                                        Button(action: {
                                             withAnimation(.easeInOut(duration: 0.2)) {
                                                 themeManager.themeMode = mode
                                             }
+                                        }) {
+                                            HStack {
+                                                Text(mode.rawValue)
+                                                if themeManager.themeMode == mode {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
                                         }
-                                    )
-
-                                    if mode != ThemeMode.allCases.last {
-                                        Divider()
-                                            .background(AppColors.secondary.opacity(0.3))
                                     }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(themeManager.themeMode.rawValue)
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(AppColors.textSecondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(AppColors.surface)
+                            .cornerRadius(12)
+                        }
+
+                        // Notifications Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Notifications")
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.textPrimary)
+                                .padding(.horizontal, 4)
+
+                            VStack(spacing: 0) {
+                                // Enable notifications toggle
+                                HStack {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(AppColors.primary)
+                                        .frame(width: 28)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Due Date Reminders")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+                                        Text("Get notified about upcoming portfolio due dates")
+                                            .font(AppFonts.caption)
+                                            .foregroundColor(AppColors.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    Toggle("", isOn: $notificationManager.notificationsEnabled)
+                                        .labelsHidden()
+                                        .tint(AppColors.primary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+
+                                if notificationManager.notificationsEnabled {
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    // Days before due date
+                                    HStack {
+                                        Image(systemName: "calendar.badge.clock")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.primary)
+                                            .frame(width: 28)
+
+                                        Text("Remind me")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+
+                                        Spacer()
+
+                                        Menu {
+                                            ForEach(daysBeforeOptions, id: \.self) { days in
+                                                Button(action: {
+                                                    notificationManager.daysBefore = days
+                                                }) {
+                                                    HStack {
+                                                        Text("\(days) day\(days == 1 ? "" : "s") before")
+                                                        if notificationManager.daysBefore == days {
+                                                            Image(systemName: "checkmark")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Text("\(notificationManager.daysBefore) day\(notificationManager.daysBefore == 1 ? "" : "s") before")
+                                                    .font(AppFonts.body)
+                                                    .foregroundColor(AppColors.textSecondary)
+                                                Image(systemName: "chevron.up.chevron.down")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(AppColors.textSecondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    // Notification frequency
+                                    HStack {
+                                        Image(systemName: "repeat")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.primary)
+                                            .frame(width: 28)
+
+                                        Text("Frequency")
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textPrimary)
+
+                                        Spacer()
+
+                                        Menu {
+                                            ForEach(NotificationFrequency.allCases, id: \.self) { freq in
+                                                Button(action: {
+                                                    notificationManager.frequency = freq
+                                                }) {
+                                                    HStack {
+                                                        Text(freq.description)
+                                                        if notificationManager.frequency == freq {
+                                                            Image(systemName: "checkmark")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Text(notificationManager.frequency.description)
+                                                    .font(AppFonts.body)
+                                                    .foregroundColor(AppColors.textSecondary)
+                                                Image(systemName: "chevron.up.chevron.down")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(AppColors.textSecondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                }
+
+                                if notificationManager.notificationsEnabled && !notificationManager.permissionGranted {
+                                    Divider()
+                                        .padding(.leading, 52)
+
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppColors.warning)
+                                            .frame(width: 28)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Permission Required")
+                                                .font(AppFonts.body)
+                                                .foregroundColor(AppColors.textPrimary)
+                                            Text("Enable notifications in Settings to receive reminders")
+                                                .font(AppFonts.caption)
+                                                .foregroundColor(AppColors.textSecondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button("Open Settings") {
+                                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        }
+                                        .font(AppFonts.caption)
+                                        .foregroundColor(AppColors.primary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
                                 }
                             }
                             .background(AppColors.surface)
@@ -363,67 +1016,6 @@ struct SettingsView: View {
             .toolbarColorScheme(themeManager.colorScheme ?? .light, for: .navigationBar)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-struct ThemeOptionRow: View {
-    let mode: ThemeMode
-    let isSelected: Bool
-    let action: () -> Void
-
-    var icon: String {
-        switch mode {
-        case .light:
-            return "sun.max.fill"
-        case .dark:
-            return "moon.fill"
-        case .system:
-            return "gear"
-        }
-    }
-
-    var subtitle: String {
-        switch mode {
-        case .light:
-            return "Always use light appearance"
-        case .dark:
-            return "Always use dark appearance"
-        case .system:
-            return "Match device settings"
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.rawValue)
-                        .font(AppFonts.body)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    Text(subtitle)
-                        .font(AppFonts.caption)
-                        .foregroundColor(AppColors.textSecondary)
-                }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppColors.primary)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -483,13 +1075,13 @@ struct ContentView: View {
         .onAppear {
             PhotoLibraryManager.shared.createAlbumIfNeeded()
         }
-        .onChange(of: selectedTab) { newTab in
+        .onChange(of: selectedTab) { _, newTab in
             // Show loading only when switching TO camera and it hasn't loaded yet
             if newTab == 0 && !cameraHasLoaded && !sharedCameraService.isSessionReady {
                 showCameraLoading = true
             }
         }
-        .onChange(of: sharedCameraService.isSessionReady) { ready in
+        .onChange(of: sharedCameraService.isSessionReady) { _, ready in
             if ready {
                 cameraHasLoaded = true
                 // Small delay to let progress bar complete visually
@@ -591,13 +1183,15 @@ struct Portfolio: Codable, Identifiable, Hashable {
     let id: String
     var name: String
     var createdDate: Date
+    var dueDate: Date?
     var requirements: [PortfolioRequirement]
     var notes: String?
 
-    init(id: String = UUID().uuidString, name: String, createdDate: Date = Date(), requirements: [PortfolioRequirement] = [], notes: String? = nil) {
+    init(id: String = UUID().uuidString, name: String, createdDate: Date = Date(), dueDate: Date? = nil, requirements: [PortfolioRequirement] = [], notes: String? = nil) {
         self.id = id
         self.name = name
         self.createdDate = createdDate
+        self.dueDate = dueDate
         self.requirements = requirements
         self.notes = notes
     }
@@ -606,6 +1200,31 @@ struct Portfolio: Codable, Identifiable, Hashable {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: createdDate)
+    }
+
+    var dueDateString: String? {
+        guard let dueDate = dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: dueDate)
+    }
+
+    var daysUntilDue: Int? {
+        guard let dueDate = dueDate else { return nil }
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfDueDate = calendar.startOfDay(for: dueDate)
+        return calendar.dateComponents([.day], from: startOfToday, to: startOfDueDate).day
+    }
+
+    var isOverdue: Bool {
+        guard let days = daysUntilDue else { return false }
+        return days < 0
+    }
+
+    var isDueSoon: Bool {
+        guard let days = daysUntilDue else { return false }
+        return days >= 0 && days <= 7
     }
 }
 
@@ -908,16 +1527,24 @@ class MetadataManager: ObservableObject {
     func addPortfolio(_ portfolio: Portfolio) {
         portfolios.append(portfolio)
         savePortfolios()
+        // Schedule notification if due date is set
+        if portfolio.dueDate != nil {
+            NotificationManager.shared.scheduleNotification(for: portfolio)
+        }
     }
 
     func updatePortfolio(_ portfolio: Portfolio) {
         if let index = portfolios.firstIndex(where: { $0.id == portfolio.id }) {
             portfolios[index] = portfolio
             savePortfolios()
+            // Reschedule notification when portfolio is updated
+            NotificationManager.shared.rescheduleNotification(for: portfolio)
         }
     }
 
     func deletePortfolio(_ portfolio: Portfolio) {
+        // Cancel notifications before deleting
+        NotificationManager.shared.cancelNotifications(for: portfolio.id)
         portfolios.removeAll { $0.id == portfolio.id }
         savePortfolios()
     }
@@ -931,6 +1558,8 @@ class MetadataManager: ObservableObject {
         if let index = portfolios.firstIndex(where: { $0.id == portfolioId }) {
             portfolios[index].requirements.append(requirement)
             savePortfolios()
+            // Reschedule notification since requirements changed
+            NotificationManager.shared.rescheduleNotification(for: portfolios[index])
         }
     }
 
@@ -939,6 +1568,8 @@ class MetadataManager: ObservableObject {
         if let index = portfolios.firstIndex(where: { $0.id == portfolioId }) {
             portfolios[index].requirements.removeAll { $0.id == requirementId }
             savePortfolios()
+            // Reschedule notification since requirements changed
+            NotificationManager.shared.rescheduleNotification(for: portfolios[index])
         }
     }
 
@@ -966,6 +1597,8 @@ class MetadataManager: ObservableObject {
             if let reqIndex = portfolios[index].requirements.firstIndex(where: { $0.id == requirement.id }) {
                 portfolios[index].requirements[reqIndex] = requirement
                 savePortfolios()
+                // Reschedule notification since requirements changed
+                NotificationManager.shared.rescheduleNotification(for: portfolios[index])
             }
         }
     }
@@ -1657,10 +2290,16 @@ struct DentalCameraSetupView: View {
             // 3. OVERLAYS (Only visible when NOT reviewing)
             if cameraService.capturedImage == nil {
                 if let ghost = ghostImage {
-                    Image(uiImage: ghost)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .opacity(ghostOpacity).allowsHitTesting(false).ignoresSafeArea()
+                    GeometryReader { geometry in
+                        Image(uiImage: ghost)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                            .opacity(ghostOpacity)
+                    }
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
                 }
                 if showGrid { CameraGridOverlay().allowsHitTesting(false) }
 
@@ -1681,6 +2320,19 @@ struct DentalCameraSetupView: View {
             }
             
             // 4. CONTROLS LAYER
+
+            // Tap-outside overlay to dismiss dropdown
+            if isInfoPillOpen {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation {
+                            isInfoPillOpen = false
+                        }
+                    }
+            }
+
             VStack {
                 // TOP BAR
                 ZStack(alignment: .top) {
@@ -1789,9 +2441,15 @@ struct DentalCameraSetupView: View {
                                         if ghostImage != nil { ghostImage = nil }
                                         else { isGhostPickerPresented = true }
                                     }) {
-                                        Image(systemName: ghostImage != nil ? "xmark.square" : "square.on.square.dashed")
-                                            .font(.title2).padding(10)
-                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(ghostImage != nil ? .yellow : .white)
+                                        Text("👻")
+                                            .font(.title2)
+                                            .padding(10)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Circle())
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                            )
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
                                 }
@@ -1842,11 +2500,12 @@ struct DentalCameraSetupView: View {
                 } else {
                     // CAPTURE MODE
                     ZStack {
+                        // Ghost Opacity Slider (positioned above shutter button)
                         if ghostImage != nil {
-                            VStack {
-                                Slider(value: $ghostOpacity, in: 0.1...0.8).accentColor(.blue).frame(width: 200)
-                                Spacer().frame(height: 180)
-                            }
+                            Slider(value: $ghostOpacity, in: 0.1...0.8)
+                                .accentColor(.blue)
+                                .frame(width: 200)
+                                .padding(.bottom, 230)
                         }
 
                         // Shutter Button (Center)
@@ -1876,7 +2535,7 @@ struct DentalCameraSetupView: View {
                                         toothDate: lastSavedMetadata?.toothDate,
                                         photoId: lastSavedPhotoId
                                     )
-                                    selectedTab = 1
+                                    selectedTab = 2
                                 }) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
@@ -1917,7 +2576,7 @@ struct DentalCameraSetupView: View {
                             }
                             .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 76) // Positioned to maintain 18pt gap to nav bar top
+                        .padding(.bottom, 76) // Positioned to maintain 10pt gap to nav bar top (matching nav bar top padding)
                     }
                 }
             }
@@ -2230,27 +2889,62 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Check if all fields are complete
+    var hasAllFieldsComplete: Bool {
+        metadata.procedure != nil &&
+        metadata.toothNumber != nil &&
+        metadata.stage != nil &&
+        metadata.angle != nil
+    }
+
+    // Check if some fields are filled (procedure set but not all complete)
+    var hasSomeFieldsFilled: Bool {
+        metadata.procedure != nil && !hasAllFieldsComplete
+    }
+
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
-        if hasIncompleteFields {
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.8)
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.8)
+        } else if metadata.procedure == nil {
             return Color.red.opacity(0.8)
-        } else if isDropdownOpen {
-            return Color.blue
         } else {
             return Color.white.opacity(0.3)
         }
     }
 
     var pillStrokeWidth: CGFloat {
-        hasIncompleteFields ? 1.5 : 1
+        if hasAllFieldsComplete || hasSomeFieldsFilled || metadata.procedure == nil {
+            return 1.5
+        } else {
+            return 1
+        }
     }
 
     var pillGlowColor: Color {
-        hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.4)
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.4)
+        } else if metadata.procedure == nil {
+            return Color.red.opacity(0.4)
+        } else {
+            return Color.clear
+        }
     }
 
     var pillGlowColorOuter: Color {
-        hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.2)
+        } else if hasSomeFieldsFilled {
+            return Color.yellow.opacity(0.2)
+        } else if metadata.procedure == nil {
+            return Color.red.opacity(0.2)
+        } else {
+            return Color.clear
+        }
     }
 
     var body: some View {
@@ -2262,7 +2956,7 @@ struct PhotoInfoPillView: View {
                     if metadata.procedure == nil {
                         Text("Choose procedure")
                             .font(AppFonts.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(Color.red)
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
@@ -2302,7 +2996,7 @@ struct PhotoInfoPillView: View {
 
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
                         .font(AppFonts.caption2)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(Color.black.opacity(0.6))
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
@@ -2880,8 +3574,13 @@ struct GalleryView: View {
     var filteredAssets: [PHAsset] {
         var assets = library.assets
         if let proc = selectedProcedure {
-            assets = assets.filter {
-                metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == proc
+            assets = assets.filter { asset in
+                let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
+                // For "Unsorted Photos" folder, include photos with nil procedure OR explicitly set to "Unsorted Photos"
+                if proc == MetadataManager.unsortedPhotosFolder {
+                    return assetProcedure == nil || assetProcedure == proc
+                }
+                return assetProcedure == proc
             }
         }
         if let tooth = selectedTooth {
@@ -2996,7 +3695,9 @@ struct GalleryView: View {
                         }
                         .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
                     }
-                    .padding(16)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 60)
+                    .padding(.bottom, 16)
                     .background(AppColors.background)
                     .zIndex(20)
 
@@ -3117,8 +3818,10 @@ struct GalleryView: View {
                 // Edge swipe gesture overlay (left edge for opening, below header)
                 if !isSidebarOpen {
                     VStack(spacing: 0) {
-                        // Spacer for header height (approx 60pt)
-                        Color.clear.frame(height: 60)
+                        // Spacer for full header height (60pt top padding + 40pt button + 16pt bottom padding = 116pt)
+                        // Using 120pt to ensure sidebar toggle button is not blocked by gesture overlay
+                        Color.clear.frame(height: 120)
+                            .allowsHitTesting(false)
 
                         HStack {
                             Color.clear
@@ -3138,6 +3841,7 @@ struct GalleryView: View {
                                         }
                                 )
                             Spacer()
+                                .allowsHitTesting(false)
                         }
                     }
                 }
@@ -3219,8 +3923,9 @@ struct GalleryView: View {
                         .background(AppColors.surface.opacity(0.98))
                         .edgesIgnoringSafeArea(.vertical)
 
-                        // Tap or swipe outside to close
+                        // Tap or swipe outside to close - cover entire photo grid area
                         Color.black.opacity(0.3)
+                            .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
                             .highPriorityGesture(
@@ -3295,6 +4000,7 @@ struct GalleryView: View {
                 }
             }
             .navigationBarHidden(true)
+            .ignoresSafeArea(edges: .top)
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
@@ -3872,7 +4578,14 @@ struct ProcedureFolderView: View {
     @State private var isExpanded = false
 
     var photoCount: Int {
-        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == procedure }.count
+        assets.filter { asset in
+            let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
+            // For "Unsorted Photos" folder, count photos with nil procedure OR explicitly set to "Unsorted Photos"
+            if procedure == MetadataManager.unsortedPhotosFolder {
+                return assetProcedure == nil || assetProcedure == procedure
+            }
+            return assetProcedure == procedure
+        }.count
     }
 
     var canManage: Bool {
@@ -4388,35 +5101,15 @@ struct PhotoDetailView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Photo with tags overlay at top
-                ZStack(alignment: .top) {
-                    if let img = image {
-                        Image(uiImage: img)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } else {
-                        ProgressView()
-                    }
-
-                    // Tags overlay at top of photo
+                // Metadata and rating display (always show rating, even for unsorted photos)
+                VStack(alignment: .leading, spacing: 8) {
+                    // Metadata info (only if metadata exists)
                     if let meta = metadata {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                if let proc = meta.procedure {
-                                    Text(proc)
-                                        .font(AppFonts.geistSemiBold(11))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(AppColors.primary.opacity(0.85))
-                                        .cornerRadius(4)
-                                }
-                                if let tooth = meta.toothNumber {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "tooth")
-                                            .font(.system(size: 10))
-                                        Text("#\(tooth)")
-                                            .font(AppFonts.geistSemiBold(11))
-                                    }
+                        // Top row: Procedure and Tooth
+                        HStack(spacing: 8) {
+                            if let proc = meta.procedure {
+                                Text(proc)
+                                    .font(AppFonts.geistSemiBold(12))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(AppColors.success.opacity(0.85))
@@ -4456,35 +5149,24 @@ struct PhotoDetailView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                         }
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.black.opacity(0.6), Color.clear]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
                     }
-                }
 
-                // Rating below the photo
-                if let meta = metadata {
-                    HStack(spacing: 12) {
-                        Text("Rating")
+                    // Rating row (always visible)
+                    HStack {
+                        Text("Rating:")
                             .font(AppFonts.caption)
                             .foregroundColor(AppColors.textSecondary)
                         RatingView(
-                            rating: meta.rating ?? 0,
+                            rating: metadata?.rating ?? 0,
                             assetID: asset.localIdentifier,
                             metadataManager: metadataManager
                         )
                     }
-                    .padding(.vertical, 16)
-                    .padding(.horizontal, 20)
-                    .frame(maxWidth: .infinity)
-                    .background(AppColors.surface.opacity(0.95))
                 }
-
-                Spacer()
+                .padding()
+                .background(AppColors.surface.opacity(0.9))
+                .cornerRadius(10)
+                .padding()
             }
         }
         .toolbar {
@@ -4527,210 +5209,298 @@ struct PhotoEditorView: View {
     // Adjustable crop frame dimensions
     @State private var cropFrameWidth: CGFloat = 0
     @State private var cropFrameHeight: CGFloat = 0
-    @State private var initialCropFrameWidth: CGFloat = 0
-    @State private var initialCropFrameHeight: CGFloat = 0
+    // Track displayed image size for crop calculations
+    @State private var displayedImageWidth: CGFloat = 0
+    @State private var displayedImageHeight: CGFloat = 0
 
     private let context = CIContext()
 
     var body: some View {
         NavigationView {
-            VStack {
-                Spacer()
-                if isCropping {
-                    // Crop mode view
-                    GeometryReader { geo in
-                        if let img = displayedImage {
-                            ZStack {
-                                // Darkened background
-                                Color.black.opacity(0.7)
-
-                                // Rotated image
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .rotationEffect(.degrees(cropRotation))
-                                    .scaleEffect(cropScale)
-                                    .offset(cropOffset)
-                                    .gesture(
-                                        MagnificationGesture()
-                                            .onChanged { value in
-                                                // Apply relative scale change from last scale
-                                                let newScale = lastCropScale * value
-                                                cropScale = max(0.5, min(3.0, newScale))
-                                            }
-                                            .onEnded { _ in
-                                                // Store the final scale for next gesture
-                                                lastCropScale = cropScale
-                                            }
-                                    )
-                                    .simultaneousGesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                // Apply relative offset from last position
-                                                cropOffset = CGSize(
-                                                    width: lastCropOffset.width + value.translation.width,
-                                                    height: lastCropOffset.height + value.translation.height
-                                                )
-                                            }
-                                            .onEnded { _ in
-                                                // Store the final offset for next gesture
-                                                lastCropOffset = cropOffset
-                                            }
-                                    )
-
-                                // Crop frame overlay
-                                CropOverlayView(
-                                    size: geo.size,
-                                    cropWidth: $cropFrameWidth,
-                                    cropHeight: $cropFrameHeight,
-                                    imageAspectRatio: img.size.width / img.size.height
-                                )
-                            }
-                        }
-                    }
-                    .padding()
-                } else {
-                    // Normal view
-                    if let img = displayedImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding()
-                    } else {
-                        ProgressView()
-                    }
+            mainContentView
+                .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { editorToolbarContent }
+                .onAppear {
+                    baseImage = inputImage
+                    displayedImage = inputImage
+                    applyProcessing()
                 }
-                Spacer()
+                .onChange(of: brightness) { _, _ in applyProcessing() }
+                .onChange(of: contrast) { _, _ in applyProcessing() }
+                .onChange(of: saturation) { _, _ in applyProcessing() }
+                .onChange(of: sharpness) { _, _ in applyProcessing() }
+        }
+    }
 
-                VStack(spacing: 20) {
-                    if isCropping {
-                        // Crop controls with fine rotation
-                        VStack(spacing: 16) {
-                            HStack(spacing: 30) {
-                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero }) {
-                                    VStack {
-                                        Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
-                                        Text("Reset").font(AppFonts.caption)
-                                    }
-                                }
-                                Button(action: { applyCrop() }) {
-                                    VStack {
-                                        Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
-                                        Text("Apply").font(AppFonts.caption)
-                                    }
-                                }
-                                .foregroundColor(AppColors.success)
-                                Button(action: { cancelCrop() }) {
-                                    VStack {
-                                        Image(systemName: "xmark.circle").font(.system(size: 22))
-                                        Text("Cancel").font(AppFonts.caption)
-                                    }
-                                }
-                                .foregroundColor(AppColors.error)
-                            }
-                            .foregroundColor(AppColors.textPrimary)
+    // MARK: - Extracted Views
 
-                            // Fine rotation slider (only in crop mode)
-                            VStack(spacing: 8) {
-                                Text("Rotation")
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.textSecondary)
-                                HStack {
-                                    Image(systemName: "rotate.left")
-                                        .foregroundColor(AppColors.textSecondary)
-                                    Slider(value: $cropRotation, in: -45...45, step: 0.5)
-                                        .accentColor(AppColors.primary)
-                                    Image(systemName: "rotate.right")
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                                Text("\(String(format: "%.1f", cropRotation))°")
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.textPrimary)
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding()
-                    } else if selectedTab == 0 {
-                        // Transform tab
-                        VStack(spacing: 16) {
-                            HStack(spacing: 30) {
-                                Button(action: { rotateImage() }) {
-                                    VStack {
-                                        Image(systemName: "rotate.right").font(.system(size: 22))
-                                        Text("90°").font(AppFonts.caption)
-                                    }
-                                }
-                                Button(action: { startCropping() }) {
-                                    VStack {
-                                        Image(systemName: "crop").font(.system(size: 22))
-                                        Text("Crop").font(AppFonts.caption)
-                                    }
-                                }
-                            }
-                            .foregroundColor(AppColors.textPrimary)
-                        }
-                        .padding()
-                    } else {
-                        // Adjust tab
-                        VStack(spacing: 15) {
-                            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
-                            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
-                            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
-                            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
-                        }
-                        .padding(.horizontal)
-                    }
+    private var mainContentView: some View {
+        VStack {
+            Spacer()
+            imageDisplayArea
+            Spacer()
+            controlsSection
+        }
+    }
 
-                    if !isCropping {
-                        Divider().background(AppColors.secondary)
-                        HStack {
-                            Button(action: { selectedTab = 0 }) {
-                                VStack {
-                                    Image(systemName: "crop.rotate")
-                                    Text("Transform").font(AppFonts.caption2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
+    @ViewBuilder
+    private var imageDisplayArea: some View {
+        if isCropping {
+            cropModeView.padding()
+        } else {
+            normalImageView
+        }
+    }
 
-                            Button(action: { selectedTab = 1 }) {
-                                VStack {
-                                    Image(systemName: "slider.horizontal.3")
-                                    Text("Adjust").font(AppFonts.caption2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
-                        }
-                        .padding(.top, 10)
-                    }
+    @ViewBuilder
+    private var normalImageView: some View {
+        if let img = displayedImage {
+            Image(uiImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .padding()
+        } else {
+            ProgressView()
+        }
+    }
+
+    private var cropModeView: some View {
+        GeometryReader { geo in
+            cropModeContent(geo: geo)
+        }
+    }
+
+    @ViewBuilder
+    private func cropModeContent(geo: GeometryProxy) -> some View {
+        if let img = displayedImage {
+            let dimensions = calculateDisplayDimensions(for: img, in: geo)
+            cropModeZStack(img: img, geo: geo, dimensions: dimensions)
+                .onAppear {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
                 }
-                .padding(.bottom)
-                .background(AppColors.surface)
+                .onChange(of: geo.size) {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
+                }
+        }
+    }
+
+    private func calculateDisplayDimensions(for img: UIImage, in geo: GeometryProxy) -> (width: CGFloat, height: CGFloat) {
+        let imageAspect = img.size.width / img.size.height
+        let containerAspect = geo.size.width / geo.size.height
+
+        if imageAspect > containerAspect {
+            return (geo.size.width, geo.size.width / imageAspect)
+        } else {
+            return (geo.size.height * imageAspect, geo.size.height)
+        }
+    }
+
+    private func cropModeZStack(img: UIImage, geo: GeometryProxy, dimensions: (width: CGFloat, height: CGFloat)) -> some View {
+        ZStack {
+            Color.black.opacity(0.7)
+            croppableImage(img: img)
+            CropOverlayView(
+                containerSize: geo.size,
+                displayedImageWidth: dimensions.width,
+                displayedImageHeight: dimensions.height,
+                cropWidth: $cropFrameWidth,
+                cropHeight: $cropFrameHeight
+            )
+        }
+    }
+
+    private func croppableImage(img: UIImage) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .rotationEffect(.degrees(cropRotation))
+            .scaleEffect(cropScale)
+            .offset(cropOffset)
+            .gesture(magnificationGesture)
+            .simultaneousGesture(dragGesture)
+    }
+
+    private var magnificationGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let newScale = lastCropScale * value
+                cropScale = max(0.5, min(3.0, newScale))
             }
-            .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !isCropping {
-                        Button("Cancel") { presentationMode.wrappedValue.dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if !isCropping {
-                        Button("Save") { saveImage() }
-                    }
+            .onEnded { _ in
+                lastCropScale = cropScale
+            }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                cropOffset = CGSize(
+                    width: lastCropOffset.width + value.translation.width,
+                    height: lastCropOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in
+                lastCropOffset = cropOffset
+            }
+    }
+
+    private var controlsSection: some View {
+        VStack(spacing: 20) {
+            currentControlsView
+            if !isCropping {
+                tabBarView
+            }
+        }
+        .padding(.bottom)
+        .background(AppColors.surface)
+    }
+
+    @ViewBuilder
+    private var currentControlsView: some View {
+        if isCropping {
+            cropControlsView
+        } else if selectedTab == 0 {
+            transformControlsView
+        } else {
+            adjustmentControlsView
+        }
+    }
+
+    private var cropControlsView: some View {
+        VStack(spacing: 16) {
+            cropButtonsRow
+            rotationSlider
+        }
+        .padding()
+    }
+
+    private var cropButtonsRow: some View {
+        HStack(spacing: 30) {
+            Button(action: resetCropSettings) {
+                VStack {
+                    Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
+                    Text("Reset").font(AppFonts.caption)
                 }
             }
-            .onAppear {
-                baseImage = inputImage
-                displayedImage = inputImage
-                applyProcessing()
+            Button(action: { applyCrop() }) {
+                VStack {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
+                    Text("Apply").font(AppFonts.caption)
+                }
             }
-            .onChange(of: brightness) { applyProcessing() }
-            .onChange(of: contrast) { applyProcessing() }
-            .onChange(of: saturation) { applyProcessing() }
-            .onChange(of: sharpness) { applyProcessing() }
+            .foregroundColor(AppColors.success)
+            Button(action: { cancelCrop() }) {
+                VStack {
+                    Image(systemName: "xmark.circle").font(.system(size: 22))
+                    Text("Cancel").font(AppFonts.caption)
+                }
+            }
+            .foregroundColor(AppColors.error)
+        }
+        .foregroundColor(AppColors.textPrimary)
+    }
+
+    private func resetCropSettings() {
+        cropScale = 1.0
+        cropOffset = .zero
+        cropRotation = 0
+        lastCropScale = 1.0
+        lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
+    }
+
+    private var rotationSlider: some View {
+        VStack(spacing: 8) {
+            Text("Rotation")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textSecondary)
+            HStack {
+                Image(systemName: "rotate.left")
+                    .foregroundColor(AppColors.textSecondary)
+                Slider(value: $cropRotation, in: -45...45, step: 0.5)
+                    .accentColor(AppColors.primary)
+                Image(systemName: "rotate.right")
+                    .foregroundColor(AppColors.textSecondary)
+            }
+            Text("\(String(format: "%.1f", cropRotation))°")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textPrimary)
+        }
+        .padding(.horizontal)
+    }
+
+    private var transformControlsView: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 30) {
+                Button(action: { rotateImage() }) {
+                    VStack {
+                        Image(systemName: "rotate.right").font(.system(size: 22))
+                        Text("90°").font(AppFonts.caption)
+                    }
+                }
+                Button(action: { startCropping() }) {
+                    VStack {
+                        Image(systemName: "crop").font(.system(size: 22))
+                        Text("Crop").font(AppFonts.caption)
+                    }
+                }
+            }
+            .foregroundColor(AppColors.textPrimary)
+        }
+        .padding()
+    }
+
+    private var adjustmentControlsView: some View {
+        VStack(spacing: 15) {
+            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
+            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
+            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
+            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
+        }
+        .padding(.horizontal)
+    }
+
+    private var tabBarView: some View {
+        VStack(spacing: 0) {
+            Divider().background(AppColors.secondary)
+            HStack {
+                Button(action: { selectedTab = 0 }) {
+                    VStack {
+                        Image(systemName: "crop.rotate")
+                        Text("Transform").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
+
+                Button(action: { selectedTab = 1 }) {
+                    VStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Adjust").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var editorToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if !isCropping {
+                Button("Cancel") { presentationMode.wrappedValue.dismiss() }
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            if !isCropping {
+                Button("Save") { saveImage() }
+            }
         }
     }
 
@@ -4767,14 +5537,36 @@ struct PhotoEditorView: View {
             }
         }
 
-        // Apply scale crop (center crop based on scale)
-        if cropScale != 1.0 {
-            let scaleFactor = 1.0 / cropScale
-            let newWidth = processedImage.size.width * scaleFactor
-            let newHeight = processedImage.size.height * scaleFactor
-            let xOffset = (processedImage.size.width - newWidth) / 2.0
-            let yOffset = (processedImage.size.height - newHeight) / 2.0
-            let cropRect = CGRect(x: xOffset, y: yOffset, width: newWidth, height: newHeight)
+        // Apply crop based on the adjustable crop frame
+        // Only crop if the frame has been adjusted from the full image
+        if cropFrameWidth > 0 && cropFrameHeight > 0 &&
+           displayedImageWidth > 0 && displayedImageHeight > 0 {
+
+            // Calculate the ratio of crop frame to displayed image
+            let widthRatio = cropFrameWidth / displayedImageWidth
+            let heightRatio = cropFrameHeight / displayedImageHeight
+
+            // Apply to original image dimensions
+            let cropWidth = processedImage.size.width * widthRatio
+            let cropHeight = processedImage.size.height * heightRatio
+
+            // Center the crop (accounting for scale and offset)
+            let scaledImageWidth = displayedImageWidth * cropScale
+            let scaledImageHeight = displayedImageHeight * cropScale
+
+            // Calculate offset in terms of the scaled image
+            let offsetXRatio = cropOffset.width / scaledImageWidth
+            let offsetYRatio = cropOffset.height / scaledImageHeight
+
+            // Map offset to original image coordinates
+            let xOffset = (processedImage.size.width - cropWidth) / 2.0 - (offsetXRatio * processedImage.size.width)
+            let yOffset = (processedImage.size.height - cropHeight) / 2.0 - (offsetYRatio * processedImage.size.height)
+
+            // Clamp to valid bounds
+            let clampedX = max(0, min(processedImage.size.width - cropWidth, xOffset))
+            let clampedY = max(0, min(processedImage.size.height - cropHeight, yOffset))
+
+            let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
 
             if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
                 processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
@@ -4791,6 +5583,8 @@ struct PhotoEditorView: View {
         lastCropOffset = .zero
         cropFrameWidth = 0
         cropFrameHeight = 0
+        displayedImageWidth = 0
+        displayedImageHeight = 0
     }
 
     func applyProcessing() {
@@ -4865,53 +5659,50 @@ struct PhotoEditorView: View {
 
 // MARK: - Crop Overlay View
 struct CropOverlayView: View {
-    let size: CGSize
+    let containerSize: CGSize
+    let displayedImageWidth: CGFloat
+    let displayedImageHeight: CGFloat
     @Binding var cropWidth: CGFloat
     @Binding var cropHeight: CGFloat
-    let imageAspectRatio: CGFloat
 
     // Minimum crop dimensions
-    private let minCropSize: CGFloat = 80
+    private let minCropSize: CGFloat = 50
 
     var body: some View {
-        let maxWidth = size.width * 0.9
-        let maxHeight = size.height * 0.9
-
-        // Initialize dimensions on first render if not set
-        let displayWidth = cropWidth > 0 ? cropWidth : calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-        let displayHeight = cropHeight > 0 ? cropHeight : calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+        // Use exact displayed image dimensions, or current crop dimensions if already adjusted
+        let frameWidth = cropWidth > 0 ? cropWidth : displayedImageWidth
+        let frameHeight = cropHeight > 0 ? cropHeight : displayedImageHeight
 
         ZStack {
             // Transparent center (crop area)
             Rectangle()
                 .fill(Color.clear)
-                .frame(width: displayWidth, height: displayHeight)
+                .frame(width: frameWidth, height: frameHeight)
                 .overlay(
                     Rectangle()
                         .stroke(Color.white, lineWidth: 2)
                 )
                 .overlay(
-                    // Grid lines - vertical
-                    VStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - horizontal dividers
+                    VStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
                 .overlay(
-                    // Grid lines - horizontal
-                    HStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - vertical dividers
+                    HStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .frame(width: 1)
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
 
@@ -4923,10 +5714,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4937,10 +5726,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4953,10 +5740,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4967,43 +5752,24 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
                         )
                 }
             }
-            .frame(width: displayWidth, height: displayHeight)
+            .frame(width: frameWidth, height: frameHeight)
         }
         .onAppear {
-            if cropWidth == 0 || cropHeight == 0 {
-                cropWidth = calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-                cropHeight = calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+            // Initialize crop frame to exact image dimensions
+            if cropWidth == 0 {
+                cropWidth = displayedImageWidth
             }
-        }
-    }
-
-    private func calculateInitialWidth(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        }
-    }
-
-    private func calculateInitialHeight(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxHeight, maxWidth / imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxHeight, maxWidth / imageAspectRatio)
+            if cropHeight == 0 {
+                cropHeight = displayedImageHeight
+            }
         }
     }
 }
@@ -5062,7 +5828,7 @@ struct CustomGhostPicker: View {
                         Button(action: { library.requestImage(for: asset) { image in self.selectedImage = image; presentationMode.wrappedValue.dismiss() } }) { AssetThumbnail(asset: asset).frame(height: 120).clipped() }
                     }
                 }
-            }.navigationTitle("Select Ghost Reference").toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } } }.onAppear { library.fetchAssets() }
+            }.navigationTitle("Select Ghost Reference").navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } } }.onAppear { library.fetchAssets() }
         }
     }
 }
@@ -5184,7 +5950,7 @@ struct PortfoliosView: View {
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
     @State private var isGeneratingZip = false
-    @State private var zipFileURL: URL? = nil
+    @State private var zipFileURL: IdentifiableURL? = nil
     @ObservedObject var library = PhotoLibraryManager.shared
 
     // Get the most recently created portfolio, or the selected one
@@ -5221,7 +5987,27 @@ struct PortfoliosView: View {
                                     selectedPortfolioId = portfolio.id
                                 }) {
                                     HStack {
-                                        Text(portfolio.name)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(portfolio.name)
+                                            if let _ = portfolio.dueDate {
+                                                if let days = portfolio.daysUntilDue {
+                                                    if portfolio.isOverdue {
+                                                        Text("Overdue by \(abs(days))d")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.red)
+                                                    } else if days == 0 {
+                                                        Text("Due today")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.red)
+                                                    } else {
+                                                        Text("Due in \(days)d")
+                                                            .font(.caption2)
+                                                            .foregroundColor(portfolio.isDueSoon ? .orange : .secondary)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Spacer()
                                         if portfolio.id == currentPortfolio?.id {
                                             Image(systemName: "checkmark")
                                         }
@@ -5231,19 +6017,20 @@ struct PortfoliosView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Text(currentPortfolio?.name ?? "Select Portfolio")
-                                    .font(.title2).bold()
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
+                                    .font(AppFonts.largeTitle)
+                                    .foregroundColor(AppColors.textPrimary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
                                 Image(systemName: "chevron.down")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                                    .font(.body)
+                                    .foregroundColor(AppColors.textSecondary)
                             }
                         }
                         .id(currentPortfolio?.id)  // Force redraw on portfolio change
                     } else {
                         Text("Portfolios")
-                            .font(.title2).bold()
-                            .foregroundColor(.white)
+                            .font(AppFonts.largeTitle)
+                            .foregroundColor(AppColors.textPrimary)
                     }
 
                     Spacer()
@@ -5375,8 +6162,8 @@ struct PortfoliosView: View {
                             .cornerRadius(12)
                             .id("stats-\(portfolio.id)")
                             .transition(.opacity)
-                            .sheet(item: $zipFileURL) { url in
-                                ShareSheet(activityItems: [url])
+                            .sheet(item: $zipFileURL) { identifiableURL in
+                                ShareSheet(activityItems: [identifiableURL.url])
                             }
 
                             // Requirements section
@@ -5471,7 +6258,7 @@ struct PortfoliosView: View {
         } message: {
             Text("Are you sure you want to delete \"\(currentPortfolio?.name ?? "")\"? This cannot be undone.")
         }
-        .onChange(of: metadataManager.portfolios) { _ in
+        .onChange(of: metadataManager.portfolios) {
             // If selected portfolio was deleted, reset to most recent
             if let id = selectedPortfolioId, metadataManager.getPortfolio(by: id) == nil {
                 selectedPortfolioId = nil
@@ -5580,7 +6367,7 @@ struct PortfoliosView: View {
                 DispatchQueue.main.async {
                     self.isGeneratingZip = false
                     if fileManager.fileExists(atPath: zipURL.path) {
-                        self.zipFileURL = zipURL
+                        self.zipFileURL = IdentifiableURL(url: zipURL)
                     }
                 }
             } catch {
@@ -5616,9 +6403,17 @@ struct PortfolioCardView: View {
                     Text(portfolio.name)
                         .font(AppFonts.headline)
                         .foregroundColor(AppColors.textPrimary)
-                    Text(portfolio.dateString)
-                        .font(AppFonts.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                    HStack(spacing: 8) {
+                        Text(portfolio.dateString)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                        if portfolio.dueDate != nil {
+                            Text("•")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                            DueDateBadge(portfolio: portfolio)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -5690,18 +6485,54 @@ struct AddPortfolioSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var portfolioName = ""
+    @State private var dueDate: Date? = nil
+    @State private var showDueDatePicker = false
     @State private var currentStep = 0  // 0 = name entry, 1 = add requirements
     @State private var createdPortfolioId: String? = nil
+
+    private var dueDateDisplayString: String {
+        guard let date = dueDate else { return "No due date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
 
     var body: some View {
         NavigationView {
             if currentStep == 0 {
-                // Step 1: Enter portfolio name
+                // Step 1: Enter portfolio name and due date
                 VStack(spacing: 0) {
                     List {
                         Section(header: Text("Portfolio Name")) {
                             TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
                                 .textInputAutocapitalization(.words)
+                        }
+
+                        Section(header: Text("Due Date (Optional)")) {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showDueDatePicker.toggle()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "calendar")
+                                        .foregroundColor(AppColors.primary)
+                                    Text(dueDateDisplayString)
+                                        .foregroundColor(dueDate != nil ? AppColors.textPrimary : AppColors.textSecondary)
+                                    Spacer()
+                                    Image(systemName: showDueDatePicker ? "chevron.up" : "chevron.down")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
+                            }
+
+                            if showDueDatePicker {
+                                CalendarDatePicker(
+                                    selectedDate: $dueDate,
+                                    minDate: Date()
+                                )
+                                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                            }
                         }
 
                         Section {
@@ -5720,9 +6551,13 @@ struct AddPortfolioSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Next") {
-                            let portfolio = Portfolio(name: portfolioName)
+                            let portfolio = Portfolio(name: portfolioName, dueDate: dueDate)
                             metadataManager.addPortfolio(portfolio)
                             createdPortfolioId = portfolio.id
+                            // Schedule notification if due date is set
+                            if dueDate != nil {
+                                NotificationManager.shared.scheduleNotification(for: portfolio)
+                            }
                             withAnimation { currentStep = 1 }
                         }
                         .disabled(portfolioName.isEmpty)
@@ -5858,6 +6693,7 @@ struct PortfolioDetailView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showEditDueDateSheet = false
     @Environment(\.presentationMode) var presentationMode
 
     var currentPortfolio: Portfolio {
@@ -5874,7 +6710,7 @@ struct PortfolioDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            AppColors.background.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -5919,6 +6755,60 @@ struct PortfolioDetailView: View {
                     .padding()
                     .background(AppColors.surface.opacity(0.5))
                     .cornerRadius(12)
+
+                    // Due Date bento card
+                    Button(action: { showEditDueDateSheet = true }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Due Date")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+                                if let dueDateStr = currentPortfolio.dueDateString {
+                                    Text(dueDateStr)
+                                        .font(AppFonts.title2)
+                                        .foregroundColor(AppColors.textPrimary)
+                                } else {
+                                    Text("Tap to set")
+                                        .font(AppFonts.title2)
+                                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                }
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Status")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+                                if let days = currentPortfolio.daysUntilDue {
+                                    if currentPortfolio.isOverdue {
+                                        Text("Overdue by \(abs(days))d")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.error)
+                                    } else if days == 0 {
+                                        Text("Due Today")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.error)
+                                    } else if days == 1 {
+                                        Text("Due Tomorrow")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(AppColors.warning)
+                                    } else {
+                                        Text("Due in \(days)d")
+                                            .font(AppFonts.headline)
+                                            .foregroundColor(currentPortfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
+                                    }
+                                } else {
+                                    Text("No deadline")
+                                        .font(AppFonts.headline)
+                                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(AppColors.surface.opacity(0.5))
+                        .cornerRadius(12)
+                    }
 
                     // Requirements section
                     VStack(alignment: .leading, spacing: 12) {
@@ -5984,6 +6874,12 @@ struct PortfolioDetailView: View {
         .sheet(isPresented: $showAddRequirementSheet) {
             AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolio.id)
         }
+        .sheet(isPresented: $showEditDueDateSheet) {
+            EditDueDateSheet(
+                isPresented: $showEditDueDateSheet,
+                portfolio: currentPortfolio
+            )
+        }
         .alert("Delete Portfolio", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -5992,6 +6888,65 @@ struct PortfolioDetailView: View {
             }
         } message: {
             Text("Are you sure you want to delete \"\(currentPortfolio.name)\"? This cannot be undone.")
+        }
+    }
+}
+
+// MARK: - Edit Due Date Sheet
+struct EditDueDateSheet: View {
+    @Binding var isPresented: Bool
+    let portfolio: Portfolio
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var selectedDueDate: Date?
+
+    init(isPresented: Binding<Bool>, portfolio: Portfolio) {
+        self._isPresented = isPresented
+        self.portfolio = portfolio
+        self._selectedDueDate = State(initialValue: portfolio.dueDate)
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppColors.background.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    CalendarDatePicker(
+                        selectedDate: $selectedDueDate,
+                        minDate: nil
+                    )
+
+                    if let date = selectedDueDate {
+                        let formatter = DateFormatter()
+                        let _ = formatter.dateStyle = .full
+                        Text("Selected: \(formatter.string(from: date))")
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+
+                    Spacer()
+                }
+                .padding()
+            }
+            .navigationTitle("Edit Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        var updatedPortfolio = portfolio
+                        updatedPortfolio.dueDate = selectedDueDate
+                        metadataManager.updatePortfolio(updatedPortfolio)
+                        // Reschedule notification
+                        NotificationManager.shared.rescheduleNotification(for: updatedPortfolio)
+                        isPresented = false
+                    }
+                }
+            }
         }
     }
 }
@@ -6091,7 +7046,7 @@ struct RequirementStatusView: View {
                         .font(AppFonts.caption)
                 }
                 .padding()
-                .background(AppColors.surface.opacity(0.5))
+                .background(Color.blue.opacity(0.15))
                 .cornerRadius(isExpanded ? 0 : 10)
             }
 
@@ -6237,7 +7192,7 @@ struct RequirementStatusView: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
-                                .background(AppColors.surface.opacity(0.4))
+                                .background(Color.gray.opacity(0.15))
                                 .cornerRadius(8)
                                 .padding(.leading, 16)
                             }
@@ -6424,9 +7379,10 @@ struct PortfolioPhotoDetailView: View {
                         ProgressView()
                     }
 
-                    // Metadata display
-                    if let meta = metadata {
-                        VStack(alignment: .leading, spacing: 8) {
+                    // Metadata and rating display (always show rating, even for unsorted photos)
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Metadata info (only if metadata exists)
+                        if let meta = metadata {
                             // Top row: Procedure and Tooth
                             HStack(spacing: 8) {
                                 if let proc = meta.procedure {
@@ -6481,24 +7437,24 @@ struct PortfolioPhotoDetailView: View {
                                         .cornerRadius(4)
                                 }
                             }
-
-                            // Rating row
-                            HStack {
-                                Text("Rating:")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                RatingView(
-                                    rating: meta.rating ?? 0,
-                                    assetID: asset.localIdentifier,
-                                    metadataManager: metadataManager
-                                )
-                            }
                         }
-                        .padding()
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(10)
-                        .padding()
+
+                        // Rating row (always visible)
+                        HStack {
+                            Text("Rating:")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            RatingView(
+                                rating: metadata?.rating ?? 0,
+                                assetID: asset.localIdentifier,
+                                metadataManager: metadataManager
+                            )
+                        }
                     }
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .padding()
                 }
             }
             .navigationTitle("Photo")
@@ -6934,9 +7890,10 @@ struct AddRequirementSheet: View {
     }
 }
 
-// MARK: - URL Identifiable Extension for Sheet
-extension URL: Identifiable {
-    public var id: String { absoluteString }
+// MARK: - Identifiable URL Wrapper for Sheet
+struct IdentifiableURL: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 
 // MARK: - Share Sheet for iOS Share Interface
