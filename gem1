@@ -198,6 +198,7 @@ struct CustomIconButtonStyle: ButtonStyle {
 // MARK: - CUSTOM BOTTOM NAVIGATION BAR
 struct CustomBottomNavBar: View {
     @Binding var selectedTab: Int
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -314,6 +315,17 @@ struct CameraLoadingView: View {
 struct SettingsView: View {
     @ObservedObject var themeManager = ThemeManager.shared
 
+    var themeIcon: String {
+        switch themeManager.themeMode {
+        case .light:
+            return "sun.max.fill"
+        case .dark:
+            return "moon.fill"
+        case .system:
+            return "gear"
+        }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -329,24 +341,46 @@ struct SettingsView: View {
                                 .foregroundColor(AppColors.textPrimary)
                                 .padding(.horizontal, 4)
 
-                            VStack(spacing: 0) {
-                                ForEach(ThemeMode.allCases, id: \.self) { mode in
-                                    ThemeOptionRow(
-                                        mode: mode,
-                                        isSelected: themeManager.themeMode == mode,
-                                        action: {
+                            HStack {
+                                Image(systemName: themeIcon)
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppColors.primary)
+                                    .frame(width: 28)
+
+                                Text("Theme")
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.textPrimary)
+
+                                Spacer()
+
+                                Menu {
+                                    ForEach(ThemeMode.allCases, id: \.self) { mode in
+                                        Button(action: {
                                             withAnimation(.easeInOut(duration: 0.2)) {
                                                 themeManager.themeMode = mode
                                             }
+                                        }) {
+                                            HStack {
+                                                Text(mode.rawValue)
+                                                if themeManager.themeMode == mode {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
                                         }
-                                    )
-
-                                    if mode != ThemeMode.allCases.last {
-                                        Divider()
-                                            .background(AppColors.secondary.opacity(0.3))
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(themeManager.themeMode.rawValue)
+                                            .font(AppFonts.body)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(AppColors.textSecondary)
                                     }
                                 }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                             .background(AppColors.surface)
                             .cornerRadius(12)
                         }
@@ -363,67 +397,6 @@ struct SettingsView: View {
             .toolbarColorScheme(themeManager.colorScheme ?? .light, for: .navigationBar)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-struct ThemeOptionRow: View {
-    let mode: ThemeMode
-    let isSelected: Bool
-    let action: () -> Void
-
-    var icon: String {
-        switch mode {
-        case .light:
-            return "sun.max.fill"
-        case .dark:
-            return "moon.fill"
-        case .system:
-            return "gear"
-        }
-    }
-
-    var subtitle: String {
-        switch mode {
-        case .light:
-            return "Always use light appearance"
-        case .dark:
-            return "Always use dark appearance"
-        case .system:
-            return "Match device settings"
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.rawValue)
-                        .font(AppFonts.body)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    Text(subtitle)
-                        .font(AppFonts.caption)
-                        .foregroundColor(AppColors.textSecondary)
-                }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppColors.primary)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 
