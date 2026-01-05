@@ -3043,25 +3043,24 @@ struct GalleryView: View {
                                             }
                                         )
                                     }
-                                }
-                            }
 
-                            Divider().background(AppColors.secondary)
-
-                            // Add Folder button
-                            Button(action: {
-                                newFolderName = ""
-                                showAddFolderSheet = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "folder.badge.plus")
-                                        .foregroundColor(AppColors.success)
-                                    Text("Add Folder")
-                                        .font(AppFonts.subheadline)
-                                        .foregroundColor(AppColors.textPrimary)
-                                    Spacer()
+                                    // Add Procedure Folder button
+                                    Button(action: {
+                                        newFolderName = ""
+                                        showAddFolderSheet = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "folder.badge.plus")
+                                                .foregroundColor(AppColors.success)
+                                            Text("Add Procedure Folder")
+                                                .font(AppFonts.subheadline)
+                                                .foregroundColor(AppColors.textPrimary)
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 10)
+                                    }
                                 }
-                                .padding()
                             }
 
                             Spacer()
