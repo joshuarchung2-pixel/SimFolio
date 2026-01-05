@@ -721,6 +721,53 @@ class MetadataManager: ObservableObject {
         saveToothHistory()
     }
 
+    // Move selected photos to a specific procedure folder
+    func movePhotos(assetIds: Set<String>, to procedure: String) {
+        for assetID in assetIds {
+            if var metadata = assetMetadata[assetID] {
+                metadata.procedure = procedure
+                // Clear tooth-specific data when moving between folders
+                metadata.toothNumber = nil
+                metadata.toothDate = nil
+                metadata.stage = nil
+                metadata.angle = nil
+                assetMetadata[assetID] = metadata
+            }
+        }
+        saveAssetMetadata()
+        cleanupEmptyToothEntries()
+    }
+
+    // Delete metadata for removed photos
+    func deleteMetadata(for assetIds: Set<String>) {
+        for assetID in assetIds {
+            assetMetadata.removeValue(forKey: assetID)
+        }
+        saveAssetMetadata()
+        cleanupEmptyToothEntries()
+    }
+
+    // Cleanup tooth entries that no longer have any photos
+    private func cleanupEmptyToothEntries() {
+        for (procedure, entries) in toothHistory {
+            let remainingEntries = entries.filter { entry in
+                // Check if any photos still belong to this tooth entry
+                assetMetadata.values.contains { metadata in
+                    metadata.procedure == procedure &&
+                    metadata.toothNumber == entry.toothNumber &&
+                    metadata.toothDate != nil &&
+                    Calendar.current.isDate(metadata.toothDate!, inSameDayAs: entry.date)
+                }
+            }
+            if remainingEntries.isEmpty {
+                toothHistory.removeValue(forKey: procedure)
+            } else if remainingEntries.count != entries.count {
+                toothHistory[procedure] = remainingEntries
+            }
+        }
+        saveToothHistory()
+    }
+
     // Rename a procedure
     func renameProcedure(_ oldName: String, to newName: String) {
         guard canRenameProcedure(oldName), !newName.isEmpty, !procedures.contains(newName) else { return }
@@ -2774,6 +2821,12 @@ struct GalleryView: View {
     // Stage collapse state
     @State private var collapsedStages: Set<String> = []
 
+    // Multi-select state
+    @State private var isSelectMode = false
+    @State private var selectedAssetIds: Set<String> = []
+    @State private var showMoveSheet = false
+    @State private var showDeleteAlert = false
+
     // Swipe gesture state
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDraggingFromEdge = false
@@ -2863,12 +2916,18 @@ struct GalleryView: View {
 
                         // Current section name (centered header)
                         VStack(spacing: 2) {
-                            Text(currentSectionTitle)
-                                .font(AppFonts.interBold(22))
-                                .foregroundColor(AppColors.textPrimary)
+                            if isSelectMode {
+                                Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                                    .font(AppFonts.interBold(22))
+                                    .foregroundColor(AppColors.primary)
+                            } else {
+                                Text(currentSectionTitle)
+                                    .font(AppFonts.interBold(22))
+                                    .foregroundColor(AppColors.textPrimary)
+                            }
 
-                            // Breadcrumb for tooth selection
-                            if selectedTooth != nil, let proc = selectedProcedure {
+                            // Breadcrumb for tooth selection (only show when not in select mode)
+                            if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
                                 HStack(spacing: 4) {
                                     Text(proc)
                                         .font(AppFonts.caption2)
@@ -2885,13 +2944,20 @@ struct GalleryView: View {
 
                         Spacer()
 
-                        // Filter/sort button (placeholder for future functionality)
-                        Button(action: { }) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        // Select mode toggle button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isSelectMode.toggle()
+                                if !isSelectMode {
+                                    selectedAssetIds.removeAll()
+                                }
+                            }
+                        }) {
+                            Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
                                 .font(.system(size: 22))
-                                .foregroundColor(AppColors.primary)
+                                .foregroundColor(isSelectMode ? AppColors.primary : AppColors.primary)
                         }
-                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
                     }
                     .padding(16)
                     .background(AppColors.background)
@@ -2920,7 +2986,9 @@ struct GalleryView: View {
                                             }
                                         },
                                         highlightedPhotoId: highlightedPhotoId,
-                                        showPhotoHighlight: showPhotoHighlight
+                                        showPhotoHighlight: showPhotoHighlight,
+                                        isSelectMode: isSelectMode,
+                                        selectedAssetIds: $selectedAssetIds
                                     )
                                 }
                             }
@@ -2942,19 +3010,64 @@ struct GalleryView: View {
                             LazyVGrid(columns: columns, spacing: 15) {
                                 ForEach(filteredAssets, id: \.localIdentifier) { asset in
                                     let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                                    NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                        AssetThumbnail(asset: asset)
-                                            .frame(height: 120)
-                                            .clipped()
-                                            .cornerRadius(8)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                            )
-                                            .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                            .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                            .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                            .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                    let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+
+                                    if isSelectMode {
+                                        // Selection mode - tap to select/deselect
+                                        Button(action: {
+                                            withAnimation(.easeInOut(duration: 0.15)) {
+                                                if selectedAssetIds.contains(asset.localIdentifier) {
+                                                    selectedAssetIds.remove(asset.localIdentifier)
+                                                } else {
+                                                    selectedAssetIds.insert(asset.localIdentifier)
+                                                }
+                                            }
+                                        }) {
+                                            AssetThumbnail(asset: asset)
+                                                .frame(height: 120)
+                                                .clipped()
+                                                .cornerRadius(8)
+                                                .overlay(
+                                                    // Selection checkbox overlay
+                                                    ZStack {
+                                                        Circle()
+                                                            .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                            .frame(width: 24, height: 24)
+                                                        if isSelected {
+                                                            Image(systemName: "checkmark")
+                                                                .font(.system(size: 12, weight: .bold))
+                                                                .foregroundColor(.white)
+                                                        } else {
+                                                            Circle()
+                                                                .stroke(Color.white, lineWidth: 2)
+                                                                .frame(width: 22, height: 22)
+                                                        }
+                                                    }
+                                                    .padding(6),
+                                                    alignment: .topTrailing
+                                                )
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                                )
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    } else {
+                                        // Normal mode - navigate to detail view
+                                        NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                            AssetThumbnail(asset: asset)
+                                                .frame(height: 120)
+                                                .clipped()
+                                                .cornerRadius(8)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                                )
+                                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                        }
                                     }
                                 }
                             }
@@ -3099,6 +3212,48 @@ struct GalleryView: View {
                             }
                     )
                 }
+
+                // Bottom action bar for multi-select mode
+                if isSelectMode && !selectedAssetIds.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 0) {
+                            // Delete button
+                            Button(action: {
+                                showDeleteAlert = true
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 22))
+                                    Text("Delete")
+                                        .font(AppFonts.caption2)
+                                }
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                            }
+
+                            // Move button
+                            Button(action: {
+                                showMoveSheet = true
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "arrow.right.doc.on.clipboard")
+                                        .font(.system(size: 22))
+                                    Text("Move")
+                                        .font(AppFonts.caption2)
+                                }
+                                .foregroundColor(AppColors.primary)
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .background(
+                            AppColors.background
+                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
+                        )
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .navigationBarHidden(true)
             .onAppear {
@@ -3219,6 +3374,93 @@ struct GalleryView: View {
                         Text("Images in this folder will be moved to \"Unsorted Photos\".")
                     } else {
                         Text("Are you sure you want to delete \"\(folder)\"?")
+                    }
+                }
+            }
+            // Delete Photos Alert
+            .alert("Delete Photos", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    library.deleteAssets(identifiers: selectedAssetIds) { success in
+                        if success {
+                            selectedAssetIds.removeAll()
+                            isSelectMode = false
+                        }
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete \(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s")? This cannot be undone.")
+            }
+            // Move Photos Sheet
+            .sheet(isPresented: $showMoveSheet) {
+                MoveToFolderSheet(
+                    selectedAssetIds: selectedAssetIds,
+                    metadataManager: metadataManager,
+                    isPresented: $showMoveSheet,
+                    onComplete: {
+                        selectedAssetIds.removeAll()
+                        isSelectMode = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Move to Folder Sheet
+struct MoveToFolderSheet: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header showing count
+                HStack {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppColors.primary)
+                    Text("\(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s") selected")
+                        .font(AppFonts.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(AppColors.secondary.opacity(0.1))
+
+                List {
+                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                        Button(action: {
+                            metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
+                            isPresented = false
+                            onComplete()
+                        }) {
+                            HStack {
+                                Circle()
+                                    .fill(metadataManager.getFolderColor(for: procedure))
+                                    .frame(width: 12, height: 12)
+                                Text(procedure)
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.textPrimary)
+                                Spacer()
+                                Image(systemName: "folder")
+                                    .foregroundColor(AppColors.textSecondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+                .listStyle(PlainListStyle())
+            }
+            .navigationTitle("Move to Folder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
                     }
                 }
             }
@@ -3462,6 +3704,8 @@ struct StageSection: View {
     var onToggleCollapse: (() -> Void)? = nil
     var highlightedPhotoId: String? = nil
     var showPhotoHighlight: Bool = false
+    var isSelectMode: Bool = false
+    @Binding var selectedAssetIds: Set<String>
 
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -3550,7 +3794,9 @@ struct StageSection: View {
                             assets: group.assets,
                             metadataManager: metadataManager,
                             highlightedPhotoId: highlightedPhotoId,
-                            showPhotoHighlight: showPhotoHighlight
+                            showPhotoHighlight: showPhotoHighlight,
+                            isSelectMode: isSelectMode,
+                            selectedAssetIds: $selectedAssetIds
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
@@ -3636,6 +3882,8 @@ struct ExpandedAngleView: View {
     @ObservedObject var metadataManager: MetadataManager
     var highlightedPhotoId: String? = nil
     var showPhotoHighlight: Bool = false
+    var isSelectMode: Bool = false
+    @Binding var selectedAssetIds: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3675,33 +3923,92 @@ struct ExpandedAngleView: View {
                     HStack(spacing: spacing) {
                         ForEach(assets, id: \.localIdentifier) { asset in
                             let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                VStack(spacing: 6) {
-                                    AssetThumbnail(asset: asset)
-                                        .frame(width: itemWidth, height: itemHeight)
-                                        .cornerRadius(8)
+                            let isSelected = selectedAssetIds.contains(asset.localIdentifier)
 
-                                    // Rating display
-                                    HStack(spacing: 2) {
-                                        ForEach(1...5, id: \.self) { star in
-                                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
-                                            Image(systemName: star <= currentRating ? "star.fill" : "star")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.yellow)
+                            if isSelectMode {
+                                // Selection mode - tap to select/deselect
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        if selectedAssetIds.contains(asset.localIdentifier) {
+                                            selectedAssetIds.remove(asset.localIdentifier)
+                                        } else {
+                                            selectedAssetIds.insert(asset.localIdentifier)
                                         }
                                     }
+                                }) {
+                                    VStack(spacing: 6) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(width: itemWidth, height: itemHeight)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                // Selection checkbox overlay
+                                                ZStack {
+                                                    Circle()
+                                                        .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                        .frame(width: 24, height: 24)
+                                                    if isSelected {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.system(size: 12, weight: .bold))
+                                                            .foregroundColor(.white)
+                                                    } else {
+                                                        Circle()
+                                                            .stroke(Color.white, lineWidth: 2)
+                                                            .frame(width: 22, height: 22)
+                                                    }
+                                                }
+                                                .padding(6),
+                                                alignment: .topTrailing
+                                            )
+
+                                        // Rating display
+                                        HStack(spacing: 2) {
+                                            ForEach(1...5, id: \.self) { star in
+                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.yellow)
+                                            }
+                                        }
+                                    }
+                                    .padding(itemPadding)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                    )
                                 }
-                                .padding(itemPadding)
-                                .background(Color.gray.opacity(0.15))
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                )
-                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                .buttonStyle(PlainButtonStyle())
+                            } else {
+                                // Normal mode - navigate to detail view
+                                NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                    VStack(spacing: 6) {
+                                        AssetThumbnail(asset: asset)
+                                            .frame(width: itemWidth, height: itemHeight)
+                                            .cornerRadius(8)
+
+                                        // Rating display
+                                        HStack(spacing: 2) {
+                                            ForEach(1...5, id: \.self) { star in
+                                                let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.yellow)
+                                            }
+                                        }
+                                    }
+                                    .padding(itemPadding)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                    )
+                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                }
                             }
                         }
                     }
@@ -4520,6 +4827,28 @@ class PhotoLibraryManager: ObservableObject {
         let manager = PHImageManager.default()
         let options = PHImageRequestOptions(); options.isSynchronous = false; options.deliveryMode = .highQualityFormat
         manager.requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { img, _ in completion(img) }
+    }
+
+    func deleteAssets(identifiers: Set<String>, completion: @escaping (Bool) -> Void) {
+        // Find assets with matching identifiers
+        let assetsToDelete = assets.filter { identifiers.contains($0.localIdentifier) }
+        guard !assetsToDelete.isEmpty else {
+            completion(false)
+            return
+        }
+
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
+        }) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    // Delete metadata for these assets
+                    MetadataManager.shared.deleteMetadata(for: identifiers)
+                    self.fetchAssets()
+                }
+                completion(success)
+            }
+        }
     }
 }
 
