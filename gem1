@@ -1326,12 +1326,9 @@ class GalleryNavigationState: ObservableObject {
 class MetadataManager: ObservableObject {
     static let shared = MetadataManager()
 
-    // Special folder for unsorted photos
-    static let unsortedPhotosFolder = "Unsorted Photos"
-
-    // Procedure options (can add, cannot delete base ones or Unsorted Photos)
-    @Published var procedures: [String] = ["Unsorted Photos", "Class 1", "Class 2", "Class 3", "Crown"]
-    private let baseProcedures = ["Unsorted Photos", "Class 1", "Class 2", "Class 3", "Crown"]
+    // Procedure options (can add, cannot delete base ones)
+    @Published var procedures: [String] = ["Class 1", "Class 2", "Class 3", "Crown"]
+    private let baseProcedures = ["Class 1", "Class 2", "Class 3", "Crown"]
 
     // Stage options (fixed)
     let stages: [String] = ["Preparation", "Restoration"]
@@ -1360,7 +1357,6 @@ class MetadataManager: ObservableObject {
 
     // Default folder colors
     private let defaultColors: [String: String] = [
-        "Unsorted Photos": "808080",  // Gray
         "Class 1": "007AFF",          // Blue
         "Class 2": "34C759",          // Green
         "Class 3": "FF9500",          // Orange
@@ -1391,20 +1387,6 @@ class MetadataManager: ObservableObject {
         folderColors.removeValue(forKey: procedure)
         saveProcedures()
         saveFolderColors()
-    }
-
-    // Move all photos from one procedure to "Unsorted Photos"
-    func movePhotosToUnsorted(from procedure: String) {
-        for (assetID, var metadata) in assetMetadata {
-            if metadata.procedure == procedure {
-                metadata.procedure = MetadataManager.unsortedPhotosFolder
-                assetMetadata[assetID] = metadata
-            }
-        }
-        // Remove tooth history for this procedure
-        toothHistory.removeValue(forKey: procedure)
-        saveAssetMetadata()
-        saveToothHistory()
     }
 
     // Move selected photos to a specific procedure folder
@@ -1531,6 +1513,17 @@ class MetadataManager: ObservableObject {
     // Get photo count for a procedure
     func photoCount(for procedure: String) -> Int {
         return assetMetadata.values.filter { $0.procedure == procedure }.count
+    }
+
+    // Get asset IDs with incomplete metadata (missing any required tag)
+    func getIncompleteAssetIds() -> Set<String> {
+        var incompleteIds: Set<String> = []
+        for (assetID, metadata) in assetMetadata {
+            if !metadata.isComplete {
+                incompleteIds.insert(assetID)
+            }
+        }
+        return incompleteIds
     }
 
     // Folder color methods
@@ -2449,40 +2442,27 @@ struct DentalCameraSetupView: View {
                         // Blank fields warning popup
                         if showBlankFieldsWarning {
                             VStack(spacing: 12) {
-                                Text("Blank fields detected")
+                                Text("All fields required")
                                     .font(AppFonts.subheadline)
                                     .foregroundColor(AppColors.textPrimary)
 
-                                HStack(spacing: 12) {
-                                    Button(action: {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showBlankFieldsWarning = false
-                                            isInfoPillOpen = true
-                                        }
-                                    }) {
-                                        Text("Add fields")
-                                            .font(AppFonts.caption)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(AppColors.primary)
-                                            .cornerRadius(8)
-                                    }
+                                Text("Please fill in all tags before saving")
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.textSecondary)
 
-                                    Button(action: {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showBlankFieldsWarning = false
-                                        }
-                                        savePhotoWithMetadata()
-                                    }) {
-                                        Text("Proceed anyways")
-                                            .font(AppFonts.caption)
-                                            .foregroundColor(AppColors.textSecondary)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(AppColors.secondary.opacity(0.3))
-                                            .cornerRadius(8)
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        showBlankFieldsWarning = false
+                                        isInfoPillOpen = true
                                     }
+                                }) {
+                                    Text("Add tags")
+                                        .font(AppFonts.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(AppColors.primary)
+                                        .cornerRadius(8)
                                 }
                             }
                             .padding(.vertical, 12)
@@ -3694,10 +3674,6 @@ struct GalleryView: View {
         if let proc = selectedProcedure {
             assets = assets.filter { asset in
                 let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
-                // For "Unsorted Photos" folder, include photos with nil procedure OR explicitly set to "Unsorted Photos"
-                if proc == MetadataManager.unsortedPhotosFolder {
-                    return assetProcedure == nil || assetProcedure == proc
-                }
                 return assetProcedure == proc
             }
         }
@@ -3867,6 +3843,7 @@ struct GalleryView: View {
                                 ForEach(filteredAssets, id: \.localIdentifier) { asset in
                                     let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                                     let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+                                    let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
 
                                     if isSelectMode {
                                         // Selection mode - tap to select/deselect
@@ -3879,50 +3856,64 @@ struct GalleryView: View {
                                                 }
                                             }
                                         }) {
-                                            AssetThumbnail(asset: asset)
-                                                .frame(height: 120)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                                .overlay(
-                                                    // Selection checkbox overlay
-                                                    ZStack {
-                                                        Circle()
-                                                            .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
-                                                            .frame(width: 24, height: 24)
-                                                        if isSelected {
-                                                            Image(systemName: "checkmark")
-                                                                .font(.system(size: 12, weight: .bold))
-                                                                .foregroundColor(.white)
-                                                        } else {
+                                            VStack(spacing: 4) {
+                                                AssetThumbnail(asset: asset)
+                                                    .frame(height: 120)
+                                                    .clipped()
+                                                    .cornerRadius(8)
+                                                    .overlay(
+                                                        // Selection checkbox overlay
+                                                        ZStack {
                                                             Circle()
-                                                                .stroke(Color.white, lineWidth: 2)
-                                                                .frame(width: 22, height: 22)
+                                                                .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                                .frame(width: 24, height: 24)
+                                                            if isSelected {
+                                                                Image(systemName: "checkmark")
+                                                                    .font(.system(size: 12, weight: .bold))
+                                                                    .foregroundColor(.white)
+                                                            } else {
+                                                                Circle()
+                                                                    .stroke(Color.white, lineWidth: 2)
+                                                                    .frame(width: 22, height: 22)
+                                                            }
                                                         }
-                                                    }
-                                                    .padding(6),
-                                                    alignment: .topTrailing
-                                                )
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
-                                                )
+                                                        .padding(6),
+                                                        alignment: .topTrailing
+                                                    )
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 8)
+                                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                                    )
+
+                                                // Tag info display (show in All Photos view)
+                                                if selectedProcedure == nil, let meta = metadata {
+                                                    PhotoTagsLabel(metadata: meta)
+                                                }
+                                            }
                                         }
                                         .buttonStyle(PlainButtonStyle())
                                     } else {
                                         // Normal mode - navigate to detail view
                                         NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                            AssetThumbnail(asset: asset)
-                                                .frame(height: 120)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                                )
-                                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                            VStack(spacing: 4) {
+                                                AssetThumbnail(asset: asset)
+                                                    .frame(height: 120)
+                                                    .clipped()
+                                                    .cornerRadius(8)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 8)
+                                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                                    )
+                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+
+                                                // Tag info display (show in All Photos view)
+                                                if selectedProcedure == nil, let meta = metadata {
+                                                    PhotoTagsLabel(metadata: meta)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -4217,12 +4208,8 @@ struct GalleryView: View {
             // Delete Confirmation Alert
             .alert("Delete Folder", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    if let folder = folderToDelete {
-                        let photoCount = metadataManager.photoCount(for: folder)
-                        if photoCount > 0 {
-                            metadataManager.movePhotosToUnsorted(from: folder)
-                        }
+                if let folder = folderToDelete, metadataManager.photoCount(for: folder) == 0 {
+                    Button("Delete", role: .destructive) {
                         metadataManager.deleteProcedure(folder)
                         if selectedProcedure == folder {
                             selectedProcedure = nil
@@ -4234,7 +4221,7 @@ struct GalleryView: View {
                 if let folder = folderToDelete {
                     let photoCount = metadataManager.photoCount(for: folder)
                     if photoCount > 0 {
-                        Text("Images in this folder will be moved to \"Unsorted Photos\".")
+                        Text("This folder contains \(photoCount) photo(s). Delete or move them first.")
                     } else {
                         Text("Are you sure you want to delete \"\(folder)\"?")
                     }
@@ -4265,6 +4252,14 @@ struct GalleryView: View {
                         isSelectMode = false
                     }
                 )
+            }
+            .onAppear {
+                // Delete photos with incomplete tags on gallery appear
+                library.deletePhotosWithIncompleteTags { deletedCount in
+                    if deletedCount > 0 {
+                        print("Deleted \(deletedCount) photo(s) with incomplete tags")
+                    }
+                }
             }
         }
     }
@@ -4698,10 +4693,6 @@ struct ProcedureFolderView: View {
     var photoCount: Int {
         assets.filter { asset in
             let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
-            // For "Unsorted Photos" folder, count photos with nil procedure OR explicitly set to "Unsorted Photos"
-            if procedure == MetadataManager.unsortedPhotosFolder {
-                return assetProcedure == nil || assetProcedure == procedure
-            }
             return assetProcedure == procedure
         }.count
     }
@@ -5203,6 +5194,45 @@ struct RatingView: View {
     }
 }
 
+// MARK: - Photo Tags Label (compact tag display for gallery)
+struct PhotoTagsLabel: View {
+    let metadata: PhotoMetadata
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // First row: Procedure and Tooth
+            HStack(spacing: 4) {
+                if let proc = metadata.procedure {
+                    Text(proc)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                if let tooth = metadata.toothNumber {
+                    Text("#\(tooth)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            }
+            .lineLimit(1)
+
+            // Second row: Stage and Angle
+            HStack(spacing: 4) {
+                if let stage = metadata.stage {
+                    Text(stage.prefix(4))
+                        .font(.system(size: 8))
+                        .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                }
+                if let angle = metadata.angle {
+                    Text(angle)
+                        .font(.system(size: 8))
+                        .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                }
+            }
+            .lineLimit(1)
+        }
+    }
+}
+
 struct PhotoDetailView: View {
     let asset: PHAsset
     @State private var image: UIImage?
@@ -5219,7 +5249,7 @@ struct PhotoDetailView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Metadata and rating display (always show rating, even for unsorted photos)
+                // Metadata and rating display
                 VStack(alignment: .leading, spacing: 8) {
                     // Metadata info (only if metadata exists)
                     if let meta = metadata {
@@ -6054,6 +6084,23 @@ class PhotoLibraryManager: ObservableObject {
                 }
                 completion(success)
             }
+        }
+    }
+
+    // Delete photos with incomplete metadata (missing any required tags)
+    func deletePhotosWithIncompleteTags(completion: @escaping (Int) -> Void) {
+        // Get all assets in the album that have incomplete metadata
+        let incompleteIds = MetadataManager.shared.getIncompleteAssetIds()
+        let assetsInLibrary = Set(assets.map { $0.localIdentifier })
+        let idsToDelete = incompleteIds.intersection(assetsInLibrary)
+
+        guard !idsToDelete.isEmpty else {
+            completion(0)
+            return
+        }
+
+        deleteAssets(identifiers: idsToDelete) { success in
+            completion(success ? idsToDelete.count : 0)
         }
     }
 }
@@ -7497,7 +7544,7 @@ struct PortfolioPhotoDetailView: View {
                         ProgressView()
                     }
 
-                    // Metadata and rating display (always show rating, even for unsorted photos)
+                    // Metadata and rating display
                     VStack(alignment: .leading, spacing: 8) {
                         // Metadata info (only if metadata exists)
                         if let meta = metadata {
@@ -7640,7 +7687,7 @@ struct EditRequirementSheet: View {
                 Section(header: Text("Procedure Type")) {
                     Picker("Procedure", selection: $selectedProcedure) {
                         Text("Select...").tag("")
-                        ForEach(metadataManager.procedures.filter { $0 != "Unsorted Photos" }, id: \.self) { proc in
+                        ForEach(metadataManager.procedures, id: \.self) { proc in
                             Text(proc).tag(proc)
                         }
                     }
@@ -7829,7 +7876,7 @@ struct AddRequirementSheet: View {
                 Section(header: Text("Procedure Type")) {
                     Picker("Procedure", selection: $selectedProcedure) {
                         Text("Select...").tag("")
-                        ForEach(metadataManager.procedures.filter { $0 != "Unsorted Photos" }, id: \.self) { proc in
+                        ForEach(metadataManager.procedures, id: \.self) { proc in
                             Text(proc).tag(proc)
                         }
                     }
