@@ -137,15 +137,15 @@ struct CustomBottomNavBar: View {
             )
 
             NavBarItem(
-                icon: "photo.on.rectangle",
-                label: "Gallery",
+                icon: "folder.fill",
+                label: "Portfolios",
                 isSelected: selectedTab == 1,
                 action: { selectedTab = 1 }
             )
 
             NavBarItem(
-                icon: "folder.fill",
-                label: "Portfolios",
+                icon: "photo.on.rectangle",
+                label: "Gallery",
                 isSelected: selectedTab == 2,
                 action: { selectedTab = 2 }
             )
@@ -202,23 +202,25 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Main content area
+            // Main content area - no animation for instant switching
             Group {
                 switch selectedTab {
                 case 0:
                     DentalCameraSetupView(selectedTab: $selectedTab)
                 case 1:
-                    GalleryView()
-                case 2:
                     PortfoliosView()
+                case 2:
+                    GalleryView()
                 default:
                     DentalCameraSetupView(selectedTab: $selectedTab)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(nil, value: selectedTab)
 
-            // Custom bottom navigation - always visible
+            // Custom bottom navigation - always visible, instant highlight
             CustomBottomNavBar(selectedTab: $selectedTab)
+                .animation(nil, value: selectedTab)
         }
         .preferredColorScheme(.dark)
         .ignoresSafeArea(.keyboard)
