@@ -3833,104 +3833,102 @@ struct GalleryView: View {
                     }
                 }
 
-                // Sidebar
+                // Darkening overlay (fades in/out smoothly, independent of sidebar slide)
                 if isSidebarOpen {
-                    HStack(spacing: 0) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // All Photos button
-                            Button(action: {
-                                selectedProcedure = nil
-                                selectedTooth = nil
-                                withAnimation { isSidebarOpen = false }
-                            }) {
-                                HStack {
-                                    Image(systemName: "square.grid.2x2")
-                                    Text("All Photos")
-                                        .font(AppFonts.subheadline)
-                                    Spacer()
-                                }
-                                .padding()
-                                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
-                                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
-                            }
-                            .padding(.top, 50)
-
-                            Divider().background(AppColors.secondary)
-
-                            // Procedure folders with tooth subfolders
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                        ProcedureFolderView(
-                                            procedure: procedure,
-                                            toothEntries: metadataManager.getToothEntries(for: procedure),
-                                            selectedProcedure: $selectedProcedure,
-                                            selectedTooth: $selectedTooth,
-                                            isSidebarOpen: $isSidebarOpen,
-                                            metadataManager: metadataManager,
-                                            assets: library.assets,
-                                            onRename: { folder in
-                                                folderToRename = folder
-                                                renameFolderText = folder
-                                                showRenameSheet = true
-                                            },
-                                            onDelete: { folder in
-                                                folderToDelete = folder
-                                                showDeleteConfirmation = true
-                                            },
-                                            onColorEdit: { folder in
-                                                folderForColorEdit = folder
-                                                showColorPicker = true
-                                            }
-                                        )
-                                    }
-
-                                    // Add Procedure Folder button
-                                    Button(action: {
-                                        newFolderName = ""
-                                        showAddFolderSheet = true
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "folder.badge.plus")
-                                                .foregroundColor(AppColors.success)
-                                            Text("Add Procedure Folder")
-                                                .font(AppFonts.subheadline)
-                                                .foregroundColor(AppColors.textPrimary)
-                                            Spacer()
-                                        }
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 10)
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                .onEnded { value in
+                                    // Close sidebar if swiped left
+                                    if value.translation.width < -20 {
+                                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
                                     }
                                 }
-                            }
+                        )
+                        .zIndex(1)
+                        .transition(.opacity)
+                }
 
-                            Spacer()
+                // Sidebar (slides in/out from left edge)
+                if isSidebarOpen {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // All Photos button
+                        Button(action: {
+                            selectedProcedure = nil
+                            selectedTooth = nil
+                            withAnimation { isSidebarOpen = false }
+                        }) {
+                            HStack {
+                                Image(systemName: "square.grid.2x2")
+                                Text("All Photos")
+                                    .font(AppFonts.subheadline)
+                                Spacer()
+                            }
+                            .padding()
+                            .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
+                            .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                         }
-                        .frame(width: 250)
-                        .background(AppColors.surface.opacity(0.98))
-                        .edgesIgnoringSafeArea(.vertical)
+                        .padding(.top, 50)
 
-                        // Tap or swipe outside to close - cover entire photo grid area
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                            .contentShape(Rectangle())
-                            .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
-                            .highPriorityGesture(
-                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                    .onEnded { value in
-                                        // Close sidebar if swiped left
-                                        if value.translation.width < -20 {
-                                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                        Divider().background(AppColors.secondary)
+
+                        // Procedure folders with tooth subfolders
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                    ProcedureFolderView(
+                                        procedure: procedure,
+                                        toothEntries: metadataManager.getToothEntries(for: procedure),
+                                        selectedProcedure: $selectedProcedure,
+                                        selectedTooth: $selectedTooth,
+                                        isSidebarOpen: $isSidebarOpen,
+                                        metadataManager: metadataManager,
+                                        assets: library.assets,
+                                        onRename: { folder in
+                                            folderToRename = folder
+                                            renameFolderText = folder
+                                            showRenameSheet = true
+                                        },
+                                        onDelete: { folder in
+                                            folderToDelete = folder
+                                            showDeleteConfirmation = true
+                                        },
+                                        onColorEdit: { folder in
+                                            folderForColorEdit = folder
+                                            showColorPicker = true
                                         }
+                                    )
+                                }
+
+                                // Add Procedure Folder button
+                                Button(action: {
+                                    newFolderName = ""
+                                    showAddFolderSheet = true
+                                }) {
+                                    HStack {
+                                        Image(systemName: "folder.badge.plus")
+                                            .foregroundColor(AppColors.success)
+                                        Text("Add Procedure Folder")
+                                            .font(AppFonts.subheadline)
+                                            .foregroundColor(AppColors.textPrimary)
+                                        Spacer()
                                     }
-                            )
-                            .transition(.opacity)
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 10)
+                                }
+                            }
+                        }
+
+                        Spacer()
                     }
+                    .frame(width: 250)
+                    .background(AppColors.surface.opacity(0.98))
+                    .edgesIgnoringSafeArea(.vertical)
                     .zIndex(2)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading),
-                        removal: .move(edge: .leading)
-                    ))
+                    .transition(.move(edge: .leading))
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 5, coordinateSpace: .global)
                             .onEnded { value in
