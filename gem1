@@ -3672,6 +3672,11 @@ struct PhotoEditorView: View {
     // For smooth gesture handling
     @State private var lastCropScale: CGFloat = 1.0
     @State private var lastCropOffset: CGSize = .zero
+    // Adjustable crop frame dimensions
+    @State private var cropFrameWidth: CGFloat = 0
+    @State private var cropFrameHeight: CGFloat = 0
+    @State private var initialCropFrameWidth: CGFloat = 0
+    @State private var initialCropFrameHeight: CGFloat = 0
 
     private let context = CIContext()
 
@@ -3722,7 +3727,12 @@ struct PhotoEditorView: View {
                                     )
 
                                 // Crop frame overlay
-                                CropOverlayView(size: geo.size)
+                                CropOverlayView(
+                                    size: geo.size,
+                                    cropWidth: $cropFrameWidth,
+                                    cropHeight: $cropFrameHeight,
+                                    imageAspectRatio: img.size.width / img.size.height
+                                )
                             }
                         }
                     }
@@ -3878,6 +3888,8 @@ struct PhotoEditorView: View {
         cropOffset = .zero
         lastCropScale = 1.0
         lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
         withAnimation { isCropping = true }
     }
 
@@ -3888,6 +3900,8 @@ struct PhotoEditorView: View {
         cropOffset = .zero
         lastCropScale = 1.0
         lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
     }
 
     func applyCrop() {
@@ -3923,6 +3937,8 @@ struct PhotoEditorView: View {
         cropOffset = .zero
         lastCropScale = 1.0
         lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
     }
 
     func applyProcessing() {
@@ -3998,21 +4014,32 @@ struct PhotoEditorView: View {
 // MARK: - Crop Overlay View
 struct CropOverlayView: View {
     let size: CGSize
+    @Binding var cropWidth: CGFloat
+    @Binding var cropHeight: CGFloat
+    let imageAspectRatio: CGFloat
+
+    // Minimum crop dimensions
+    private let minCropSize: CGFloat = 80
 
     var body: some View {
-        let cropSize = min(size.width, size.height) * 0.8
+        let maxWidth = size.width * 0.9
+        let maxHeight = size.height * 0.9
+
+        // Initialize dimensions on first render if not set
+        let displayWidth = cropWidth > 0 ? cropWidth : calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
+        let displayHeight = cropHeight > 0 ? cropHeight : calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
 
         ZStack {
             // Transparent center (crop area)
             Rectangle()
                 .fill(Color.clear)
-                .frame(width: cropSize, height: cropSize)
+                .frame(width: displayWidth, height: displayHeight)
                 .overlay(
                     Rectangle()
                         .stroke(Color.white, lineWidth: 2)
                 )
                 .overlay(
-                    // Grid lines
+                    // Grid lines - vertical
                     VStack {
                         ForEach(0..<4) { i in
                             if i > 0 {
@@ -4024,6 +4051,7 @@ struct CropOverlayView: View {
                     }
                 )
                 .overlay(
+                    // Grid lines - horizontal
                     HStack {
                         ForEach(0..<4) { i in
                             if i > 0 {
@@ -4035,21 +4063,95 @@ struct CropOverlayView: View {
                     }
                 )
 
-            // Corner handles
+            // Corner handles with drag gestures
             VStack {
                 HStack {
+                    // Top-left handle
                     CropCornerHandle()
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let deltaX = -value.translation.width
+                                    let deltaY = -value.translation.height
+                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
+                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    cropWidth = newWidth
+                                    cropHeight = newHeight
+                                }
+                        )
                     Spacer()
+                    // Top-right handle
                     CropCornerHandle()
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let deltaX = value.translation.width
+                                    let deltaY = -value.translation.height
+                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
+                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    cropWidth = newWidth
+                                    cropHeight = newHeight
+                                }
+                        )
                 }
                 Spacer()
                 HStack {
+                    // Bottom-left handle
                     CropCornerHandle()
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let deltaX = -value.translation.width
+                                    let deltaY = value.translation.height
+                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
+                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    cropWidth = newWidth
+                                    cropHeight = newHeight
+                                }
+                        )
                     Spacer()
+                    // Bottom-right handle
                     CropCornerHandle()
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let deltaX = value.translation.width
+                                    let deltaY = value.translation.height
+                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
+                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    cropWidth = newWidth
+                                    cropHeight = newHeight
+                                }
+                        )
                 }
             }
-            .frame(width: cropSize, height: cropSize)
+            .frame(width: displayWidth, height: displayHeight)
+        }
+        .onAppear {
+            if cropWidth == 0 || cropHeight == 0 {
+                cropWidth = calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
+                cropHeight = calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+            }
+        }
+    }
+
+    private func calculateInitialWidth(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        if imageAspectRatio > 1 {
+            // Landscape image
+            return min(maxWidth, maxHeight * imageAspectRatio)
+        } else {
+            // Portrait or square image
+            return min(maxWidth, maxHeight * imageAspectRatio)
+        }
+    }
+
+    private func calculateInitialHeight(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        if imageAspectRatio > 1 {
+            // Landscape image
+            return min(maxHeight, maxWidth / imageAspectRatio)
+        } else {
+            // Portrait or square image
+            return min(maxHeight, maxWidth / imageAspectRatio)
         }
     }
 }
@@ -4057,13 +4159,19 @@ struct CropOverlayView: View {
 struct CropCornerHandle: View {
     var body: some View {
         ZStack {
+            // Invisible larger hit area for easier touch
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 44, height: 44)
+            // Visible corner indicator
             Rectangle()
                 .fill(Color.white)
-                .frame(width: 20, height: 3)
+                .frame(width: 24, height: 4)
             Rectangle()
                 .fill(Color.white)
-                .frame(width: 3, height: 20)
+                .frame(width: 4, height: 24)
         }
+        .contentShape(Rectangle())
     }
 }
 
