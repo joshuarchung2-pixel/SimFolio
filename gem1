@@ -4382,9 +4382,7 @@ struct PortfoliosView: View {
                             .padding(8)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 60)
-                .padding(.bottom, 16)
+                .padding(16)
 
                 // Main content
                 if metadataManager.portfolios.isEmpty {
