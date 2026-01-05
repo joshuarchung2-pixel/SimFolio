@@ -3561,8 +3561,13 @@ struct GalleryView: View {
     var filteredAssets: [PHAsset] {
         var assets = library.assets
         if let proc = selectedProcedure {
-            assets = assets.filter {
-                metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == proc
+            assets = assets.filter { asset in
+                let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
+                // For "Unsorted Photos" folder, include photos with nil procedure OR explicitly set to "Unsorted Photos"
+                if proc == MetadataManager.unsortedPhotosFolder {
+                    return assetProcedure == nil || assetProcedure == proc
+                }
+                return assetProcedure == proc
             }
         }
         if let tooth = selectedTooth {
@@ -4560,7 +4565,14 @@ struct ProcedureFolderView: View {
     @State private var isExpanded = false
 
     var photoCount: Int {
-        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.procedure == procedure }.count
+        assets.filter { asset in
+            let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
+            // For "Unsorted Photos" folder, count photos with nil procedure OR explicitly set to "Unsorted Photos"
+            if procedure == MetadataManager.unsortedPhotosFolder {
+                return assetProcedure == nil || assetProcedure == procedure
+            }
+            return assetProcedure == procedure
+        }.count
     }
 
     var canManage: Bool {
@@ -5082,9 +5094,10 @@ struct PhotoDetailView: View {
                     ProgressView()
                 }
 
-                // Metadata display
-                if let meta = metadata {
-                    VStack(alignment: .leading, spacing: 8) {
+                // Metadata and rating display (always show rating, even for unsorted photos)
+                VStack(alignment: .leading, spacing: 8) {
+                    // Metadata info (only if metadata exists)
+                    if let meta = metadata {
                         // Top row: Procedure and Tooth
                         HStack(spacing: 8) {
                             if let proc = meta.procedure {
@@ -5139,24 +5152,24 @@ struct PhotoDetailView: View {
                                     .cornerRadius(4)
                             }
                         }
-
-                        // Rating row
-                        HStack {
-                            Text("Rating:")
-                                .font(AppFonts.caption)
-                                .foregroundColor(AppColors.textSecondary)
-                            RatingView(
-                                rating: meta.rating ?? 0,
-                                assetID: asset.localIdentifier,
-                                metadataManager: metadataManager
-                            )
-                        }
                     }
-                    .padding()
-                    .background(AppColors.surface.opacity(0.9))
-                    .cornerRadius(10)
-                    .padding()
+
+                    // Rating row (always visible)
+                    HStack {
+                        Text("Rating:")
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                        RatingView(
+                            rating: metadata?.rating ?? 0,
+                            assetID: asset.localIdentifier,
+                            metadataManager: metadataManager
+                        )
+                    }
                 }
+                .padding()
+                .background(AppColors.surface.opacity(0.9))
+                .cornerRadius(10)
+                .padding()
             }
         }
         .toolbar {
@@ -7360,9 +7373,10 @@ struct PortfolioPhotoDetailView: View {
                         ProgressView()
                     }
 
-                    // Metadata display
-                    if let meta = metadata {
-                        VStack(alignment: .leading, spacing: 8) {
+                    // Metadata and rating display (always show rating, even for unsorted photos)
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Metadata info (only if metadata exists)
+                        if let meta = metadata {
                             // Top row: Procedure and Tooth
                             HStack(spacing: 8) {
                                 if let proc = meta.procedure {
@@ -7417,24 +7431,24 @@ struct PortfolioPhotoDetailView: View {
                                         .cornerRadius(4)
                                 }
                             }
-
-                            // Rating row
-                            HStack {
-                                Text("Rating:")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                RatingView(
-                                    rating: meta.rating ?? 0,
-                                    assetID: asset.localIdentifier,
-                                    metadataManager: metadataManager
-                                )
-                            }
                         }
-                        .padding()
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(10)
-                        .padding()
+
+                        // Rating row (always visible)
+                        HStack {
+                            Text("Rating:")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            RatingView(
+                                rating: metadata?.rating ?? 0,
+                                assetID: asset.localIdentifier,
+                                metadataManager: metadataManager
+                            )
+                        }
                     }
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .padding()
                 }
             }
             .navigationTitle("Photo")
