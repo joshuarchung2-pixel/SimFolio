@@ -151,8 +151,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 28)
+        .padding(.vertical, 6)
         .background(
             AppColors.surface
                 .overlay(
@@ -162,6 +161,7 @@ struct CustomBottomNavBar: View {
                     alignment: .top
                 )
         )
+        .padding(.bottom, 0) // Sits at the very bottom in safe area
     }
 }
 
@@ -173,9 +173,9 @@ struct NavBarItem: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
 
                 Text(label)
@@ -183,12 +183,12 @@ struct NavBarItem: View {
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
             .background(
                 isSelected ?
                     AppColors.primary.opacity(0.1)
-                        .cornerRadius(12)
-                    : Color.clear.cornerRadius(12)
+                        .cornerRadius(10)
+                    : Color.clear.cornerRadius(10)
             )
         }
         .buttonStyle(PlainButtonStyle())
