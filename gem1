@@ -2660,7 +2660,7 @@ struct GalleryView: View {
                         // Current section name (centered header)
                         VStack(spacing: 2) {
                             Text(currentSectionTitle)
-                                .font(AppFonts.title2)
+                                .font(AppFonts.interBold(22))
                                 .foregroundColor(AppColors.textPrimary)
 
                             // Breadcrumb for tooth selection
@@ -2879,9 +2879,13 @@ struct GalleryView: View {
                                         }
                                     }
                             )
+                            .transition(.opacity)
                     }
                     .zIndex(2)
-                    .transition(.move(edge: .leading))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading),
+                        removal: .move(edge: .leading)
+                    ))
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 5, coordinateSpace: .global)
                             .onEnded { value in
