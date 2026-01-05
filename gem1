@@ -230,7 +230,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 18) // 18pt padding between nav bar top edge and highlight area
+        .padding(.top, 10) // 10pt padding between nav bar top edge and highlight area
         .padding(.bottom, 0) // Minimal bottom padding - safe area handled by background extension
         .background(
             AppColors.surface
@@ -1917,7 +1917,7 @@ struct DentalCameraSetupView: View {
                             }
                             .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 76) // Positioned to maintain 18pt gap to nav bar top
+                        .padding(.bottom, 76) // Positioned to maintain 10pt gap to nav bar top (matching nav bar top padding)
                     }
                 }
             }
