@@ -3997,14 +3997,91 @@ class PhotoLibraryManager: ObservableObject {
 struct PortfoliosView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var showAddPortfolioSheet = false
-    @State private var selectedPortfolio: Portfolio? = nil
+    @State private var selectedPortfolioId: String? = nil
+    @State private var showPortfolioPicker = false
+    @State private var showAddRequirementSheet = false
+    @State private var showDeleteConfirmation = false
+
+    // Get the most recently created portfolio, or the selected one
+    var currentPortfolio: Portfolio? {
+        if let id = selectedPortfolioId {
+            return metadataManager.getPortfolio(by: id)
+        }
+        // Default to most recently created (last in array)
+        return metadataManager.portfolios.last
+    }
+
+    var stats: (fulfilled: Int, total: Int) {
+        guard let portfolio = currentPortfolio else { return (0, 0) }
+        return metadataManager.getPortfolioStats(portfolio)
+    }
+
+    var completionPercentage: Double {
+        guard let portfolio = currentPortfolio else { return 0 }
+        return metadataManager.getPortfolioCompletionPercentage(portfolio)
+    }
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
 
+            VStack(spacing: 0) {
+                // Custom header bar
+                HStack {
+                    Text("Portfolios")
+                        .font(.title2).bold()
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    // Portfolio dropdown selector (only show if portfolios exist)
+                    if !metadataManager.portfolios.isEmpty {
+                        Menu {
+                            ForEach(metadataManager.portfolios) { portfolio in
+                                Button(action: {
+                                    selectedPortfolioId = portfolio.id
+                                }) {
+                                    HStack {
+                                        Text(portfolio.name)
+                                        if portfolio.id == currentPortfolio?.id {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(currentPortfolio?.name ?? "Select")
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.systemGray5))
+                            .cornerRadius(8)
+                        }
+                    }
+
+                    // Plus button
+                    Button(action: { showAddPortfolioSheet = true }) {
+                        Image(systemName: "plus")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                            .padding(8)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 60)
+                .padding(.bottom, 16)
+
+                // Main content
                 if metadataManager.portfolios.isEmpty {
+                    // Empty state
+                    Spacer()
                     VStack(spacing: 20) {
                         Image(systemName: "folder.badge.plus")
                             .font(.system(size: 60))
@@ -4025,34 +4102,164 @@ struct PortfoliosView: View {
                         .buttonStyle(CustomPrimaryButtonStyle())
                         .padding(.top, 10)
                     }
-                } else {
+                    Spacer()
+                } else if let portfolio = currentPortfolio {
+                    // Expanded portfolio view
                     ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(metadataManager.portfolios) { portfolio in
-                                NavigationLink(destination: PortfolioDetailView(portfolio: portfolio)) {
-                                    PortfolioCardView(portfolio: portfolio)
+                        VStack(alignment: .leading, spacing: 20) {
+                            // Header stats card
+                            VStack(spacing: 16) {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("Progress")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                        Text(String(format: "%.0f%%", completionPercentage))
+                                            .font(.system(size: 36, weight: .bold))
+                                            .foregroundColor(completionPercentage >= 100 ? .green : .blue)
+                                    }
+
+                                    Spacer()
+
+                                    // Circular progress indicator
+                                    ZStack {
+                                        Circle()
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 8)
+                                            .frame(width: 70, height: 70)
+                                        Circle()
+                                            .trim(from: 0, to: min(1.0, completionPercentage / 100))
+                                            .stroke(
+                                                completionPercentage >= 100 ? Color.green : Color.blue,
+                                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                                            )
+                                            .frame(width: 70, height: 70)
+                                            .rotationEffect(.degrees(-90))
+                                        VStack(spacing: 0) {
+                                            Text("\(stats.fulfilled)")
+                                                .font(.system(size: 16, weight: .bold))
+                                                .foregroundColor(.white)
+                                            Text("of \(stats.total)")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.gray)
+                                        }
+                                    }
+                                }
+
+                                // Progress bar
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(height: 12)
+
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(completionPercentage >= 100 ? Color.green : Color.blue)
+                                            .frame(width: geo.size.width * min(1.0, completionPercentage / 100), height: 12)
+                                    }
+                                }
+                                .frame(height: 12)
+
+                                // Date created
+                                HStack {
+                                    Text("Created \(portfolio.dateString)")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                    Spacer()
                                 }
                             }
+                            .padding()
+                            .background(Color(UIColor.systemGray6).opacity(0.3))
+                            .cornerRadius(12)
+
+                            // Requirements section
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("Requirements")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Button(action: { showAddRequirementSheet = true }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "plus.circle.fill")
+                                            Text("Add")
+                                        }
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
+                                    }
+                                }
+
+                                if portfolio.requirements.isEmpty {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "doc.text")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.gray)
+                                        Text("No requirements yet")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                        Text("Add requirements to specify what photos you need")
+                                            .font(.caption)
+                                            .foregroundColor(.gray.opacity(0.8))
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 30)
+                                } else {
+                                    ForEach(portfolio.requirements) { requirement in
+                                        RequirementStatusView(
+                                            requirement: requirement,
+                                            portfolioId: portfolio.id
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Delete button
+                            Button(action: { showDeleteConfirmation = true }) {
+                                HStack {
+                                    Image(systemName: "trash")
+                                    Text("Delete Portfolio")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color(UIColor.systemGray6).opacity(0.3))
+                                .cornerRadius(10)
+                            }
+                            .padding(.top, 20)
+
+                            Spacer(minLength: 50)
                         }
                         .padding()
                     }
                 }
             }
-            .navigationTitle("Portfolios")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showAddPortfolioSheet = true }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(.blue)
-                    }
-                }
-            }
-            .sheet(isPresented: $showAddPortfolioSheet) {
-                AddPortfolioSheet(isPresented: $showAddPortfolioSheet)
+        }
+        .sheet(isPresented: $showAddPortfolioSheet) {
+            AddPortfolioSheet(isPresented: $showAddPortfolioSheet)
+        }
+        .sheet(isPresented: $showAddRequirementSheet) {
+            if let portfolio = currentPortfolio {
+                AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolio.id)
             }
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .alert("Delete Portfolio", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let portfolio = currentPortfolio {
+                    metadataManager.deletePortfolio(portfolio)
+                    selectedPortfolioId = nil
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete \"\(currentPortfolio?.name ?? "")\"? This cannot be undone.")
+        }
+        .onChange(of: metadataManager.portfolios) { _ in
+            // If selected portfolio was deleted, reset to most recent
+            if let id = selectedPortfolioId, metadataManager.getPortfolio(by: id) == nil {
+                selectedPortfolioId = nil
+            }
+        }
     }
 }
 
