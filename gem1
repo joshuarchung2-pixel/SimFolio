@@ -110,6 +110,73 @@ class ThemeManager: ObservableObject {
     }
 }
 
+// MARK: - ORIENTATION MANAGER
+class OrientationManager: ObservableObject {
+    static let shared = OrientationManager()
+
+    @Published var deviceOrientation: UIDeviceOrientation = .portrait
+    @Published var isLandscape: Bool = false
+
+    // Rotation angle for icons (in degrees)
+    var iconRotationAngle: Angle {
+        switch deviceOrientation {
+        case .landscapeLeft:
+            return .degrees(90)
+        case .landscapeRight:
+            return .degrees(-90)
+        default:
+            return .degrees(0)
+        }
+    }
+
+    // Video rotation angle for AVCaptureConnection
+    var videoRotationAngle: CGFloat {
+        switch deviceOrientation {
+        case .landscapeLeft:
+            return 180
+        case .landscapeRight:
+            return 0
+        default:
+            return 90
+        }
+    }
+
+    private init() {
+        deviceOrientation = UIDevice.current.orientation.isValidInterfaceOrientation ? UIDevice.current.orientation : .portrait
+        isLandscape = deviceOrientation.isLandscape
+    }
+
+    func startMonitoring() {
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(orientationDidChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+    }
+
+    func stopMonitoring() {
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    @objc private func orientationDidChange() {
+        let newOrientation = UIDevice.current.orientation
+        // Only respond to portrait and landscape orientations (not face up/down)
+        guard newOrientation == .portrait || newOrientation == .landscapeLeft || newOrientation == .landscapeRight else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                self.deviceOrientation = newOrientation
+                self.isLandscape = newOrientation.isLandscape
+            }
+        }
+    }
+}
+
 // MARK: - NOTIFICATION MANAGER
 enum NotificationFrequency: String, CaseIterable, Codable {
     case once = "Once"
@@ -1809,10 +1876,13 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     @Published var currentZoom: CGFloat = 1.0
     @Published var minZoom: CGFloat = 1.0
     @Published var maxZoom: CGFloat = 10.0
-    
+
     private let output = AVCapturePhotoOutput()
     private var videoInput: AVCaptureDeviceInput?
     private var currentExposureBias: Float = 0.0
+
+    // Orientation at time of capture
+    private var captureOrientation: UIDeviceOrientation = .portrait
     
     override init() {
         super.init()
@@ -1972,6 +2042,9 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     }
     
     func takePhoto() {
+        // Capture current device orientation before taking photo
+        captureOrientation = OrientationManager.shared.deviceOrientation
+
         let settings = AVCapturePhotoSettings()
         // Check if flash is supported
         if output.supportedFlashModes.contains(flashMode) {
@@ -1979,12 +2052,39 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         }
         output.capturePhoto(with: settings, delegate: self)
     }
-    
+
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else { return }
+
+        // Apply correct orientation based on device orientation at capture time
+        let orientedImage = applyOrientationToImage(image, deviceOrientation: captureOrientation)
+
         DispatchQueue.main.async {
-            self.capturedImage = image
+            self.capturedImage = orientedImage
         }
+    }
+
+    private func applyOrientationToImage(_ image: UIImage, deviceOrientation: UIDeviceOrientation) -> UIImage {
+        guard let cgImage = image.cgImage else { return image }
+
+        // Determine the correct UIImage.Orientation based on device orientation
+        // The camera sensor is naturally in landscape-left orientation
+        let imageOrientation: UIImage.Orientation
+        let isFrontCamera = videoInput?.device.position == .front
+
+        switch deviceOrientation {
+        case .landscapeLeft:
+            // Device rotated to landscape with home button on RIGHT
+            imageOrientation = isFrontCamera ? .downMirrored : .up
+        case .landscapeRight:
+            // Device rotated to landscape with home button on LEFT
+            imageOrientation = isFrontCamera ? .upMirrored : .down
+        default:
+            // Portrait orientation - use the image's existing orientation
+            return image
+        }
+
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: imageOrientation)
     }
     
     func retake() {
@@ -2031,6 +2131,7 @@ class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
 struct DentalCameraSetupView: View {
     @Binding var selectedTab: Int
     @ObservedObject var cameraService: CameraService
+    @ObservedObject var orientationManager = OrientationManager.shared
 
     // UI State
     @State private var showGrid = false
@@ -2254,6 +2355,7 @@ struct DentalCameraSetupView: View {
                         Image(systemName: "sun.max.fill")
                             .font(.system(size: 20))
                             .foregroundColor(.yellow)
+                            .rotationEffect(orientationManager.iconRotationAngle)
                             .shadow(radius: 2)
                             .offset(x: 65, y: sunY)
                     }
@@ -2276,10 +2378,11 @@ struct DentalCameraSetupView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem) // Default linger time
                     }
                 }
-                
+
                 if isAELocked {
                     Text("AE/AF LOCK")
                         .font(AppFonts.caption).foregroundColor(.black)
+                        .rotationEffect(orientationManager.iconRotationAngle)
                         .padding(.vertical, 4).padding(.horizontal, 8)
                         .background(Color.yellow).cornerRadius(4)
                         .padding(.top, 120)
@@ -2407,6 +2510,7 @@ struct DentalCameraSetupView: View {
                                 Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
                                     Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
                                         .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
                                         .padding(10)
                                         .background(Color.black.opacity(0.6))
                                         .clipShape(Circle())
@@ -2423,7 +2527,9 @@ struct DentalCameraSetupView: View {
                                         }
                                     }) {
                                         Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
-                                            .font(.title2).padding(10)
+                                            .font(.title2)
+                                            .rotationEffect(orientationManager.iconRotationAngle)
+                                            .padding(10)
                                             .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -2431,7 +2537,9 @@ struct DentalCameraSetupView: View {
                                     // Grid Toggle
                                     Button(action: { showGrid.toggle() }) {
                                         Image(systemName: showGrid ? "square" : "grid")
-                                            .font(.title2).padding(10)
+                                            .font(.title2)
+                                            .rotationEffect(orientationManager.iconRotationAngle)
+                                            .padding(10)
                                             .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
                                     }
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -2443,6 +2551,7 @@ struct DentalCameraSetupView: View {
                                     }) {
                                         Text("👻")
                                             .font(.title2)
+                                            .rotationEffect(orientationManager.iconRotationAngle)
                                             .padding(10)
                                             .background(Color.black.opacity(0.6))
                                             .clipShape(Circle())
@@ -2559,6 +2668,7 @@ struct DentalCameraSetupView: View {
                                     .overlay(
                                         Image(systemName: "photo")
                                             .foregroundColor(.gray)
+                                            .rotationEffect(orientationManager.iconRotationAngle)
                                     )
                                     .padding(.leading, 20)
                             }
@@ -2569,6 +2679,7 @@ struct DentalCameraSetupView: View {
                             Button(action: { cameraService.flipCamera() }) {
                                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                                     .font(.system(size: 22))
+                                    .rotationEffect(orientationManager.iconRotationAngle)
                                     .foregroundColor(.white)
                                     .frame(width: 50, height: 50)
                                     .background(Color.black.opacity(0.6))
@@ -2592,6 +2703,7 @@ struct DentalCameraSetupView: View {
                             .font(AppFonts.caption)
                             .foregroundColor(.white)
                     }
+                    .rotationEffect(orientationManager.iconRotationAngle)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(AppColors.success)
@@ -2617,6 +2729,12 @@ struct DentalCameraSetupView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .onAppear {
+            orientationManager.startMonitoring()
+        }
+        .onDisappear {
+            orientationManager.stopMonitoring()
+        }
     }
 }
 
