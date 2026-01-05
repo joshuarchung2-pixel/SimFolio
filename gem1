@@ -738,6 +738,43 @@ class MetadataManager: ObservableObject {
         cleanupEmptyToothEntries()
     }
 
+    // Move selected photos with full metadata specification
+    func movePhotosWithMetadata(assetIds: Set<String>, to procedure: String, toothEntry: ToothEntry?, stage: String?, angle: String?) {
+        for assetID in assetIds {
+            if var metadata = assetMetadata[assetID] {
+                metadata.procedure = procedure
+                if let tooth = toothEntry {
+                    metadata.toothNumber = tooth.toothNumber
+                    metadata.toothDate = tooth.date
+                    metadata.stage = stage
+                    metadata.angle = angle
+                    // Ensure the tooth entry exists
+                    addToothEntry(tooth)
+                } else {
+                    metadata.toothNumber = nil
+                    metadata.toothDate = nil
+                    metadata.stage = nil
+                    metadata.angle = nil
+                }
+                assetMetadata[assetID] = metadata
+            } else {
+                // Create new metadata if it doesn't exist
+                var newMetadata = PhotoMetadata()
+                newMetadata.procedure = procedure
+                if let tooth = toothEntry {
+                    newMetadata.toothNumber = tooth.toothNumber
+                    newMetadata.toothDate = tooth.date
+                    newMetadata.stage = stage
+                    newMetadata.angle = angle
+                    addToothEntry(tooth)
+                }
+                assetMetadata[assetID] = newMetadata
+            }
+        }
+        saveAssetMetadata()
+        cleanupEmptyToothEntries()
+    }
+
     // Delete metadata for removed photos
     func deleteMetadata(for assetIds: Set<String>) {
         for assetID in assetIds {
@@ -3217,6 +3254,7 @@ struct GalleryView: View {
                 if isSelectMode && !selectedAssetIds.isEmpty {
                     VStack {
                         Spacer()
+                            .allowsHitTesting(false)
                         HStack(spacing: 0) {
                             // Delete button
                             Button(action: {
@@ -3417,55 +3455,343 @@ struct MoveToFolderSheet: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header showing count
-                HStack {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 16))
-                        .foregroundColor(AppColors.primary)
-                    Text("\(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s") selected")
-                        .font(AppFonts.subheadline)
-                        .foregroundColor(AppColors.textSecondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(AppColors.secondary.opacity(0.1))
+            MoveSelectProcedureView(
+                selectedAssetIds: selectedAssetIds,
+                metadataManager: metadataManager,
+                isPresented: $isPresented,
+                onComplete: onComplete
+            )
+        }
+    }
+}
 
-                List {
-                    ForEach(metadataManager.procedures, id: \.self) { procedure in
-                        Button(action: {
-                            metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
-                            isPresented = false
-                            onComplete()
-                        }) {
+// MARK: - Move Select Procedure View
+struct MoveSelectProcedureView: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header showing count
+            HStack {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppColors.primary)
+                Text("\(selectedAssetIds.count) photo\(selectedAssetIds.count == 1 ? "" : "s") selected")
+                    .font(AppFonts.subheadline)
+                    .foregroundColor(AppColors.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.secondary.opacity(0.1))
+
+            List {
+                ForEach(metadataManager.procedures, id: \.self) { procedure in
+                    NavigationLink(destination: MoveSelectToothView(
+                        selectedAssetIds: selectedAssetIds,
+                        metadataManager: metadataManager,
+                        procedure: procedure,
+                        isPresented: $isPresented,
+                        onComplete: onComplete
+                    )) {
+                        HStack {
+                            Circle()
+                                .fill(metadataManager.getFolderColor(for: procedure))
+                                .frame(width: 12, height: 12)
+                            Text(procedure)
+                                .font(AppFonts.body)
+                                .foregroundColor(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .listStyle(PlainListStyle())
+        }
+        .navigationTitle("Select Folder")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    isPresented = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Move Select Tooth View
+struct MoveSelectToothView: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    let procedure: String
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    @State private var showNewToothSheet = false
+    @State private var newToothNumber: Int = 1
+
+    var toothEntries: [ToothEntry] {
+        metadataManager.getToothEntries(for: procedure)
+    }
+
+    var body: some View {
+        List {
+            // Move to folder root option
+            Section {
+                Button(action: {
+                    metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
+                    isPresented = false
+                    onComplete()
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(AppColors.primary)
+                        Text("Move to \(procedure)")
+                            .font(AppFonts.body)
+                            .foregroundColor(AppColors.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // Existing teeth
+            if !toothEntries.isEmpty {
+                Section(header: Text("Select Tooth")) {
+                    ForEach(toothEntries, id: \.id) { tooth in
+                        NavigationLink(destination: MoveSelectStageView(
+                            selectedAssetIds: selectedAssetIds,
+                            metadataManager: metadataManager,
+                            procedure: procedure,
+                            toothEntry: tooth,
+                            isPresented: $isPresented,
+                            onComplete: onComplete
+                        )) {
                             HStack {
-                                Circle()
-                                    .fill(metadataManager.getFolderColor(for: procedure))
-                                    .frame(width: 12, height: 12)
-                                Text(procedure)
-                                    .font(AppFonts.body)
-                                    .foregroundColor(AppColors.textPrimary)
+                                Image(systemName: "tooth")
+                                    .foregroundColor(metadataManager.getFolderColor(for: procedure))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Tooth \(tooth.toothNumber)")
+                                        .font(AppFonts.body)
+                                        .foregroundColor(AppColors.textPrimary)
+                                    Text(tooth.date, style: .date)
+                                        .font(AppFonts.caption2)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
                                 Spacer()
-                                Image(systemName: "folder")
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14))
                                     .foregroundColor(AppColors.textSecondary)
                             }
                             .padding(.vertical, 4)
                         }
                     }
                 }
-                .listStyle(PlainListStyle())
             }
-            .navigationTitle("Move to Folder")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        isPresented = false
+
+            // Create new tooth option
+            Section {
+                Button(action: {
+                    showNewToothSheet = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(AppColors.success)
+                        Text("Create New Tooth Entry")
+                            .font(AppFonts.body)
+                            .foregroundColor(AppColors.success)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle(procedure)
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showNewToothSheet) {
+            NavigationView {
+                Form {
+                    Picker("Tooth Number", selection: $newToothNumber) {
+                        ForEach(1...32, id: \.self) { num in
+                            Text("Tooth \(num)").tag(num)
+                        }
+                    }
+                }
+                .navigationTitle("New Tooth")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showNewToothSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Create") {
+                            let newTooth = ToothEntry(procedure: procedure, toothNumber: newToothNumber, date: Date())
+                            metadataManager.movePhotosWithMetadata(
+                                assetIds: selectedAssetIds,
+                                to: procedure,
+                                toothEntry: newTooth,
+                                stage: nil,
+                                angle: nil
+                            )
+                            showNewToothSheet = false
+                            isPresented = false
+                            onComplete()
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - Move Select Stage View
+struct MoveSelectStageView: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    let procedure: String
+    let toothEntry: ToothEntry
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    var body: some View {
+        List {
+            // Move to tooth root option
+            Section {
+                Button(action: {
+                    metadataManager.movePhotosWithMetadata(
+                        assetIds: selectedAssetIds,
+                        to: procedure,
+                        toothEntry: toothEntry,
+                        stage: nil,
+                        angle: nil
+                    )
+                    isPresented = false
+                    onComplete()
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(AppColors.primary)
+                        Text("Move to Tooth \(toothEntry.toothNumber)")
+                            .font(AppFonts.body)
+                            .foregroundColor(AppColors.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // Stage options
+            Section(header: Text("Select Stage")) {
+                ForEach(metadataManager.stages, id: \.self) { stage in
+                    NavigationLink(destination: MoveSelectAngleView(
+                        selectedAssetIds: selectedAssetIds,
+                        metadataManager: metadataManager,
+                        procedure: procedure,
+                        toothEntry: toothEntry,
+                        stage: stage,
+                        isPresented: $isPresented,
+                        onComplete: onComplete
+                    )) {
+                        HStack {
+                            Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                                .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
+                            Text(stage)
+                                .font(AppFonts.body)
+                                .foregroundColor(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("Tooth \(toothEntry.toothNumber)")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Move Select Angle View
+struct MoveSelectAngleView: View {
+    let selectedAssetIds: Set<String>
+    @ObservedObject var metadataManager: MetadataManager
+    let procedure: String
+    let toothEntry: ToothEntry
+    let stage: String
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+
+    var body: some View {
+        List {
+            // Move to stage root option
+            Section {
+                Button(action: {
+                    metadataManager.movePhotosWithMetadata(
+                        assetIds: selectedAssetIds,
+                        to: procedure,
+                        toothEntry: toothEntry,
+                        stage: stage,
+                        angle: nil
+                    )
+                    isPresented = false
+                    onComplete()
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(AppColors.primary)
+                        Text("Move to \(stage)")
+                            .font(AppFonts.body)
+                            .foregroundColor(AppColors.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // Angle options
+            Section(header: Text("Select Angle")) {
+                ForEach(metadataManager.angles, id: \.self) { angle in
+                    Button(action: {
+                        metadataManager.movePhotosWithMetadata(
+                            assetIds: selectedAssetIds,
+                            to: procedure,
+                            toothEntry: toothEntry,
+                            stage: stage,
+                            angle: angle
+                        )
+                        isPresented = false
+                        onComplete()
+                    }) {
+                        HStack {
+                            Image(systemName: "camera.viewfinder")
+                                .foregroundColor(AppColors.primary)
+                            Text(angle)
+                                .font(AppFonts.body)
+                                .foregroundColor(AppColors.textPrimary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle(stage)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
