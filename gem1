@@ -483,13 +483,13 @@ struct ContentView: View {
         .onAppear {
             PhotoLibraryManager.shared.createAlbumIfNeeded()
         }
-        .onChange(of: selectedTab) { newTab in
+        .onChange(of: selectedTab) { _, newTab in
             // Show loading only when switching TO camera and it hasn't loaded yet
             if newTab == 0 && !cameraHasLoaded && !sharedCameraService.isSessionReady {
                 showCameraLoading = true
             }
         }
-        .onChange(of: sharedCameraService.isSessionReady) { ready in
+        .onChange(of: sharedCameraService.isSessionReady) { _, ready in
             if ready {
                 cameraHasLoaded = true
                 // Small delay to let progress bar complete visually
@@ -4222,226 +4222,290 @@ struct PhotoEditorView: View {
 
     var body: some View {
         NavigationView {
-            VStack {
-                Spacer()
-                if isCropping {
-                    // Crop mode view
-                    GeometryReader { geo in
-                        if let img = displayedImage {
-                            let imageAspect = img.size.width / img.size.height
-                            let containerAspect = geo.size.width / geo.size.height
-
-                            // Calculate actual displayed image size
-                            let calcDisplayWidth: CGFloat
-                            let calcDisplayHeight: CGFloat
-                            if imageAspect > containerAspect {
-                                // Image is wider than container - width constrained
-                                calcDisplayWidth = geo.size.width
-                                calcDisplayHeight = geo.size.width / imageAspect
-                            } else {
-                                // Image is taller than container - height constrained
-                                calcDisplayHeight = geo.size.height
-                                calcDisplayWidth = geo.size.height * imageAspect
-                            }
-
-                            ZStack {
-                                // Darkened background
-                                Color.black.opacity(0.7)
-
-                                // The image (user can pan/zoom to position within crop frame)
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .rotationEffect(.degrees(cropRotation))
-                                    .scaleEffect(cropScale)
-                                    .offset(cropOffset)
-                                    .gesture(
-                                        MagnificationGesture()
-                                            .onChanged { value in
-                                                let newScale = lastCropScale * value
-                                                cropScale = max(0.5, min(3.0, newScale))
-                                            }
-                                            .onEnded { _ in
-                                                lastCropScale = cropScale
-                                            }
-                                    )
-                                    .simultaneousGesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                cropOffset = CGSize(
-                                                    width: lastCropOffset.width + value.translation.width,
-                                                    height: lastCropOffset.height + value.translation.height
-                                                )
-                                            }
-                                            .onEnded { _ in
-                                                lastCropOffset = cropOffset
-                                            }
-                                    )
-
-                                // Crop frame overlay - starts at exact image dimensions
-                                CropOverlayView(
-                                    containerSize: geo.size,
-                                    displayedImageWidth: calcDisplayWidth,
-                                    displayedImageHeight: calcDisplayHeight,
-                                    cropWidth: $cropFrameWidth,
-                                    cropHeight: $cropFrameHeight
-                                )
-                            }
-                            .onAppear {
-                                // Store displayed dimensions for applyCrop
-                                displayedImageWidth = calcDisplayWidth
-                                displayedImageHeight = calcDisplayHeight
-                            }
-                            .onChange(of: geo.size) { _ in
-                                // Update if container resizes
-                                displayedImageWidth = calcDisplayWidth
-                                displayedImageHeight = calcDisplayHeight
-                            }
-                        }
-                    }
-                    .padding()
-                } else {
-                    // Normal view
-                    if let img = displayedImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding()
-                    } else {
-                        ProgressView()
-                    }
+            mainContentView
+                .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { editorToolbarContent }
+                .onAppear {
+                    baseImage = inputImage
+                    displayedImage = inputImage
+                    applyProcessing()
                 }
-                Spacer()
+                .onChange(of: brightness) { _, _ in applyProcessing() }
+                .onChange(of: contrast) { _, _ in applyProcessing() }
+                .onChange(of: saturation) { _, _ in applyProcessing() }
+                .onChange(of: sharpness) { _, _ in applyProcessing() }
+        }
+    }
 
-                VStack(spacing: 20) {
-                    if isCropping {
-                        // Crop controls with fine rotation
-                        VStack(spacing: 16) {
-                            HStack(spacing: 30) {
-                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero; cropFrameWidth = 0; cropFrameHeight = 0 }) {
-                                    VStack {
-                                        Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
-                                        Text("Reset").font(AppFonts.caption)
-                                    }
-                                }
-                                Button(action: { applyCrop() }) {
-                                    VStack {
-                                        Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
-                                        Text("Apply").font(AppFonts.caption)
-                                    }
-                                }
-                                .foregroundColor(AppColors.success)
-                                Button(action: { cancelCrop() }) {
-                                    VStack {
-                                        Image(systemName: "xmark.circle").font(.system(size: 22))
-                                        Text("Cancel").font(AppFonts.caption)
-                                    }
-                                }
-                                .foregroundColor(AppColors.error)
-                            }
-                            .foregroundColor(AppColors.textPrimary)
+    // MARK: - Extracted Views
 
-                            // Fine rotation slider (only in crop mode)
-                            VStack(spacing: 8) {
-                                Text("Rotation")
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.textSecondary)
-                                HStack {
-                                    Image(systemName: "rotate.left")
-                                        .foregroundColor(AppColors.textSecondary)
-                                    Slider(value: $cropRotation, in: -45...45, step: 0.5)
-                                        .accentColor(AppColors.primary)
-                                    Image(systemName: "rotate.right")
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                                Text("\(String(format: "%.1f", cropRotation))°")
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.textPrimary)
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding()
-                    } else if selectedTab == 0 {
-                        // Transform tab
-                        VStack(spacing: 16) {
-                            HStack(spacing: 30) {
-                                Button(action: { rotateImage() }) {
-                                    VStack {
-                                        Image(systemName: "rotate.right").font(.system(size: 22))
-                                        Text("90°").font(AppFonts.caption)
-                                    }
-                                }
-                                Button(action: { startCropping() }) {
-                                    VStack {
-                                        Image(systemName: "crop").font(.system(size: 22))
-                                        Text("Crop").font(AppFonts.caption)
-                                    }
-                                }
-                            }
-                            .foregroundColor(AppColors.textPrimary)
-                        }
-                        .padding()
-                    } else {
-                        // Adjust tab
-                        VStack(spacing: 15) {
-                            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
-                            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
-                            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
-                            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
-                        }
-                        .padding(.horizontal)
-                    }
+    private var mainContentView: some View {
+        VStack {
+            Spacer()
+            imageDisplayArea
+            Spacer()
+            controlsSection
+        }
+    }
 
-                    if !isCropping {
-                        Divider().background(AppColors.secondary)
-                        HStack {
-                            Button(action: { selectedTab = 0 }) {
-                                VStack {
-                                    Image(systemName: "crop.rotate")
-                                    Text("Transform").font(AppFonts.caption2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
+    @ViewBuilder
+    private var imageDisplayArea: some View {
+        if isCropping {
+            cropModeView.padding()
+        } else {
+            normalImageView
+        }
+    }
 
-                            Button(action: { selectedTab = 1 }) {
-                                VStack {
-                                    Image(systemName: "slider.horizontal.3")
-                                    Text("Adjust").font(AppFonts.caption2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
-                        }
-                        .padding(.top, 10)
-                    }
+    @ViewBuilder
+    private var normalImageView: some View {
+        if let img = displayedImage {
+            Image(uiImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .padding()
+        } else {
+            ProgressView()
+        }
+    }
+
+    private var cropModeView: some View {
+        GeometryReader { geo in
+            cropModeContent(geo: geo)
+        }
+    }
+
+    @ViewBuilder
+    private func cropModeContent(geo: GeometryProxy) -> some View {
+        if let img = displayedImage {
+            let dimensions = calculateDisplayDimensions(for: img, in: geo)
+            cropModeZStack(img: img, geo: geo, dimensions: dimensions)
+                .onAppear {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
                 }
-                .padding(.bottom)
-                .background(AppColors.surface)
+                .onChange(of: geo.size) {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
+                }
+        }
+    }
+
+    private func calculateDisplayDimensions(for img: UIImage, in geo: GeometryProxy) -> (width: CGFloat, height: CGFloat) {
+        let imageAspect = img.size.width / img.size.height
+        let containerAspect = geo.size.width / geo.size.height
+
+        if imageAspect > containerAspect {
+            return (geo.size.width, geo.size.width / imageAspect)
+        } else {
+            return (geo.size.height * imageAspect, geo.size.height)
+        }
+    }
+
+    private func cropModeZStack(img: UIImage, geo: GeometryProxy, dimensions: (width: CGFloat, height: CGFloat)) -> some View {
+        ZStack {
+            Color.black.opacity(0.7)
+            croppableImage(img: img)
+            CropOverlayView(
+                containerSize: geo.size,
+                displayedImageWidth: dimensions.width,
+                displayedImageHeight: dimensions.height,
+                cropWidth: $cropFrameWidth,
+                cropHeight: $cropFrameHeight
+            )
+        }
+    }
+
+    private func croppableImage(img: UIImage) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .rotationEffect(.degrees(cropRotation))
+            .scaleEffect(cropScale)
+            .offset(cropOffset)
+            .gesture(magnificationGesture)
+            .simultaneousGesture(dragGesture)
+    }
+
+    private var magnificationGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let newScale = lastCropScale * value
+                cropScale = max(0.5, min(3.0, newScale))
             }
-            .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !isCropping {
-                        Button("Cancel") { presentationMode.wrappedValue.dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if !isCropping {
-                        Button("Save") { saveImage() }
-                    }
+            .onEnded { _ in
+                lastCropScale = cropScale
+            }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                cropOffset = CGSize(
+                    width: lastCropOffset.width + value.translation.width,
+                    height: lastCropOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in
+                lastCropOffset = cropOffset
+            }
+    }
+
+    private var controlsSection: some View {
+        VStack(spacing: 20) {
+            currentControlsView
+            if !isCropping {
+                tabBarView
+            }
+        }
+        .padding(.bottom)
+        .background(AppColors.surface)
+    }
+
+    @ViewBuilder
+    private var currentControlsView: some View {
+        if isCropping {
+            cropControlsView
+        } else if selectedTab == 0 {
+            transformControlsView
+        } else {
+            adjustmentControlsView
+        }
+    }
+
+    private var cropControlsView: some View {
+        VStack(spacing: 16) {
+            cropButtonsRow
+            rotationSlider
+        }
+        .padding()
+    }
+
+    private var cropButtonsRow: some View {
+        HStack(spacing: 30) {
+            Button(action: resetCropSettings) {
+                VStack {
+                    Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
+                    Text("Reset").font(AppFonts.caption)
                 }
             }
-            .onAppear {
-                baseImage = inputImage
-                displayedImage = inputImage
-                applyProcessing()
+            Button(action: { applyCrop() }) {
+                VStack {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
+                    Text("Apply").font(AppFonts.caption)
+                }
             }
-            .onChange(of: brightness) { applyProcessing() }
-            .onChange(of: contrast) { applyProcessing() }
-            .onChange(of: saturation) { applyProcessing() }
-            .onChange(of: sharpness) { applyProcessing() }
+            .foregroundColor(AppColors.success)
+            Button(action: { cancelCrop() }) {
+                VStack {
+                    Image(systemName: "xmark.circle").font(.system(size: 22))
+                    Text("Cancel").font(AppFonts.caption)
+                }
+            }
+            .foregroundColor(AppColors.error)
+        }
+        .foregroundColor(AppColors.textPrimary)
+    }
+
+    private func resetCropSettings() {
+        cropScale = 1.0
+        cropOffset = .zero
+        cropRotation = 0
+        lastCropScale = 1.0
+        lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
+    }
+
+    private var rotationSlider: some View {
+        VStack(spacing: 8) {
+            Text("Rotation")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textSecondary)
+            HStack {
+                Image(systemName: "rotate.left")
+                    .foregroundColor(AppColors.textSecondary)
+                Slider(value: $cropRotation, in: -45...45, step: 0.5)
+                    .accentColor(AppColors.primary)
+                Image(systemName: "rotate.right")
+                    .foregroundColor(AppColors.textSecondary)
+            }
+            Text("\(String(format: "%.1f", cropRotation))°")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textPrimary)
+        }
+        .padding(.horizontal)
+    }
+
+    private var transformControlsView: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 30) {
+                Button(action: { rotateImage() }) {
+                    VStack {
+                        Image(systemName: "rotate.right").font(.system(size: 22))
+                        Text("90°").font(AppFonts.caption)
+                    }
+                }
+                Button(action: { startCropping() }) {
+                    VStack {
+                        Image(systemName: "crop").font(.system(size: 22))
+                        Text("Crop").font(AppFonts.caption)
+                    }
+                }
+            }
+            .foregroundColor(AppColors.textPrimary)
+        }
+        .padding()
+    }
+
+    private var adjustmentControlsView: some View {
+        VStack(spacing: 15) {
+            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
+            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
+            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
+            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
+        }
+        .padding(.horizontal)
+    }
+
+    private var tabBarView: some View {
+        VStack(spacing: 0) {
+            Divider().background(AppColors.secondary)
+            HStack {
+                Button(action: { selectedTab = 0 }) {
+                    VStack {
+                        Image(systemName: "crop.rotate")
+                        Text("Transform").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
+
+                Button(action: { selectedTab = 1 }) {
+                    VStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Adjust").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var editorToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if !isCropping {
+                Button("Cancel") { presentationMode.wrappedValue.dismiss() }
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            if !isCropping {
+                Button("Save") { saveImage() }
+            }
         }
     }
 
@@ -4891,7 +4955,7 @@ struct PortfoliosView: View {
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
     @State private var isGeneratingZip = false
-    @State private var zipFileURL: URL? = nil
+    @State private var zipFileURL: IdentifiableURL? = nil
     @ObservedObject var library = PhotoLibraryManager.shared
 
     // Get the most recently created portfolio, or the selected one
@@ -5088,8 +5152,8 @@ struct PortfoliosView: View {
                             .cornerRadius(12)
                             .id("stats-\(portfolio.id)")
                             .transition(.opacity)
-                            .sheet(item: $zipFileURL) { url in
-                                ShareSheet(activityItems: [url])
+                            .sheet(item: $zipFileURL) { identifiableURL in
+                                ShareSheet(activityItems: [identifiableURL.url])
                             }
 
                             // Requirements section
@@ -5184,7 +5248,7 @@ struct PortfoliosView: View {
         } message: {
             Text("Are you sure you want to delete \"\(currentPortfolio?.name ?? "")\"? This cannot be undone.")
         }
-        .onChange(of: metadataManager.portfolios) { _ in
+        .onChange(of: metadataManager.portfolios) {
             // If selected portfolio was deleted, reset to most recent
             if let id = selectedPortfolioId, metadataManager.getPortfolio(by: id) == nil {
                 selectedPortfolioId = nil
@@ -5293,7 +5357,7 @@ struct PortfoliosView: View {
                 DispatchQueue.main.async {
                     self.isGeneratingZip = false
                     if fileManager.fileExists(atPath: zipURL.path) {
-                        self.zipFileURL = zipURL
+                        self.zipFileURL = IdentifiableURL(url: zipURL)
                     }
                 }
             } catch {
@@ -6647,9 +6711,10 @@ struct AddRequirementSheet: View {
     }
 }
 
-// MARK: - URL Identifiable Extension for Sheet
-extension URL: Identifiable {
-    public var id: String { absoluteString }
+// MARK: - Identifiable URL Wrapper for Sheet
+struct IdentifiableURL: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 
 // MARK: - Share Sheet for iOS Share Interface
