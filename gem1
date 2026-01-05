@@ -4081,6 +4081,7 @@ struct PortfoliosView: View {
                                     .font(.subheadline)
                                     .foregroundColor(.white)
                                     .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
                                 Image(systemName: "chevron.down")
                                     .font(.caption)
                                     .foregroundColor(.gray)
@@ -4090,6 +4091,7 @@ struct PortfoliosView: View {
                             .background(Color(UIColor.systemGray5))
                             .cornerRadius(8)
                         }
+                        .id(currentPortfolio?.id)  // Force redraw on portfolio change
                     }
 
                     // Plus button
@@ -4394,16 +4396,20 @@ struct AddPortfolioSheet: View {
         NavigationView {
             if currentStep == 0 {
                 // Step 1: Enter portfolio name
-                Form {
-                    Section(header: Text("Portfolio Name")) {
-                        TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
-                    }
+                VStack(spacing: 0) {
+                    List {
+                        Section(header: Text("Portfolio Name")) {
+                            TextField("e.g., Fall 2024 Portfolio", text: $portfolioName)
+                                .textInputAutocapitalization(.words)
+                        }
 
-                    Section {
-                        Text("After naming your portfolio, you'll be prompted to add photo requirements.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                        Section {
+                            Text("After naming your portfolio, you'll be prompted to add photo requirements.")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
                     }
+                    .listStyle(.insetGrouped)
                 }
                 .navigationTitle("New Portfolio")
                 .navigationBarTitleDisplayMode(.inline)
