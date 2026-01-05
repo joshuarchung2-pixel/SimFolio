@@ -5918,6 +5918,7 @@ struct PortfoliosView: View {
     @State private var showPortfolioPicker = false
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showEditDueDateSheet = false
     @State private var isGeneratingZip = false
     @State private var zipFileURL: IdentifiableURL? = nil
     @ObservedObject var library = PhotoLibraryManager.shared
@@ -6135,6 +6136,61 @@ struct PortfoliosView: View {
                                 ShareSheet(activityItems: [identifiableURL.url])
                             }
 
+                            // Due Date bento card
+                            Button(action: { showEditDueDateSheet = true }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Due Date")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        if let dueDateStr = portfolio.dueDateString {
+                                            Text(dueDateStr)
+                                                .font(.title2.weight(.semibold))
+                                                .foregroundColor(AppColors.textPrimary)
+                                        } else {
+                                            Text("Tap to set")
+                                                .font(.title2.weight(.semibold))
+                                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("Status")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        if let days = portfolio.daysUntilDue {
+                                            if portfolio.isOverdue {
+                                                Text("Overdue by \(abs(days))d")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.error)
+                                            } else if days == 0 {
+                                                Text("Due Today")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.error)
+                                            } else if days == 1 {
+                                                Text("Due Tomorrow")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.warning)
+                                            } else {
+                                                Text("Due in \(days)d")
+                                                    .font(.headline)
+                                                    .foregroundColor(portfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
+                                            }
+                                        } else {
+                                            Text("No deadline")
+                                                .font(.headline)
+                                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                        }
+                                    }
+                                }
+                                .padding()
+                                .background(AppColors.surface)
+                                .cornerRadius(12)
+                            }
+                            .buttonStyle(.plain)
+
                             // Requirements section
                             VStack(alignment: .leading, spacing: 12) {
                                 // Header (stationary - no transition)
@@ -6214,6 +6270,11 @@ struct PortfoliosView: View {
         .sheet(isPresented: $showAddRequirementSheet) {
             if let portfolio = currentPortfolio {
                 AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolio.id)
+            }
+        }
+        .sheet(isPresented: $showEditDueDateSheet) {
+            if let portfolio = currentPortfolio {
+                EditDueDateSheet(isPresented: $showEditDueDateSheet, portfolio: portfolio)
             }
         }
         .alert("Delete Portfolio", isPresented: $showDeleteConfirmation) {
