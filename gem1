@@ -596,6 +596,25 @@ class MetadataManager: ObservableObject {
         }.count
     }
 
+    // Get asset IDs matching specific criteria
+    func getMatchingAssetIDs(procedure: String, stage: String, angle: String) -> [String] {
+        return assetMetadata.filter { (_, metadata) in
+            metadata.procedure == procedure &&
+            metadata.stage == stage &&
+            metadata.angle == angle
+        }.map { $0.key }
+    }
+
+    // Update a requirement in a portfolio
+    func updateRequirement(in portfolioId: String, requirement: PortfolioRequirement) {
+        if let index = portfolios.firstIndex(where: { $0.id == portfolioId }) {
+            if let reqIndex = portfolios[index].requirements.firstIndex(where: { $0.id == requirement.id }) {
+                portfolios[index].requirements[reqIndex] = requirement
+                savePortfolios()
+            }
+        }
+    }
+
     // Get total fulfilled count for a requirement
     func getFulfilledCount(for requirement: PortfolioRequirement) -> Int {
         var count = 0
@@ -4745,7 +4764,10 @@ struct RequirementStatusView: View {
     let requirement: PortfolioRequirement
     let portfolioId: String
     @ObservedObject var metadataManager = MetadataManager.shared
+    @ObservedObject var library = PhotoLibraryManager.shared
     @State private var isExpanded = false
+    @State private var showEditSheet = false
+    @State private var selectedPhotoStack: PhotoStackSelection? = nil
 
     var fulfilled: Int {
         metadataManager.getFulfilledCount(for: requirement)
@@ -4784,6 +4806,14 @@ struct RequirementStatusView: View {
 
                     Spacer()
 
+                    // Edit button
+                    Button(action: { showEditSheet = true }) {
+                        Image(systemName: "pencil.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title3)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .foregroundColor(AppColors.textSecondary)
                         .font(AppFonts.caption)
@@ -4796,7 +4826,7 @@ struct RequirementStatusView: View {
             // Expanded details
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Stage and angle breakdown
+                    // Stage and angle breakdown with thumbnails
                     ForEach(requirement.stages, id: \.self) { stage in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
@@ -4812,6 +4842,12 @@ struct RequirementStatusView: View {
                                 let count = metadataManager.getPhotoCount(for: requirement, stage: stage, angle: angle)
                                 let needed = requirement.angleCounts[angle] ?? 1
                                 let satisfied = count >= needed
+                                let assetIDs = metadataManager.getMatchingAssetIDs(
+                                    procedure: requirement.procedure,
+                                    stage: stage,
+                                    angle: angle
+                                )
+                                let matchingAssets = library.assets.filter { assetIDs.contains($0.localIdentifier) }
 
                                 HStack {
                                     Image(systemName: satisfied ? "checkmark.circle.fill" : "circle")
@@ -4822,7 +4858,7 @@ struct RequirementStatusView: View {
                                         .font(AppFonts.caption)
                                         .foregroundColor(AppColors.textPrimary.opacity(0.8))
 
-                                    Spacer()
+                                        Spacer()
 
                                     Text("\(min(count, needed))/\(needed)")
                                         .font(AppFonts.caption)
@@ -4858,6 +4894,447 @@ struct RequirementStatusView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isFulfilled ? AppColors.success.opacity(0.5) : AppColors.secondary.opacity(0.3), lineWidth: 1)
         )
+        .sheet(isPresented: $showEditSheet) {
+            EditRequirementSheet(
+                isPresented: $showEditSheet,
+                portfolioId: portfolioId,
+                requirement: requirement
+            )
+        }
+        .sheet(item: $selectedPhotoStack) { selection in
+            PhotoStackPopupView(selection: selection)
+        }
+    }
+}
+
+// MARK: - Photo Stack Selection
+struct PhotoStackSelection: Identifiable {
+    let id = UUID()
+    let procedure: String
+    let stage: String
+    let angle: String
+    let assets: [PHAsset]
+}
+
+// MARK: - Photo Stack Popup View
+struct PhotoStackPopupView: View {
+    let selection: PhotoStackSelection
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @Environment(\.presentationMode) var presentationMode
+    @State private var selectedAsset: PHAsset? = nil
+    @State private var showPhotoDetail = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Header info
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(selection.procedure)
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            HStack(spacing: 8) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: selection.stage == "Preparation" ? "wrench.fill" : "checkmark.seal.fill")
+                                        .font(.caption2)
+                                    Text(selection.stage)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(selection.stage == "Preparation" ? Color.orange.opacity(0.8) : Color.green.opacity(0.8))
+                                .cornerRadius(4)
+
+                                Text(selection.angle)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.purple.opacity(0.8))
+                                    .cornerRadius(4)
+                            }
+                        }
+                        .padding()
+
+                        // Photo grid
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 4),
+                            GridItem(.flexible(), spacing: 4),
+                            GridItem(.flexible(), spacing: 4)
+                        ], spacing: 4) {
+                            ForEach(selection.assets, id: \.localIdentifier) { asset in
+                                Button(action: {
+                                    selectedAsset = asset
+                                    showPhotoDetail = true
+                                }) {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        AssetThumbnail(asset: asset)
+                                            .aspectRatio(1, contentMode: .fill)
+                                            .clipped()
+
+                                        // Rating stars overlay
+                                        if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
+                                            HStack(spacing: 1) {
+                                                ForEach(1...rating, id: \.self) { _ in
+                                                    Image(systemName: "star.fill")
+                                                        .font(.system(size: 8))
+                                                        .foregroundColor(.yellow)
+                                                }
+                                            }
+                                            .padding(4)
+                                            .background(Color.black.opacity(0.6))
+                                            .cornerRadius(4)
+                                            .padding(4)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+            }
+            .navigationTitle("\(selection.assets.count) Photo\(selection.assets.count == 1 ? "" : "s")")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { presentationMode.wrappedValue.dismiss() }
+                }
+            }
+            .sheet(isPresented: $showPhotoDetail) {
+                if let asset = selectedAsset {
+                    PortfolioPhotoDetailView(asset: asset)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Portfolio Photo Detail View (with edit/rating)
+struct PortfolioPhotoDetailView: View {
+    let asset: PHAsset
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @Environment(\.presentationMode) var presentationMode
+    @State private var image: UIImage? = nil
+    @State private var isEditing = false
+
+    var metadata: PhotoMetadata? {
+        metadataManager.getMetadata(for: asset.localIdentifier)
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                VStack {
+                    if let img = image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        ProgressView()
+                    }
+
+                    // Metadata display
+                    if let meta = metadata {
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Top row: Procedure and Tooth
+                            HStack(spacing: 8) {
+                                if let proc = meta.procedure {
+                                    Text(proc)
+                                        .font(.caption).bold()
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.blue.opacity(0.8))
+                                        .cornerRadius(4)
+                                }
+                                if let tooth = meta.toothNumber {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "tooth")
+                                            .font(.caption2)
+                                        Text("#\(tooth)")
+                                            .font(.caption).bold()
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.8))
+                                    .cornerRadius(4)
+                                }
+                                if let date = meta.toothDate {
+                                    let formatter = DateFormatter()
+                                    let _ = formatter.dateStyle = .short
+                                    Text(formatter.string(from: date))
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+
+                            // Second row: Stage and Angle
+                            HStack(spacing: 8) {
+                                if let stage = meta.stage {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                                            .font(.caption2)
+                                        Text(stage)
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(stage == "Preparation" ? Color.orange.opacity(0.8) : Color.green.opacity(0.8))
+                                    .cornerRadius(4)
+                                }
+                                if let angle = meta.angle {
+                                    Text(angle)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.purple.opacity(0.8))
+                                        .cornerRadius(4)
+                                }
+                            }
+
+                            // Rating row
+                            HStack {
+                                Text("Rating:")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                RatingView(
+                                    rating: meta.rating ?? 0,
+                                    assetID: asset.localIdentifier,
+                                    metadataManager: metadataManager
+                                )
+                            }
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(10)
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle("Photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { presentationMode.wrappedValue.dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Edit") { isEditing = true }
+                }
+            }
+            .fullScreenCover(isPresented: $isEditing) {
+                if let img = image { PhotoEditorView(inputImage: img) }
+            }
+            .onAppear {
+                PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
+                    self.image = loadedImg
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Edit Requirement Sheet
+struct EditRequirementSheet: View {
+    @Binding var isPresented: Bool
+    let portfolioId: String
+    let requirement: PortfolioRequirement
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var selectedProcedure: String
+    @State private var selectedStages: Set<String>
+    @State private var selectedAngles: Set<String>
+    @State private var angleCounts: [String: Int]
+    @State private var showDeleteConfirmation = false
+
+    init(isPresented: Binding<Bool>, portfolioId: String, requirement: PortfolioRequirement) {
+        self._isPresented = isPresented
+        self.portfolioId = portfolioId
+        self.requirement = requirement
+        self._selectedProcedure = State(initialValue: requirement.procedure)
+        self._selectedStages = State(initialValue: Set(requirement.stages))
+        self._selectedAngles = State(initialValue: Set(requirement.angles))
+        self._angleCounts = State(initialValue: requirement.angleCounts)
+    }
+
+    var canSave: Bool {
+        !selectedProcedure.isEmpty && !selectedStages.isEmpty && !selectedAngles.isEmpty
+    }
+
+    var totalPhotos: Int {
+        var total = 0
+        for angle in selectedAngles {
+            let count = angleCounts[angle] ?? 1
+            total += selectedStages.count * count
+        }
+        return total
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                // Procedure selection
+                Section(header: Text("Procedure Type")) {
+                    Picker("Procedure", selection: $selectedProcedure) {
+                        Text("Select...").tag("")
+                        ForEach(metadataManager.procedures.filter { $0 != "Unsorted Photos" }, id: \.self) { proc in
+                            Text(proc).tag(proc)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                // Stage selection
+                Section(header: Text("Stages Required")) {
+                    ForEach(metadataManager.stages, id: \.self) { stage in
+                        Button(action: {
+                            if selectedStages.contains(stage) {
+                                selectedStages.remove(stage)
+                            } else {
+                                selectedStages.insert(stage)
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: stage == "Preparation" ? "wrench.fill" : "checkmark.seal.fill")
+                                    .foregroundColor(stage == "Preparation" ? .orange : .green)
+                                Text(stage)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if selectedStages.contains(stage) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Angle selection with per-angle counters
+                Section(header: Text("Angles Required")) {
+                    ForEach(metadataManager.angles, id: \.self) { angle in
+                        HStack {
+                            Button(action: {
+                                if selectedAngles.contains(angle) {
+                                    selectedAngles.remove(angle)
+                                    angleCounts.removeValue(forKey: angle)
+                                } else {
+                                    selectedAngles.insert(angle)
+                                    angleCounts[angle] = 1
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: angleIcon(for: angle))
+                                        .foregroundColor(.purple)
+                                        .frame(width: 20)
+                                    Text(angle)
+                                        .foregroundColor(.primary)
+                                }
+                            }
+
+                            Spacer()
+
+                            if selectedAngles.contains(angle) {
+                                HStack(spacing: 8) {
+                                    Button(action: {
+                                        let current = angleCounts[angle] ?? 1
+                                        if current > 1 {
+                                            angleCounts[angle] = current - 1
+                                        }
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(angleCounts[angle] ?? 1 > 1 ? .blue : .gray)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+
+                                    Text("\(angleCounts[angle] ?? 1)")
+                                        .font(.subheadline).bold()
+                                        .foregroundColor(.blue)
+                                        .frame(minWidth: 20)
+
+                                    Button(action: {
+                                        let current = angleCounts[angle] ?? 1
+                                        if current < 10 {
+                                            angleCounts[angle] = current + 1
+                                        }
+                                    }) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundColor(angleCounts[angle] ?? 1 < 10 ? .blue : .gray)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                }
+                            } else {
+                                Image(systemName: "circle")
+                                    .foregroundColor(.gray.opacity(0.3))
+                            }
+                        }
+                    }
+                }
+
+                // Summary
+                if canSave {
+                    Section(header: Text("Summary")) {
+                        Text("Total: \(totalPhotos) photo\(totalPhotos == 1 ? "" : "s") required")
+                            .font(.subheadline)
+                    }
+                }
+
+                // Delete section
+                Section {
+                    Button(action: { showDeleteConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Delete Requirement")
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Requirement")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let updatedRequirement = PortfolioRequirement(
+                            id: requirement.id,
+                            procedure: selectedProcedure,
+                            stages: Array(selectedStages),
+                            angles: Array(selectedAngles),
+                            angleCounts: angleCounts
+                        )
+                        metadataManager.updateRequirement(in: portfolioId, requirement: updatedRequirement)
+                        isPresented = false
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .alert("Delete Requirement", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    metadataManager.removeRequirement(from: portfolioId, requirementId: requirement.id)
+                    isPresented = false
+                }
+            } message: {
+                Text("Are you sure you want to delete this requirement?")
+            }
+        }
+    }
+
+    func angleIcon(for angle: String) -> String {
+        switch angle {
+        case "Occlusal": return "arrow.down"
+        case "Buccal/Facial": return "arrow.left"
+        case "Lingual": return "arrow.right"
+        case "Proximal": return "arrow.left.arrow.right"
+        case "Mesial": return "arrow.up.left"
+        case "Distal": return "arrow.up.right"
+        default: return "questionmark"
+        }
     }
 }
 
