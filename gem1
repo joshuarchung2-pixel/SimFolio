@@ -3812,9 +3812,9 @@ struct PhotoEditorView: View {
                         // Adjust tab
                         VStack(spacing: 15) {
                             AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
-                            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.5...1.5)
-                            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.0...2.0)
-                            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...10.0)
+                            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
+                            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
+                            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
                         }
                         .padding(.horizontal)
                     }
