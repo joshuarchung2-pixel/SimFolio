@@ -3277,6 +3277,7 @@ struct GalleryView: View {
                             }
                         }
                         .padding(.vertical, 12)
+                        .padding(.bottom, 50)
                         .background(
                             AppColors.background
                                 .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
