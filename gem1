@@ -3675,8 +3675,9 @@ struct PhotoEditorView: View {
     // Adjustable crop frame dimensions
     @State private var cropFrameWidth: CGFloat = 0
     @State private var cropFrameHeight: CGFloat = 0
-    @State private var initialCropFrameWidth: CGFloat = 0
-    @State private var initialCropFrameHeight: CGFloat = 0
+    // Track displayed image size for crop calculations
+    @State private var displayedImageWidth: CGFloat = 0
+    @State private var displayedImageHeight: CGFloat = 0
 
     private let context = CIContext()
 
@@ -3688,11 +3689,27 @@ struct PhotoEditorView: View {
                     // Crop mode view
                     GeometryReader { geo in
                         if let img = displayedImage {
+                            let imageAspect = img.size.width / img.size.height
+                            let containerAspect = geo.size.width / geo.size.height
+
+                            // Calculate actual displayed image size
+                            let calcDisplayWidth: CGFloat
+                            let calcDisplayHeight: CGFloat
+                            if imageAspect > containerAspect {
+                                // Image is wider than container - width constrained
+                                calcDisplayWidth = geo.size.width
+                                calcDisplayHeight = geo.size.width / imageAspect
+                            } else {
+                                // Image is taller than container - height constrained
+                                calcDisplayHeight = geo.size.height
+                                calcDisplayWidth = geo.size.height * imageAspect
+                            }
+
                             ZStack {
                                 // Darkened background
                                 Color.black.opacity(0.7)
 
-                                // Rotated image
+                                // The image (user can pan/zoom to position within crop frame)
                                 Image(uiImage: img)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
@@ -3702,37 +3719,44 @@ struct PhotoEditorView: View {
                                     .gesture(
                                         MagnificationGesture()
                                             .onChanged { value in
-                                                // Apply relative scale change from last scale
                                                 let newScale = lastCropScale * value
                                                 cropScale = max(0.5, min(3.0, newScale))
                                             }
                                             .onEnded { _ in
-                                                // Store the final scale for next gesture
                                                 lastCropScale = cropScale
                                             }
                                     )
                                     .simultaneousGesture(
                                         DragGesture()
                                             .onChanged { value in
-                                                // Apply relative offset from last position
                                                 cropOffset = CGSize(
                                                     width: lastCropOffset.width + value.translation.width,
                                                     height: lastCropOffset.height + value.translation.height
                                                 )
                                             }
                                             .onEnded { _ in
-                                                // Store the final offset for next gesture
                                                 lastCropOffset = cropOffset
                                             }
                                     )
 
-                                // Crop frame overlay
+                                // Crop frame overlay - starts at exact image dimensions
                                 CropOverlayView(
-                                    size: geo.size,
+                                    containerSize: geo.size,
+                                    displayedImageWidth: calcDisplayWidth,
+                                    displayedImageHeight: calcDisplayHeight,
                                     cropWidth: $cropFrameWidth,
-                                    cropHeight: $cropFrameHeight,
-                                    imageAspectRatio: img.size.width / img.size.height
+                                    cropHeight: $cropFrameHeight
                                 )
+                            }
+                            .onAppear {
+                                // Store displayed dimensions for applyCrop
+                                displayedImageWidth = calcDisplayWidth
+                                displayedImageHeight = calcDisplayHeight
+                            }
+                            .onChange(of: geo.size) { _ in
+                                // Update if container resizes
+                                displayedImageWidth = calcDisplayWidth
+                                displayedImageHeight = calcDisplayHeight
                             }
                         }
                     }
@@ -3755,7 +3779,7 @@ struct PhotoEditorView: View {
                         // Crop controls with fine rotation
                         VStack(spacing: 16) {
                             HStack(spacing: 30) {
-                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero }) {
+                                Button(action: { cropScale = 1.0; cropOffset = .zero; cropRotation = 0; lastCropScale = 1.0; lastCropOffset = .zero; cropFrameWidth = 0; cropFrameHeight = 0 }) {
                                     VStack {
                                         Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
                                         Text("Reset").font(AppFonts.caption)
@@ -3915,14 +3939,36 @@ struct PhotoEditorView: View {
             }
         }
 
-        // Apply scale crop (center crop based on scale)
-        if cropScale != 1.0 {
-            let scaleFactor = 1.0 / cropScale
-            let newWidth = processedImage.size.width * scaleFactor
-            let newHeight = processedImage.size.height * scaleFactor
-            let xOffset = (processedImage.size.width - newWidth) / 2.0
-            let yOffset = (processedImage.size.height - newHeight) / 2.0
-            let cropRect = CGRect(x: xOffset, y: yOffset, width: newWidth, height: newHeight)
+        // Apply crop based on the adjustable crop frame
+        // Only crop if the frame has been adjusted from the full image
+        if cropFrameWidth > 0 && cropFrameHeight > 0 &&
+           displayedImageWidth > 0 && displayedImageHeight > 0 {
+
+            // Calculate the ratio of crop frame to displayed image
+            let widthRatio = cropFrameWidth / displayedImageWidth
+            let heightRatio = cropFrameHeight / displayedImageHeight
+
+            // Apply to original image dimensions
+            let cropWidth = processedImage.size.width * widthRatio
+            let cropHeight = processedImage.size.height * heightRatio
+
+            // Center the crop (accounting for scale and offset)
+            let scaledImageWidth = displayedImageWidth * cropScale
+            let scaledImageHeight = displayedImageHeight * cropScale
+
+            // Calculate offset in terms of the scaled image
+            let offsetXRatio = cropOffset.width / scaledImageWidth
+            let offsetYRatio = cropOffset.height / scaledImageHeight
+
+            // Map offset to original image coordinates
+            let xOffset = (processedImage.size.width - cropWidth) / 2.0 - (offsetXRatio * processedImage.size.width)
+            let yOffset = (processedImage.size.height - cropHeight) / 2.0 - (offsetYRatio * processedImage.size.height)
+
+            // Clamp to valid bounds
+            let clampedX = max(0, min(processedImage.size.width - cropWidth, xOffset))
+            let clampedY = max(0, min(processedImage.size.height - cropHeight, yOffset))
+
+            let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
 
             if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
                 processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
@@ -3939,6 +3985,8 @@ struct PhotoEditorView: View {
         lastCropOffset = .zero
         cropFrameWidth = 0
         cropFrameHeight = 0
+        displayedImageWidth = 0
+        displayedImageHeight = 0
     }
 
     func applyProcessing() {
@@ -4013,53 +4061,50 @@ struct PhotoEditorView: View {
 
 // MARK: - Crop Overlay View
 struct CropOverlayView: View {
-    let size: CGSize
+    let containerSize: CGSize
+    let displayedImageWidth: CGFloat
+    let displayedImageHeight: CGFloat
     @Binding var cropWidth: CGFloat
     @Binding var cropHeight: CGFloat
-    let imageAspectRatio: CGFloat
 
     // Minimum crop dimensions
-    private let minCropSize: CGFloat = 80
+    private let minCropSize: CGFloat = 50
 
     var body: some View {
-        let maxWidth = size.width * 0.9
-        let maxHeight = size.height * 0.9
-
-        // Initialize dimensions on first render if not set
-        let displayWidth = cropWidth > 0 ? cropWidth : calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-        let displayHeight = cropHeight > 0 ? cropHeight : calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+        // Use exact displayed image dimensions, or current crop dimensions if already adjusted
+        let frameWidth = cropWidth > 0 ? cropWidth : displayedImageWidth
+        let frameHeight = cropHeight > 0 ? cropHeight : displayedImageHeight
 
         ZStack {
             // Transparent center (crop area)
             Rectangle()
                 .fill(Color.clear)
-                .frame(width: displayWidth, height: displayHeight)
+                .frame(width: frameWidth, height: frameHeight)
                 .overlay(
                     Rectangle()
                         .stroke(Color.white, lineWidth: 2)
                 )
                 .overlay(
-                    // Grid lines - vertical
-                    VStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - horizontal dividers
+                    VStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
                 .overlay(
-                    // Grid lines - horizontal
-                    HStack {
-                        ForEach(0..<4) { i in
-                            if i > 0 {
-                                Divider()
-                                    .background(Color.white.opacity(0.5))
-                            }
+                    // Grid lines - vertical dividers
+                    HStack(spacing: 0) {
+                        ForEach(0..<3, id: \.self) { _ in
                             Spacer()
+                            Divider()
+                                .frame(width: 1)
+                                .background(Color.white.opacity(0.5))
                         }
+                        Spacer()
                     }
                 )
 
@@ -4071,10 +4116,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4085,10 +4128,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = -value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight - value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4101,10 +4142,8 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = -value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth - value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
@@ -4115,43 +4154,24 @@ struct CropOverlayView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let deltaX = value.translation.width
-                                    let deltaY = value.translation.height
-                                    let newWidth = max(minCropSize, min(maxWidth, displayWidth + deltaX))
-                                    let newHeight = max(minCropSize, min(maxHeight, displayHeight + deltaY))
+                                    let newWidth = max(minCropSize, min(displayedImageWidth, frameWidth + value.translation.width))
+                                    let newHeight = max(minCropSize, min(displayedImageHeight, frameHeight + value.translation.height))
                                     cropWidth = newWidth
                                     cropHeight = newHeight
                                 }
                         )
                 }
             }
-            .frame(width: displayWidth, height: displayHeight)
+            .frame(width: frameWidth, height: frameHeight)
         }
         .onAppear {
-            if cropWidth == 0 || cropHeight == 0 {
-                cropWidth = calculateInitialWidth(maxWidth: maxWidth, maxHeight: maxHeight)
-                cropHeight = calculateInitialHeight(maxWidth: maxWidth, maxHeight: maxHeight)
+            // Initialize crop frame to exact image dimensions
+            if cropWidth == 0 {
+                cropWidth = displayedImageWidth
             }
-        }
-    }
-
-    private func calculateInitialWidth(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxWidth, maxHeight * imageAspectRatio)
-        }
-    }
-
-    private func calculateInitialHeight(maxWidth: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        if imageAspectRatio > 1 {
-            // Landscape image
-            return min(maxHeight, maxWidth / imageAspectRatio)
-        } else {
-            // Portrait or square image
-            return min(maxHeight, maxWidth / imageAspectRatio)
+            if cropHeight == 0 {
+                cropHeight = displayedImageHeight
+            }
         }
     }
 }
