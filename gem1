@@ -4138,7 +4138,7 @@ struct PortfoliosView: View {
                     // Expanded portfolio view
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
-                            // Header stats card
+                            // Header stats card (animated)
                             VStack(spacing: 16) {
                                 HStack {
                                     VStack(alignment: .leading) {
@@ -4201,9 +4201,12 @@ struct PortfoliosView: View {
                             .padding()
                             .background(Color(UIColor.systemGray6).opacity(0.3))
                             .cornerRadius(12)
+                            .id("stats-\(portfolio.id)")
+                            .transition(.opacity)
 
                             // Requirements section
                             VStack(alignment: .leading, spacing: 12) {
+                                // Header (stationary - no transition)
                                 HStack {
                                     Text("Requirements")
                                         .font(.headline)
@@ -4219,32 +4222,37 @@ struct PortfoliosView: View {
                                     }
                                 }
 
-                                if portfolio.requirements.isEmpty {
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "doc.text")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.gray)
-                                        Text("No requirements yet")
-                                            .font(.subheadline)
-                                            .foregroundColor(.gray)
-                                        Text("Add requirements to specify what photos you need")
-                                            .font(.caption)
-                                            .foregroundColor(.gray.opacity(0.8))
-                                            .multilineTextAlignment(.center)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 30)
-                                } else {
-                                    ForEach(portfolio.requirements) { requirement in
-                                        RequirementStatusView(
-                                            requirement: requirement,
-                                            portfolioId: portfolio.id
-                                        )
+                                // Requirements content (animated)
+                                VStack(spacing: 12) {
+                                    if portfolio.requirements.isEmpty {
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "doc.text")
+                                                .font(.system(size: 40))
+                                                .foregroundColor(.gray)
+                                            Text("No requirements yet")
+                                                .font(.subheadline)
+                                                .foregroundColor(.gray)
+                                            Text("Add requirements to specify what photos you need")
+                                                .font(.caption)
+                                                .foregroundColor(.gray.opacity(0.8))
+                                                .multilineTextAlignment(.center)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 30)
+                                    } else {
+                                        ForEach(portfolio.requirements) { requirement in
+                                            RequirementStatusView(
+                                                requirement: requirement,
+                                                portfolioId: portfolio.id
+                                            )
+                                        }
                                     }
                                 }
+                                .id("requirements-\(portfolio.id)")
+                                .transition(.opacity)
                             }
 
-                            // Delete button
+                            // Delete button (animated)
                             Button(action: { showDeleteConfirmation = true }) {
                                 HStack {
                                     Image(systemName: "trash")
@@ -4258,10 +4266,13 @@ struct PortfoliosView: View {
                                 .cornerRadius(10)
                             }
                             .padding(.top, 20)
+                            .id("delete-\(portfolio.id)")
+                            .transition(.opacity)
 
                             Spacer(minLength: 50)
                         }
                         .padding()
+                        .animation(.easeInOut(duration: 0.2), value: portfolio.id)
                     }
                 }
             }
