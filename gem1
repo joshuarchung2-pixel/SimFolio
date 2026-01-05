@@ -2864,7 +2864,7 @@ struct GalleryView: View {
                         // Current section name (centered header)
                         VStack(spacing: 2) {
                             Text(currentSectionTitle)
-                                .font(AppFonts.headline)
+                                .font(AppFonts.title2)
                                 .foregroundColor(AppColors.textPrimary)
 
                             // Breadcrumb for tooth selection
@@ -2996,12 +2996,6 @@ struct GalleryView: View {
                 if isSidebarOpen {
                     HStack(spacing: 0) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Procedures")
-                                .font(AppFonts.title3)
-                                .foregroundColor(AppColors.textPrimary)
-                                .padding(.top, 50)
-                                .padding(.horizontal)
-
                             // All Photos button
                             Button(action: {
                                 selectedProcedure = nil
@@ -3018,6 +3012,7 @@ struct GalleryView: View {
                                 .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
                                 .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                             }
+                            .padding(.top, 50)
 
                             Divider().background(AppColors.secondary)
 
@@ -3048,25 +3043,24 @@ struct GalleryView: View {
                                             }
                                         )
                                     }
-                                }
-                            }
 
-                            Divider().background(AppColors.secondary)
-
-                            // Add Folder button
-                            Button(action: {
-                                newFolderName = ""
-                                showAddFolderSheet = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "folder.badge.plus")
-                                        .foregroundColor(AppColors.success)
-                                    Text("Add Folder")
-                                        .font(AppFonts.subheadline)
-                                        .foregroundColor(AppColors.textPrimary)
-                                    Spacer()
+                                    // Add Procedure Folder button
+                                    Button(action: {
+                                        newFolderName = ""
+                                        showAddFolderSheet = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "folder.badge.plus")
+                                                .foregroundColor(AppColors.success)
+                                            Text("Add Procedure Folder")
+                                                .font(AppFonts.subheadline)
+                                                .foregroundColor(AppColors.textPrimary)
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 10)
+                                    }
                                 }
-                                .padding()
                             }
 
                             Spacer()
@@ -4543,13 +4537,7 @@ struct PortfoliosView: View {
             VStack(spacing: 0) {
                 // Custom header bar
                 HStack {
-                    Text("Portfolios")
-                        .font(.title2).bold()
-                        .foregroundColor(AppColors.textPrimary)
-
-                    Spacer()
-
-                    // Portfolio dropdown selector (only show if portfolios exist)
+                    // Portfolio dropdown selector acting as header
                     if !metadataManager.portfolios.isEmpty {
                         Menu {
                             ForEach(metadataManager.portfolios) { portfolio in
@@ -4565,23 +4553,24 @@ struct PortfoliosView: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 6) {
-                                Text(currentPortfolio?.name ?? "Select")
-                                    .font(.subheadline)
-                                    .foregroundColor(AppColors.textPrimary)
+                            HStack(spacing: 8) {
+                                Text(currentPortfolio?.name ?? "Select Portfolio")
+                                    .font(.title2).bold()
+                                    .foregroundColor(.white)
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
                                 Image(systemName: "chevron.down")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.textSecondary)
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(AppColors.surface)
-                            .cornerRadius(8)
                         }
                         .id(currentPortfolio?.id)  // Force redraw on portfolio change
+                    } else {
+                        Text("Portfolios")
+                            .font(.title2).bold()
+                            .foregroundColor(.white)
                     }
+
+                    Spacer()
 
                     // Plus button
                     Button(action: { showAddPortfolioSheet = true }) {
