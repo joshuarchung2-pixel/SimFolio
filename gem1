@@ -2193,9 +2193,19 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Check if all fields are complete
+    var hasAllFieldsComplete: Bool {
+        metadata.procedure != nil &&
+        metadata.toothNumber != nil &&
+        metadata.stage != nil &&
+        metadata.angle != nil
+    }
+
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
-        if hasIncompleteFields {
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.8)
+        } else if hasIncompleteFields && metadata.procedure == nil {
             return Color.red.opacity(0.8)
         } else if isDropdownOpen {
             return Color.blue
@@ -2205,15 +2215,33 @@ struct PhotoInfoPillView: View {
     }
 
     var pillStrokeWidth: CGFloat {
-        hasIncompleteFields ? 1.5 : 1
+        if hasAllFieldsComplete {
+            return 1.5
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return 1.5
+        } else {
+            return 1
+        }
     }
 
     var pillGlowColor: Color {
-        hasIncompleteFields ? Color.red.opacity(0.4) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.4)
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return Color.red.opacity(0.4)
+        } else {
+            return Color.clear
+        }
     }
 
     var pillGlowColorOuter: Color {
-        hasIncompleteFields ? Color.red.opacity(0.2) : Color.clear
+        if hasAllFieldsComplete {
+            return Color.green.opacity(0.2)
+        } else if hasIncompleteFields && metadata.procedure == nil {
+            return Color.red.opacity(0.2)
+        } else {
+            return Color.clear
+        }
     }
 
     var body: some View {
@@ -2225,7 +2253,7 @@ struct PhotoInfoPillView: View {
                     if metadata.procedure == nil {
                         Text("Choose procedure")
                             .font(AppFonts.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(Color.red)
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
@@ -2265,7 +2293,7 @@ struct PhotoInfoPillView: View {
 
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
                         .font(AppFonts.caption2)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(Color.black.opacity(0.6))
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
