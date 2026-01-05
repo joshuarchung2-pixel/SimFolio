@@ -4543,13 +4543,7 @@ struct PortfoliosView: View {
             VStack(spacing: 0) {
                 // Custom header bar
                 HStack {
-                    Text("Portfolios")
-                        .font(.title2).bold()
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    // Portfolio dropdown selector (only show if portfolios exist)
+                    // Portfolio dropdown selector acting as header
                     if !metadataManager.portfolios.isEmpty {
                         Menu {
                             ForEach(metadataManager.portfolios) { portfolio in
@@ -4565,23 +4559,24 @@ struct PortfoliosView: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 6) {
-                                Text(currentPortfolio?.name ?? "Select")
-                                    .font(.subheadline)
+                            HStack(spacing: 8) {
+                                Text(currentPortfolio?.name ?? "Select Portfolio")
+                                    .font(.title2).bold()
                                     .foregroundColor(.white)
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
                                 Image(systemName: "chevron.down")
-                                    .font(.caption)
+                                    .font(.subheadline)
                                     .foregroundColor(.gray)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color(UIColor.systemGray5))
-                            .cornerRadius(8)
                         }
                         .id(currentPortfolio?.id)  // Force redraw on portfolio change
+                    } else {
+                        Text("Portfolios")
+                            .font(.title2).bold()
+                            .foregroundColor(.white)
                     }
+
+                    Spacer()
 
                     // Plus button
                     Button(action: { showAddPortfolioSheet = true }) {
