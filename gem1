@@ -2435,7 +2435,7 @@ struct DentalCameraSetupView: View {
                                         if ghostImage != nil { ghostImage = nil }
                                         else { isGhostPickerPresented = true }
                                     }) {
-                                        Image(systemName: ghostImage != nil ? "xmark.square" : "square.on.square.dashed")
+                                        Image(systemName: ghostImage != nil ? "ghost.fill" : "ghost")
                                             .font(.title2).padding(10)
                                             .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(ghostImage != nil ? .yellow : .white)
                                     }
@@ -2488,11 +2488,12 @@ struct DentalCameraSetupView: View {
                 } else {
                     // CAPTURE MODE
                     ZStack {
+                        // Ghost Opacity Slider (positioned above shutter button)
                         if ghostImage != nil {
-                            VStack {
-                                Slider(value: $ghostOpacity, in: 0.1...0.8).accentColor(.blue).frame(width: 200)
-                                Spacer().frame(height: 180)
-                            }
+                            Slider(value: $ghostOpacity, in: 0.1...0.8)
+                                .accentColor(.blue)
+                                .frame(width: 200)
+                                .padding(.bottom, 230)
                         }
 
                         // Shutter Button (Center)
