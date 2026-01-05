@@ -248,18 +248,21 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(selectedTab == 0 && !showCameraLoading ? 1 : 0)
                 .zIndex(selectedTab == 0 ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: selectedTab)
 
             // Portfolios view
             PortfoliosView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(selectedTab == 1 ? 1 : 0)
                 .zIndex(selectedTab == 1 ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: selectedTab)
 
             // Gallery view
             GalleryView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(selectedTab == 2 ? 1 : 0)
                 .zIndex(selectedTab == 2 ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: selectedTab)
 
             // Camera loading view
             if showCameraLoading {
