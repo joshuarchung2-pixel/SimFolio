@@ -5844,7 +5844,7 @@ struct CustomGhostPicker: View {
                         Button(action: { library.requestImage(for: asset) { image in self.selectedImage = image; presentationMode.wrappedValue.dismiss() } }) { AssetThumbnail(asset: asset).frame(height: 120).clipped() }
                     }
                 }
-            }.navigationTitle("Select Ghost Reference").toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } } }.onAppear { library.fetchAssets() }
+            }.navigationTitle("Select Ghost Reference").navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { presentationMode.wrappedValue.dismiss() } } }.onAppear { library.fetchAssets() }
         }
     }
 }
