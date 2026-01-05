@@ -335,6 +335,33 @@ struct Portfolio: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - GALLERY NAVIGATION STATE
+class GalleryNavigationState: ObservableObject {
+    static let shared = GalleryNavigationState()
+
+    @Published var pendingProcedure: String? = nil
+    @Published var pendingToothNumber: Int? = nil
+    @Published var pendingToothDate: Date? = nil
+    @Published var pendingHighlightPhotoId: String? = nil
+    @Published var navigatedFromCamera: Bool = false
+
+    func setNavigation(procedure: String?, toothNumber: Int?, toothDate: Date?, photoId: String?) {
+        pendingProcedure = procedure
+        pendingToothNumber = toothNumber
+        pendingToothDate = toothDate
+        pendingHighlightPhotoId = photoId
+        navigatedFromCamera = true
+    }
+
+    func clearNavigation() {
+        pendingProcedure = nil
+        pendingToothNumber = nil
+        pendingToothDate = nil
+        pendingHighlightPhotoId = nil
+        navigatedFromCamera = false
+    }
+}
+
 // MARK: - METADATA MANAGER (PERSISTENCE)
 class MetadataManager: ObservableObject {
     static let shared = MetadataManager()
@@ -1380,13 +1407,16 @@ struct DentalCameraSetupView: View {
                         HStack {
                             // Last Photo Preview (bottom-left)
                             if let lastPhoto = lastSavedPhoto {
-                                NavigationLink(destination: GalleryView(
-                                    initialProcedure: lastSavedMetadata?.procedure,
-                                    initialToothNumber: lastSavedMetadata?.toothNumber,
-                                    initialToothDate: lastSavedMetadata?.toothDate,
-                                    highlightPhotoId: lastSavedPhotoId,
-                                    navigatedFromCamera: true
-                                )) {
+                                Button(action: {
+                                    // Set navigation state and switch to gallery tab
+                                    GalleryNavigationState.shared.setNavigation(
+                                        procedure: lastSavedMetadata?.procedure,
+                                        toothNumber: lastSavedMetadata?.toothNumber,
+                                        toothDate: lastSavedMetadata?.toothDate,
+                                        photoId: lastSavedPhotoId
+                                    )
+                                    selectedTab = 1
+                                }) {
                                     Image(uiImage: lastPhoto)
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
@@ -2342,17 +2372,11 @@ struct PhotoInfoPillView: View {
 struct GalleryView: View {
     @StateObject private var library = PhotoLibraryManager.shared
     @ObservedObject var metadataManager = MetadataManager.shared
+    @ObservedObject var galleryNavState = GalleryNavigationState.shared
     @State private var isSidebarOpen = false
     @State private var selectedProcedure: String? = nil
     @State private var selectedTooth: ToothEntry? = nil
     @State private var expandedAngleStack: String? = nil
-
-    // Optional initial selection (for navigation from camera)
-    var initialProcedure: String? = nil
-    var initialToothNumber: Int? = nil
-    var initialToothDate: Date? = nil
-    var highlightPhotoId: String? = nil
-    var navigatedFromCamera: Bool = false
 
     // State for photo highlight animation
     @State private var showPhotoHighlight = false
@@ -2701,39 +2725,43 @@ struct GalleryView: View {
                 }
             }
             .navigationBarHidden(true)
-            .navigationBarBackButtonHidden(navigatedFromCamera)
             .onAppear {
                 library.fetchAssets()
-                // Apply initial selection if provided (from camera navigation)
-                if let proc = initialProcedure {
-                    selectedProcedure = proc
-                    if let toothNum = initialToothNumber, let toothDate = initialToothDate {
-                        // Find matching tooth entry
-                        let entries = metadataManager.getToothEntries(for: proc)
-                        selectedTooth = entries.first { entry in
-                            entry.toothNumber == toothNum &&
-                            Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                // Apply navigation from camera via shared state
+                if galleryNavState.navigatedFromCamera {
+                    if let proc = galleryNavState.pendingProcedure {
+                        selectedProcedure = proc
+                        if let toothNum = galleryNavState.pendingToothNumber,
+                           let toothDate = galleryNavState.pendingToothDate {
+                            // Find matching tooth entry
+                            let entries = metadataManager.getToothEntries(for: proc)
+                            selectedTooth = entries.first { entry in
+                                entry.toothNumber == toothNum &&
+                                Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                            }
                         }
                     }
-                }
-                // Trigger photo highlight animation if navigated from camera
-                if let photoId = highlightPhotoId {
-                    highlightedPhotoId = photoId
-                    showPhotoHighlight = true
+                    // Trigger photo highlight animation
+                    if let photoId = galleryNavState.pendingHighlightPhotoId {
+                        highlightedPhotoId = photoId
+                        showPhotoHighlight = true
 
-                    // Auto-expand the angle group containing the highlighted photo
-                    if let metadata = metadataManager.getMetadata(for: photoId),
-                       let stage = metadata.stage,
-                       let angle = metadata.angle {
-                        expandedAngleStack = "\(stage)-\(angle)"
-                    }
+                        // Auto-expand the angle group containing the highlighted photo
+                        if let metadata = metadataManager.getMetadata(for: photoId),
+                           let stage = metadata.stage,
+                           let angle = metadata.angle {
+                            expandedAngleStack = "\(stage)-\(angle)"
+                        }
 
-                    // Remove highlight after 1 second
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            showPhotoHighlight = false
+                        // Remove highlight after 1 second
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                showPhotoHighlight = false
+                            }
                         }
                     }
+                    // Clear navigation state after applying
+                    galleryNavState.clearNavigation()
                 }
             }
             // Add Folder Sheet
