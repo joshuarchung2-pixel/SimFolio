@@ -2864,7 +2864,7 @@ struct GalleryView: View {
                         // Current section name (centered header)
                         VStack(spacing: 2) {
                             Text(currentSectionTitle)
-                                .font(AppFonts.headline)
+                                .font(AppFonts.title2)
                                 .foregroundColor(AppColors.textPrimary)
 
                             // Breadcrumb for tooth selection
@@ -2996,12 +2996,6 @@ struct GalleryView: View {
                 if isSidebarOpen {
                     HStack(spacing: 0) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Procedures")
-                                .font(AppFonts.title3)
-                                .foregroundColor(AppColors.textPrimary)
-                                .padding(.top, 50)
-                                .padding(.horizontal)
-
                             // All Photos button
                             Button(action: {
                                 selectedProcedure = nil
@@ -3018,6 +3012,7 @@ struct GalleryView: View {
                                 .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
                                 .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                             }
+                            .padding(.top, 50)
 
                             Divider().background(AppColors.secondary)
 
