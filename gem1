@@ -3800,8 +3800,9 @@ struct GalleryView: View {
                 // Edge swipe gesture overlay (left edge for opening, below header)
                 if !isSidebarOpen {
                     VStack(spacing: 0) {
-                        // Spacer for header height (approx 60pt) - disable hit testing so sidebar button works
-                        Color.clear.frame(height: 60)
+                        // Spacer for full header height (60pt top padding + 40pt button + 16pt bottom padding = 116pt)
+                        // Using 120pt to ensure sidebar toggle button is not blocked by gesture overlay
+                        Color.clear.frame(height: 120)
                             .allowsHitTesting(false)
 
                         HStack {
