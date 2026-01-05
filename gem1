@@ -2987,7 +2987,9 @@ struct GalleryView: View {
                         }
                         .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
                     }
-                    .padding(16)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 60)
+                    .padding(.bottom, 16)
                     .background(AppColors.background)
                     .zIndex(20)
 
@@ -4918,7 +4920,13 @@ struct PortfoliosView: View {
             VStack(spacing: 0) {
                 // Custom header bar
                 HStack {
-                    // Portfolio dropdown selector acting as header
+                    Text("Portfolios")
+                        .font(AppFonts.largeTitle)
+                        .foregroundColor(AppColors.textPrimary)
+
+                    Spacer()
+
+                    // Portfolio dropdown selector (only show if portfolios exist)
                     if !metadataManager.portfolios.isEmpty {
                         Menu {
                             ForEach(metadataManager.portfolios) { portfolio in
