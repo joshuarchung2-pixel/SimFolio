@@ -1085,7 +1085,7 @@ struct ToothEntry: Codable, Hashable, Identifiable {
     }
 }
 
-struct PhotoMetadata: Codable {
+struct PhotoMetadata: Codable, Equatable {
     var procedure: String?
     var toothNumber: Int?
     var toothDate: Date?
