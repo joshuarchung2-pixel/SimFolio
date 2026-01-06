@@ -742,7 +742,6 @@ struct NavBarItem: View {
                 Text(label)
                     .font(AppFonts.caption2)
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .rotationEffect(iconRotation)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
