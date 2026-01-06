@@ -202,6 +202,10 @@ class NotificationManager: ObservableObject {
         guard notificationsEnabled, permissionGranted else { return }
         guard let dueDate = portfolio.dueDate else { return }
 
+        // Don't schedule notifications for past-due portfolios
+        let now = Date()
+        guard dueDate > now else { return }
+
         // Check if portfolio has outstanding requirements
         let stats = MetadataManager.shared.getPortfolioStats(portfolio)
         guard stats.fulfilled < stats.total else { return }
@@ -210,12 +214,11 @@ class NotificationManager: ObservableObject {
         let calendar = Calendar.current
         guard let notificationDate = calendar.date(byAdding: .day, value: -daysBefore, to: dueDate) else { return }
 
-        // Don't schedule if notification date is in the past
-        let now = Date()
-        if notificationDate < now && dueDate > now {
+        // Schedule based on whether notification date has passed
+        if notificationDate < now {
             // Due date is still in future but notification date passed - schedule for today
             scheduleImmediateNotification(for: portfolio, dueDate: dueDate)
-        } else if notificationDate >= now {
+        } else {
             scheduleTimedNotification(for: portfolio, dueDate: dueDate, notificationDate: notificationDate)
         }
     }
@@ -563,7 +566,7 @@ struct DueDateBadge: View {
     let portfolio: Portfolio
 
     var body: some View {
-        if let dueDate = portfolio.dueDate {
+        if portfolio.dueDate != nil {
             let days = portfolio.daysUntilDue ?? 0
             let isOverdue = portfolio.isOverdue
             let isDueSoon = portfolio.isDueSoon
@@ -698,7 +701,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10) // 10pt padding between nav bar top edge and highlight area
+        .padding(.top, 4) // Reduced padding to align with thumbnail bottom spacing
         .padding(.bottom, 0) // Minimal bottom padding - safe area handled by background extension
         .background(
             AppColors.surface
@@ -2315,7 +2318,7 @@ struct DentalCameraSetupView: View {
                 let isLandscapeLeft = orientationManager.deviceOrientation == .landscapeLeft
                 let isLandscapeRight = orientationManager.deviceOrientation == .landscapeRight
 
-                // Blank fields warning popup
+                // Blank fields warning popup - positioned just below the photo info pill
                 if showBlankFieldsWarning {
                     VStack(spacing: 12) {
                         Text("All fields required")
@@ -2357,90 +2360,93 @@ struct DentalCameraSetupView: View {
                     ))
                     .zIndex(10)
                     .position(
-                        x: isLandscapeLeft ? geometry.size.width - 80 :
-                           isLandscapeRight ? 80 :
+                        x: isLandscapeLeft ? geometry.size.width - 310 :
+                           isLandscapeRight ? 310 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 80
+                        y: isLandscape ? geometry.size.height / 2 : 120
                     )
                 }
 
-                // TOP CENTER: Photo Info Pill (tag selector dropdown)
-                if cameraService.capturedImage == nil {
+                // TOP CENTER: Photo Info Pill (tag selector dropdown) - always visible
+                VStack {
                     PhotoInfoPillView(
                         metadata: $currentMetadata,
                         isDropdownOpen: $isInfoPillOpen
                     )
-                    .position(
-                        x: isLandscapeLeft ? geometry.size.width - 180 :
-                           isLandscapeRight ? 180 :
-                           geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 60
-                    )
-                    .zIndex(5)
+                    Spacer(minLength: 0)
                 }
+                .frame(height: isLandscape ? 600 : 500, alignment: .top)
+                .rotationEffect(orientationManager.iconRotationAngle)
+                .position(
+                    x: isLandscapeLeft ? geometry.size.width - 310 :
+                       isLandscapeRight ? 310 :
+                       geometry.size.width / 2,
+                    y: isLandscape ? geometry.size.height / 2 : 310
+                )
+                .zIndex(5)
 
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
-                    VStack(alignment: .trailing, spacing: 10) {
-                        Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
-                            Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
-                                .font(.title2)
-                                .rotationEffect(orientationManager.iconRotationAngle)
-                                .padding(10)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                                .foregroundColor(.white)
-                        }
-
-                        if isOptionsExpanded {
-                            // Flash Toggle
-                            Button(action: {
-                                switch cameraService.flashMode {
-                                case .off: cameraService.flashMode = .on
-                                case .on: cameraService.flashMode = .auto
-                                default: cameraService.flashMode = .off
-                                }
-                            }) {
-                                Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Grid Toggle
-                            Button(action: { showGrid.toggle() }) {
-                                Image(systemName: showGrid ? "square" : "grid")
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Ghost Toggle
-                            Button(action: {
-                                if ghostImage != nil { ghostImage = nil }
-                                else { isGhostPickerPresented = true }
-                            }) {
-                                Text("👻")
+                    VStack {
+                        VStack(alignment: .trailing, spacing: 10) {
+                            Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
+                                Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
                                     .font(.title2)
                                     .rotationEffect(orientationManager.iconRotationAngle)
                                     .padding(10)
                                     .background(Color.black.opacity(0.6))
                                     .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
-                                    )
+                                    .foregroundColor(.white)
                             }
-                            .transition(.move(edge: .top).combined(with: .opacity))
+
+                            if isOptionsExpanded {
+                                // Flash Toggle (on/off only)
+                                Button(action: {
+                                    cameraService.flashMode = cameraService.flashMode == .off ? .on : .off
+                                }) {
+                                    Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : "bolt.fill")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Grid Toggle
+                                Button(action: { showGrid.toggle() }) {
+                                    Image(systemName: showGrid ? "square" : "grid")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Ghost Toggle
+                                Button(action: {
+                                    if ghostImage != nil { ghostImage = nil }
+                                    else { isGhostPickerPresented = true }
+                                }) {
+                                    Text("👻")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                        )
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
+                    .frame(height: 250)
                     .position(
                         x: geometry.size.width - 40,
-                        y: 100
+                        y: 185
                     )
                 }
 
@@ -2467,6 +2473,7 @@ struct DentalCameraSetupView: View {
                             .rotationEffect(orientationManager.iconRotationAngle)
 
                             Button(action: {
+                                showBlankFieldsWarning = false
                                 isPhotoFading = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                     cameraService.retake()
@@ -2483,6 +2490,7 @@ struct DentalCameraSetupView: View {
                             // Horizontal layout for portrait
                             HStack(alignment: .center, spacing: 50) {
                                 Button(action: {
+                                    showBlankFieldsWarning = false
                                     isPhotoFading = true
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                         cameraService.retake()
@@ -2531,76 +2539,81 @@ struct DentalCameraSetupView: View {
                                 .padding(.bottom, 20)
                         }
 
-                        // Shutter Button (Center)
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { showShutterEffect = false }
-                            }
-                            cameraService.takePhoto()
-                        }) {
-                            ZStack {
-                                Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
-                                Circle().fill(Color.white).frame(width: 62, height: 62)
-                            }
-                        }
-                        .padding(.bottom, 20)
-
-                        // Bottom row: Photo Preview (left) and Flip Camera (right)
-                        HStack {
-                            // Last Photo Preview (bottom-left)
-                            if let lastPhoto = lastSavedPhoto {
-                                Button(action: {
-                                    // Set navigation state and switch to gallery tab
-                                    GalleryNavigationState.shared.setNavigation(
-                                        procedure: lastSavedMetadata?.procedure,
-                                        toothNumber: lastSavedMetadata?.toothNumber,
-                                        toothDate: lastSavedMetadata?.toothDate,
-                                        photoId: lastSavedPhotoId
-                                    )
-                                    selectedTab = 2
-                                }) {
-                                    Image(uiImage: lastPhoto)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .rotationEffect(orientationManager.iconRotationAngle)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                        // Bottom row with shutter, thumbnail, and flip camera aligned at bottom
+                        ZStack(alignment: .bottom) {
+                            // Photo Preview (left) and Flip Camera (right)
+                            HStack {
+                                // Last Photo Preview (bottom-left)
+                                if let lastPhoto = lastSavedPhoto {
+                                    Button(action: {
+                                        // Set navigation state and switch to gallery tab
+                                        GalleryNavigationState.shared.setNavigation(
+                                            procedure: lastSavedMetadata?.procedure,
+                                            toothNumber: lastSavedMetadata?.toothNumber,
+                                            toothDate: lastSavedMetadata?.toothDate,
+                                            photoId: lastSavedPhotoId
                                         )
-                                        .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
-                                        .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
-                                        .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
-                                }
-                                .padding(.leading, 20)
-                            } else {
-                                // Placeholder when no photo saved yet
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 50, height: 50)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .foregroundColor(.gray)
+                                        selectedTab = 2
+                                    }) {
+                                        Image(uiImage: lastPhoto)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
                                             .rotationEffect(orientationManager.iconRotationAngle)
-                                    )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                                            )
+                                            .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
+                                            .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
+                                            .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
+                                    }
                                     .padding(.leading, 20)
+                                } else {
+                                    // Placeholder when no photo saved yet
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 50, height: 50)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray)
+                                                .rotationEffect(orientationManager.iconRotationAngle)
+                                        )
+                                        .padding(.leading, 20)
+                                }
+
+                                Spacer()
+
+                                // Flip Camera Button (bottom-right) - matches thumbnail size
+                                Button(action: { cameraService.flipCamera() }) {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                        .font(.system(size: 22))
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .foregroundColor(.white)
+                                        .frame(width: 50, height: 50)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .padding(.trailing, 20)
                             }
 
-                            Spacer()
-
-                            // Flip Camera Button (bottom-right) - matches thumbnail size
-                            Button(action: { cameraService.flipCamera() }) {
-                                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                    .font(.system(size: 22))
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 50)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(Circle())
+                            // Shutter Button (Center) - bottom aligned with thumbnail and flip camera
+                            Button(action: {
+                                cameraService.takePhoto()
+                                // Flash effect after photo capture starts
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        withAnimation { showShutterEffect = false }
+                                    }
+                                }
+                            }) {
+                                ZStack {
+                                    Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
+                                    Circle().fill(Color.white).frame(width: 62, height: 62)
+                                }
                             }
-                            .padding(.trailing, 20)
                         }
                         .padding(.bottom, 90)
                     }
@@ -2923,6 +2936,14 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Check if all fields are empty
+    var hasAllFieldsEmpty: Bool {
+        metadata.procedure == nil &&
+        metadata.toothNumber == nil &&
+        metadata.stage == nil &&
+        metadata.angle == nil
+    }
+
     // Check if all fields are complete
     var hasAllFieldsComplete: Bool {
         metadata.procedure != nil &&
@@ -2931,41 +2952,33 @@ struct PhotoInfoPillView: View {
         metadata.angle != nil
     }
 
-    // Check if some fields are filled (procedure set but not all complete)
+    // Check if some fields are filled (at least one set but not all complete)
     var hasSomeFieldsFilled: Bool {
-        metadata.procedure != nil && !hasAllFieldsComplete
+        !hasAllFieldsEmpty && !hasAllFieldsComplete
     }
 
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
         if hasAllFieldsComplete {
-            return Color.green.opacity(0.8)
+            return Color.green
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.8)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.8)
+            return Color.orange
         } else {
-            return Color.white.opacity(0.3)
+            return Color.red
         }
     }
 
     var pillStrokeWidth: CGFloat {
-        if hasAllFieldsComplete || hasSomeFieldsFilled || metadata.procedure == nil {
-            return 1.5
-        } else {
-            return 1
-        }
+        return 2
     }
 
     var pillGlowColor: Color {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.4)
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.4)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.4)
+            return Color.orange.opacity(0.4)
         } else {
-            return Color.clear
+            return Color.red.opacity(0.4)
         }
     }
 
@@ -2973,11 +2986,20 @@ struct PhotoInfoPillView: View {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.2)
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.2)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.2)
+            return Color.orange.opacity(0.2)
         } else {
-            return Color.clear
+            return Color.red.opacity(0.2)
+        }
+    }
+
+    // Dropdown outline color follows same schema
+    var dropdownStrokeColor: Color {
+        if hasAllFieldsComplete {
+            return Color.green
+        } else if hasSomeFieldsFilled {
+            return Color.orange
+        } else {
+            return Color.red
         }
     }
 
@@ -3064,11 +3086,11 @@ struct PhotoInfoPillView: View {
             bottomButtonsView
         }
         .frame(width: 340)
-        .background(AppColors.surface.opacity(0.98))
+        .background(Color.white.opacity(0.9))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(AppColors.secondary.opacity(0.3), lineWidth: 1)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .onAppear { updateCurrentStage() }
     }
@@ -4026,7 +4048,6 @@ struct GalleryView: View {
     private var mainZStackContent: some View {
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
-                headerView
                 scrollContentView
             }
             .offset(x: isSidebarOpen ? 250 : 0)
@@ -4050,7 +4071,7 @@ struct GalleryView: View {
         NavigationView {
             mainZStackContent
             .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -4398,26 +4419,18 @@ struct MoveSelectToothView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle(procedure)
         .navigationBarTitleDisplayMode(.inline)
-        .background(
-            NavigationLink(
-                destination: Group {
-                    if let tooth = createdToothEntry {
-                        MoveSelectStageView(
-                            selectedAssetIds: selectedAssetIds,
-                            metadataManager: metadataManager,
-                            procedure: procedure,
-                            toothEntry: tooth,
-                            isPresented: $isPresented,
-                            onComplete: onComplete
-                        )
-                    }
-                },
-                isActive: $navigateToStage
-            ) {
-                EmptyView()
+        .navigationDestination(isPresented: $navigateToStage) {
+            if let tooth = createdToothEntry {
+                MoveSelectStageView(
+                    selectedAssetIds: selectedAssetIds,
+                    metadataManager: metadataManager,
+                    procedure: procedure,
+                    toothEntry: tooth,
+                    isPresented: $isPresented,
+                    onComplete: onComplete
+                )
             }
-            .hidden()
-        )
+        }
         .sheet(isPresented: $showNewToothSheet) {
             NavigationView {
                 Form {
@@ -4977,7 +4990,6 @@ struct ExpandedAngleView: View {
                 let itemPadding: CGFloat = 8
                 let ratingHeight: CGFloat = 20
                 let itemHeight: CGFloat = 120
-                let totalItemHeight = itemHeight + ratingHeight + itemPadding * 2
                 let itemCount = assets.count
                 let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
                 let horizontalPadding: CGFloat = 16
@@ -6445,11 +6457,12 @@ struct PortfoliosView: View {
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
+            .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    if !metadataManager.portfolios.isEmpty, let portfolio = currentPortfolio {
+                    if metadataManager.portfolios.count > 1, let portfolio = currentPortfolio {
                         Menu {
                             ForEach(metadataManager.portfolios) { p in
                                 Button(action: {
@@ -6467,24 +6480,9 @@ struct PortfoliosView: View {
                                 }
                             }
                         } label: {
-                            HStack(alignment: .center, spacing: 6) {
-                                Text(portfolio.name)
-                                    .font(.headline)
-                                    .foregroundColor(AppColors.textPrimary)
-                                    .lineLimit(2)
-                                    .truncationMode(.tail)
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                            .frame(maxWidth: 200, alignment: .leading)
+                            Image(systemName: "folder.fill.badge.gearshape")
+                                .foregroundColor(AppColors.primary)
                         }
-                    } else {
-                        Text("Portfolios")
-                            .font(.headline)
-                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -7333,14 +7331,16 @@ struct RequirementStatusView: View {
 
                     Spacer()
 
-                    // Edit button
-                    Button(action: { showEditSheet = true }) {
-                        Image(systemName: "pencil.circle.fill")
-                            .foregroundColor(.blue)
-                            .font(.title3)
+                    // Edit button - only shown when expanded
+                    if isExpanded {
+                        Button(action: { showEditSheet = true }) {
+                            Image(systemName: "pencil.circle")
+                                .foregroundColor(.gray)
+                                .font(.title3)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .padding(.trailing, 12)
                     }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .padding(.trailing, 12)
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .foregroundColor(AppColors.textSecondary)
@@ -7368,8 +7368,7 @@ struct RequirementStatusView: View {
                                     .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                                     .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(AppFonts.nexaRegular(12))
-                                    .fontWeight(.bold)
+                                    .font(AppFonts.nexaBold(14))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
