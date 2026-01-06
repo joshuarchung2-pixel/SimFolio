@@ -3089,7 +3089,7 @@ struct PhotoInfoPillView: View {
                     ))
             }
         }
-        .clipped()
+        .frame(width: 340) // Fixed width to prevent horizontal shift when dropdown appears
     }
 
     var dropdownContent: some View {
