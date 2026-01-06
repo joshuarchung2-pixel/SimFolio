@@ -566,7 +566,7 @@ struct DueDateBadge: View {
     let portfolio: Portfolio
 
     var body: some View {
-        if let dueDate = portfolio.dueDate {
+        if portfolio.dueDate != nil {
             let days = portfolio.daysUntilDue ?? 0
             let isOverdue = portfolio.isOverdue
             let isDueSoon = portfolio.isDueSoon
@@ -4411,26 +4411,18 @@ struct MoveSelectToothView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle(procedure)
         .navigationBarTitleDisplayMode(.inline)
-        .background(
-            NavigationLink(
-                destination: Group {
-                    if let tooth = createdToothEntry {
-                        MoveSelectStageView(
-                            selectedAssetIds: selectedAssetIds,
-                            metadataManager: metadataManager,
-                            procedure: procedure,
-                            toothEntry: tooth,
-                            isPresented: $isPresented,
-                            onComplete: onComplete
-                        )
-                    }
-                },
-                isActive: $navigateToStage
-            ) {
-                EmptyView()
+        .navigationDestination(isPresented: $navigateToStage) {
+            if let tooth = createdToothEntry {
+                MoveSelectStageView(
+                    selectedAssetIds: selectedAssetIds,
+                    metadataManager: metadataManager,
+                    procedure: procedure,
+                    toothEntry: tooth,
+                    isPresented: $isPresented,
+                    onComplete: onComplete
+                )
             }
-            .hidden()
-        )
+        }
         .sheet(isPresented: $showNewToothSheet) {
             NavigationView {
                 Form {
@@ -4990,7 +4982,7 @@ struct ExpandedAngleView: View {
                 let itemPadding: CGFloat = 8
                 let ratingHeight: CGFloat = 20
                 let itemHeight: CGFloat = 120
-                let totalItemHeight = itemHeight + ratingHeight + itemPadding * 2
+                _ = itemHeight + ratingHeight + itemPadding * 2  // Suppressed: calculated but not currently used
                 let itemCount = assets.count
                 let totalSpacing = spacing * CGFloat(max(0, itemCount - 1))
                 let horizontalPadding: CGFloat = 16
