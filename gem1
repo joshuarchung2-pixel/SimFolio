@@ -669,7 +669,6 @@ struct CustomIconButtonStyle: ButtonStyle {
 // MARK: - CUSTOM BOTTOM NAVIGATION BAR
 struct CustomBottomNavBar: View {
     @Binding var selectedTab: Int
-    @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var orientationManager = OrientationManager.shared
 
     // Only rotate icons when on camera tab (tab 0)
@@ -2329,56 +2328,54 @@ struct DentalCameraSetupView: View {
                 let isLandscapeLeft = orientationManager.deviceOrientation == .landscapeLeft
                 let isLandscapeRight = orientationManager.deviceOrientation == .landscapeRight
 
-                        // Blank fields warning popup
-                        if showBlankFieldsWarning {
-                            VStack(spacing: 12) {
-                                Text("All fields required")
-                                    .font(AppFonts.subheadline)
-                                    .foregroundColor(AppColors.textPrimary)
+                // Blank fields warning popup
+                if showBlankFieldsWarning {
+                    VStack(spacing: 12) {
+                        Text("All fields required")
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textPrimary)
 
-                                Text("Please fill in all tags before saving")
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.textSecondary)
+                        Text("Please fill in all tags before saving")
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.textSecondary)
 
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        showBlankFieldsWarning = false
-                                        isInfoPillOpen = true
-                                    }
-                                }) {
-                                    Text("Add tags")
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(AppColors.primary)
-                                        .cornerRadius(8)
-                                }
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showBlankFieldsWarning = false
+                                isInfoPillOpen = true
                             }
+                        }) {
+                            Text("Add tags")
+                                .font(AppFonts.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(AppColors.primary)
+                                .cornerRadius(8)
                         }
-                        .rotationEffect(orientationManager.iconRotationAngle)
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(AppColors.surface.opacity(0.95))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(AppColors.warning.opacity(0.5), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
-                            removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
-                        ))
                     }
+                    .rotationEffect(orientationManager.iconRotationAngle)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(AppColors.surface.opacity(0.95))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.warning.opacity(0.5), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
+                        removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                    ))
+                    .zIndex(10)
+                    .position(
+                        x: isLandscapeLeft ? geometry.size.width - 80 :
+                           isLandscapeRight ? 80 :
+                           geometry.size.width / 2,
+                        y: isLandscape ? geometry.size.height / 2 : 80
+                    )
                 }
-                .zIndex(10)
-                .position(
-                    x: isLandscapeLeft ? geometry.size.width - 80 :
-                       isLandscapeRight ? 80 :
-                       geometry.size.width / 2,
-                    y: isLandscape ? geometry.size.height / 2 : 80
-                )
 
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
@@ -2636,11 +2633,11 @@ struct DentalCameraSetupView: View {
                 Color.black.ignoresSafeArea().zIndex(20)
             }
         }
-            .ignoresSafeArea()
-            .sheet(isPresented: $isGhostPickerPresented) {
-                CustomGhostPicker(selectedImage: $ghostImage)
-            }
-            .navigationBarHidden(true)
+        .ignoresSafeArea()
+        .sheet(isPresented: $isGhostPickerPresented) {
+            CustomGhostPicker(selectedImage: $ghostImage)
+        }
+        .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
