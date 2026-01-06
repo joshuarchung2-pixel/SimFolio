@@ -6176,6 +6176,9 @@ struct PortfoliosView: View {
     @State private var displayedTotal: Int = 0
     @State private var contentOpacity: Double = 1.0
 
+    // Scroll offset for header animation
+    @State private var scrollOffset: CGFloat = 0
+
     // Get the most recently created portfolio, or the selected one
     var currentPortfolio: Portfolio? {
         if let id = selectedPortfolioId {
@@ -6500,6 +6503,15 @@ struct PortfoliosView: View {
     private func portfolioContentView(portfolio: Portfolio) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // Invisible view for scroll offset tracking
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: -geometry.frame(in: .named("portfolioScrollView")).origin.y
+                    )
+                }
+                .frame(height: 0)
+
                 statsCardView(portfolio: portfolio)
                 dueDateCardView(portfolio: portfolio)
                 requirementsSectionView(portfolio: portfolio)
@@ -6510,56 +6522,96 @@ struct PortfoliosView: View {
             .padding(.top, 20)
             .padding(.bottom, 120)
         }
+        .coordinateSpace(name: "portfolioScrollView")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            scrollOffset = value
+        }
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            HStack(spacing: 12) {
-                Menu {
-                    ForEach(metadataManager.portfolios) { p in
-                        Button(action: {
-                            if p.id != currentPortfolio?.id {
-                                selectedPortfolioId = p.id
-                                animatePortfolioChange()
-                            }
-                        }) {
-                            HStack {
-                                Text(p.name)
-                                if p.id == currentPortfolio?.id {
-                                    Image(systemName: "checkmark")
+    // Calculate header animation progress (0 = at top/expanded, 1 = scrolled/collapsed)
+    private var headerProgress: CGFloat {
+        let threshold: CGFloat = 50
+        return min(1, max(0, scrollOffset / threshold))
+    }
+
+    // Interpolated font size for the title
+    private var headerTitleSize: CGFloat {
+        let largeSize: CGFloat = 34
+        let smallSize: CGFloat = 17
+        return largeSize - (largeSize - smallSize) * headerProgress
+    }
+
+    private var customHeaderView: some View {
+        VStack(spacing: 0) {
+            // Top toolbar row with title and buttons in-line
+            HStack(alignment: .center) {
+                // Large title (visible when at top, fades when scrolled)
+                Text(currentPortfolio?.name ?? "Portfolios")
+                    .font(AppFonts.nexaBold(headerTitleSize))
+                    .foregroundColor(AppColors.textPrimary)
+                    .opacity(1 - headerProgress)
+
+                Spacer()
+
+                // Inline title (visible when scrolled)
+                Text(currentPortfolio?.name ?? "Portfolios")
+                    .font(AppFonts.nexaBold(17))
+                    .foregroundColor(AppColors.textPrimary)
+                    .opacity(headerProgress)
+                    .frame(maxWidth: headerProgress > 0 ? .infinity : 0)
+
+                Spacer()
+
+                // Toolbar buttons
+                HStack(spacing: 12) {
+                    Menu {
+                        ForEach(metadataManager.portfolios) { p in
+                            Button(action: {
+                                if p.id != currentPortfolio?.id {
+                                    selectedPortfolioId = p.id
+                                    animatePortfolioChange()
+                                }
+                            }) {
+                                HStack {
+                                    Text(p.name)
+                                    if p.id == currentPortfolio?.id {
+                                        Image(systemName: "checkmark")
+                                    }
                                 }
                             }
                         }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppColors.primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle()
+                                    .stroke(Color(white: 0.85), lineWidth: 1)
+                            )
                     }
-                } label: {
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .stroke(Color(white: 0.85), lineWidth: 1)
-                        )
-                }
-                Button(action: { showAddPortfolioSheet = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .stroke(Color(white: 0.85), lineWidth: 1)
-                        )
+                    Button(action: { showAddPortfolioSheet = true }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppColors.primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle()
+                                    .stroke(Color(white: 0.85), lineWidth: 1)
+                            )
+                    }
                 }
             }
-            .id("portfolio-toolbar-\(currentPortfolio?.id ?? "none")")
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
+        .background(AppColors.background)
     }
 
     var body: some View {
         NavigationView {
-            ZStack {
+            ZStack(alignment: .top) {
                 AppColors.background
                     .ignoresSafeArea()
 
@@ -6567,14 +6619,16 @@ struct PortfoliosView: View {
                     emptyStateView
                 } else if let portfolio = currentPortfolio {
                     portfolioContentView(portfolio: portfolio)
+                        .padding(.top, 50) // Space for custom header
+                }
+
+                // Custom header overlay
+                VStack {
+                    customHeaderView
+                    Spacer()
                 }
             }
-            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                toolbarContent
-            }
+            .navigationBarHidden(true)
             .tint(AppColors.primary)
         }
         .navigationViewStyle(StackNavigationViewStyle())
