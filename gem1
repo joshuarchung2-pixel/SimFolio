@@ -2545,14 +2545,16 @@ struct DentalCameraSetupView: View {
                         y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
                     )
                 } else {
-                    // CAPTURE MODE
-                    ZStack {
+                    // CAPTURE MODE - Bottom controls
+                    VStack {
+                        Spacer()
+
                         // Ghost Opacity Slider (positioned above shutter button)
                         if ghostImage != nil {
                             Slider(value: $ghostOpacity, in: 0.1...0.8)
                                 .accentColor(.blue)
                                 .frame(width: 200)
-                                .padding(.bottom, 230)
+                                .padding(.bottom, 20)
                         }
 
                         // Shutter Button (Center)
@@ -2568,7 +2570,7 @@ struct DentalCameraSetupView: View {
                                 Circle().fill(Color.white).frame(width: 62, height: 62)
                             }
                         }
-                        .padding(.bottom, 100)
+                        .padding(.bottom, 20)
 
                         // Bottom row: Photo Preview (left) and Flip Camera (right)
                         HStack {
@@ -2626,8 +2628,9 @@ struct DentalCameraSetupView: View {
                             }
                             .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 76) // Positioned to maintain 10pt gap to nav bar top (matching nav bar top padding)
+                        .padding(.bottom, 90)
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
             .zIndex(2)
