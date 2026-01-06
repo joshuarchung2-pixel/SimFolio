@@ -6495,7 +6495,7 @@ struct PortfoliosView: View {
                         )
                 }
             }
-            .id("portfolio-toolbar-\(currentPortfolio?.id.uuidString ?? "none")")
+            .id("portfolio-toolbar-\(currentPortfolio?.id ?? "none")")
         }
     }
 
