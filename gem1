@@ -6514,6 +6514,11 @@ struct PortfoliosView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Text(currentPortfolio?.name ?? "Portfolios")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(AppColors.textPrimary)
+        }
         ToolbarItem(placement: .navigationBarTrailing) {
             HStack(spacing: 12) {
                 Menu {
@@ -6569,8 +6574,7 @@ struct PortfoliosView: View {
                     portfolioContentView(portfolio: portfolio)
                 }
             }
-            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 toolbarContent
