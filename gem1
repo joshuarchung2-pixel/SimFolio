@@ -3881,7 +3881,7 @@ struct GalleryView: View {
     }
 
     private var headerGradientOverlay: some View {
-        VStack {
+        VStack(spacing: 0) {
             LinearGradient(
                 gradient: Gradient(stops: [
                     .init(color: Color.white, location: 0.0),
@@ -3891,10 +3891,12 @@ struct GalleryView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .frame(maxWidth: .infinity)
             .frame(height: 120)
             .opacity(headerGradientOpacity)
             Spacer()
         }
+        .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
     }
 
@@ -4074,10 +4076,11 @@ struct GalleryView: View {
     }
 
     private var mainZStackContent: some View {
-        ZStack(alignment: .leading) {
+        ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 scrollContentView
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .offset(x: isSidebarOpen ? 250 : 0)
 
             // White gradient glow behind header (fades in on scroll)
