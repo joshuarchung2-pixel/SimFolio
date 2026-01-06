@@ -6409,11 +6409,12 @@ struct PortfoliosView: View {
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
+            .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if !metadataManager.portfolios.isEmpty, let portfolio = currentPortfolio {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if metadataManager.portfolios.count > 1, let portfolio = currentPortfolio {
                         Menu {
                             ForEach(metadataManager.portfolios) { p in
                                 Button(action: {
@@ -6428,19 +6429,9 @@ struct PortfoliosView: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 6) {
-                                Text(portfolio.name)
-                                    .font(.headline)
-                                    .foregroundColor(AppColors.textPrimary)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
+                            Image(systemName: "folder.fill.badge.gearshape")
+                                .foregroundColor(AppColors.primary)
                         }
-                    } else {
-                        Text("Portfolios")
-                            .font(.headline)
-                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
