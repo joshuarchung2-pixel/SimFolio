@@ -17,54 +17,41 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 // MARK: - CUSTOM FONT SYSTEM
-// Typography using Inter for headings, Geist for body/subheadings
+// Typography using Nexa font family exclusively
+// Bold for titles, Regular for headings, Light for body
 struct AppFonts {
-    // Inter - Headings (requires Inter font to be added to app bundle)
-    static func interBold(_ size: CGFloat) -> Font {
-        .custom("Inter-Bold", size: size, relativeTo: .headline)
+    // Nexa - Bold (for titles and prominent text)
+    static func nexaBold(_ size: CGFloat) -> Font {
+        .custom("Nexa-Bold", size: size, relativeTo: .headline)
     }
 
-    static func interSemiBold(_ size: CGFloat) -> Font {
-        .custom("Inter-SemiBold", size: size, relativeTo: .headline)
+    // Nexa - Regular (for headings)
+    static func nexaRegular(_ size: CGFloat) -> Font {
+        .custom("Nexa-Regular", size: size, relativeTo: .headline)
     }
 
-    static func interMedium(_ size: CGFloat) -> Font {
-        .custom("Inter-Medium", size: size, relativeTo: .headline)
-    }
-
-    static func interRegular(_ size: CGFloat) -> Font {
-        .custom("Inter-Regular", size: size, relativeTo: .body)
-    }
-
-    // Geist - Body/Subheadings (requires Geist font to be added to app bundle)
-    static func geistBold(_ size: CGFloat) -> Font {
-        .custom("Geist-Bold", size: size, relativeTo: .body)
-    }
-
-    static func geistSemiBold(_ size: CGFloat) -> Font {
-        .custom("Geist-SemiBold", size: size, relativeTo: .body)
-    }
-
-    static func geistMedium(_ size: CGFloat) -> Font {
-        .custom("Geist-Medium", size: size, relativeTo: .body)
-    }
-
-    static func geistRegular(_ size: CGFloat) -> Font {
-        .custom("Geist-Regular", size: size, relativeTo: .body)
+    // Nexa - Light (for body text)
+    static func nexaLight(_ size: CGFloat) -> Font {
+        .custom("Nexa-Light", size: size, relativeTo: .body)
     }
 
     // Semantic typography styles
-    static var largeTitle: Font { interBold(34) }
-    static var title: Font { interBold(28) }
-    static var title2: Font { interSemiBold(22) }
-    static var title3: Font { interSemiBold(20) }
-    static var headline: Font { interSemiBold(17) }
-    static var subheadline: Font { geistMedium(15) }
-    static var body: Font { geistRegular(17) }
-    static var callout: Font { geistRegular(16) }
-    static var footnote: Font { geistRegular(13) }
-    static var caption: Font { geistMedium(12) }
-    static var caption2: Font { geistRegular(11) }
+    // Titles use Bold
+    static var largeTitle: Font { nexaBold(34) }
+    static var title: Font { nexaBold(28) }
+    static var title2: Font { nexaBold(22) }
+    static var title3: Font { nexaBold(20) }
+
+    // Headings use Regular
+    static var headline: Font { nexaRegular(17) }
+    static var subheadline: Font { nexaRegular(15) }
+
+    // Body text uses Light
+    static var body: Font { nexaLight(17) }
+    static var callout: Font { nexaLight(16) }
+    static var footnote: Font { nexaLight(13) }
+    static var caption: Font { nexaLight(12) }
+    static var caption2: Font { nexaLight(11) }
 }
 
 // MARK: - CUSTOM UI COMPONENTS
@@ -2805,7 +2792,7 @@ struct ZoomDialView: View {
         VStack(spacing: 4) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(AppFonts.interSemiBold(14))
+                .font(AppFonts.nexaRegular(14))
                 .foregroundColor(.yellow)
 
             // Horizontal strip with tick marks
@@ -2828,7 +2815,7 @@ struct ZoomDialView: View {
                             if isMainTick {
                                 let zoomValue = Int(displayMin) + (i / 10)
                                 Text("\(zoomValue)")
-                                    .font(AppFonts.geistMedium(8))
+                                    .font(AppFonts.nexaLight(8))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                         }
@@ -3004,7 +2991,7 @@ struct PhotoInfoPillView: View {
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
-                            .font(AppFonts.geistSemiBold(11))
+                            .font(AppFonts.nexaRegular(11))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(AppColors.primary.opacity(0.8))
@@ -3012,7 +2999,7 @@ struct PhotoInfoPillView: View {
 
                         if let tooth = metadata.toothNumber {
                             Text("#\(tooth)")
-                                .font(AppFonts.geistSemiBold(11))
+                                .font(AppFonts.nexaRegular(11))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
                                 .background(AppColors.success.opacity(0.8))
@@ -3100,10 +3087,10 @@ struct PhotoInfoPillView: View {
         }) {
             VStack(spacing: 4) {
                 Text(stageName(for: stage))
-                    .font(AppFonts.geistSemiBold(11))
+                    .font(AppFonts.nexaRegular(11))
                     .foregroundColor(currentStage == stage ? AppColors.textPrimary : AppColors.textSecondary)
                 Text(stageValue(for: stage))
-                    .font(AppFonts.geistRegular(9))
+                    .font(AppFonts.nexaLight(9))
                     .foregroundColor(stageColor(for: stage))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -3692,11 +3679,11 @@ struct GalleryView: View {
                         VStack(spacing: 2) {
                             if isSelectMode {
                                 Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                                    .font(AppFonts.interBold(22))
+                                    .font(AppFonts.nexaBold(22))
                                     .foregroundColor(AppColors.primary)
                             } else {
                                 Text(currentSectionTitle)
-                                    .font(AppFonts.interBold(22))
+                                    .font(AppFonts.nexaBold(22))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
@@ -4729,7 +4716,7 @@ struct ToothSubfolderRow: View {
                     .font(AppFonts.caption)
                     .foregroundColor(AppColors.success)
                 Text("#\(entry.toothNumber)")
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textPrimary)
                 Text(entry.dateString)
                     .font(AppFonts.caption2)
@@ -4894,7 +4881,7 @@ struct AngleStackView: View {
 
                 HStack {
                     Text(angle)
-                        .font(AppFonts.geistSemiBold(11))
+                        .font(AppFonts.nexaRegular(11))
                         .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(assets.count)")
@@ -4943,7 +4930,7 @@ struct ExpandedAngleView: View {
             // Header showing angle name
             HStack {
                 Text(angle)
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
                 Text("\(assets.count) photos")
@@ -5106,7 +5093,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let proc = metadata.procedure {
                         Text(proc)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -5115,7 +5102,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let tooth = metadata.toothNumber {
                         Text("#\(tooth)")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5129,7 +5116,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let stage = metadata.stage {
                         Text(stage == "Preparation" ? "Prep" : "Resto")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5138,7 +5125,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5178,7 +5165,7 @@ struct PhotoDetailView: View {
                             // Procedure badge (blue)
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -5188,7 +5175,7 @@ struct PhotoDetailView: View {
                             // Tooth badge (green)
                             if let tooth = meta.toothNumber {
                                 Text("#\(tooth)")
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
@@ -6655,7 +6642,7 @@ struct PortfolioCardView: View {
                         .foregroundColor(AppColors.textSecondary)
                     Spacer()
                     Text(String(format: "%.0f%%", completionPercentage))
-                        .font(AppFonts.geistSemiBold(12))
+                        .font(AppFonts.nexaRegular(12))
                         .foregroundColor(isComplete ? AppColors.success : AppColors.primary)
                 }
 
@@ -6937,7 +6924,7 @@ struct PortfolioDetailView: View {
                                     .font(AppFonts.subheadline)
                                     .foregroundColor(AppColors.textSecondary)
                                 Text(String(format: "%.0f%%", completionPercentage))
-                                    .font(AppFonts.interBold(36))
+                                    .font(AppFonts.nexaBold(36))
                                     .foregroundColor(completionPercentage >= 100 ? AppColors.success : AppColors.primary)
                             }
 
@@ -7246,7 +7233,7 @@ struct RequirementStatusView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(requirement.procedure)
-                            .font(AppFonts.geistSemiBold(15))
+                            .font(AppFonts.nexaRegular(15))
                             .foregroundColor(AppColors.textPrimary)
                         Text("\(fulfilled)/\(total) photos")
                             .font(AppFonts.caption)
@@ -7284,7 +7271,7 @@ struct RequirementStatusView: View {
                                     .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                                     .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(AppFonts.geistSemiBold(12))
+                                    .font(AppFonts.nexaRegular(12))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
