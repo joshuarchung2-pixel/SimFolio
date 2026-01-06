@@ -3079,14 +3079,11 @@ struct PhotoInfoPillView: View {
             .foregroundColor(.primary)
             .zIndex(1) // Keep pill above dropdown
 
-            // Dropdown content - drops down from pill
+            // Dropdown content - fades in below pill
             if isDropdownOpen {
                 dropdownContent
                     .padding(.top, 8)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
+                    .transition(.opacity.animation(.easeInOut(duration: 0.15)))
             }
         }
         .frame(width: 340) // Fixed width to prevent horizontal shift when dropdown appears
