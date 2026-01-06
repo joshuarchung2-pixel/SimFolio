@@ -3885,26 +3885,6 @@ struct GalleryView: View {
         return min(1, max(0, Double(scrollOffset / threshold)))
     }
 
-    private var headerGradientOverlay: some View {
-        VStack(spacing: 0) {
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.white, location: 0.0),
-                    .init(color: Color.white, location: 0.5),
-                    .init(color: Color.white.opacity(0), location: 1.0)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(maxWidth: .infinity)
-            .frame(height: 120)
-            .opacity(headerGradientOpacity)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .allowsHitTesting(false)
-    }
-
     private var sidebarView: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
@@ -4088,10 +4068,6 @@ struct GalleryView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .offset(x: isSidebarOpen ? 250 : 0)
 
-            // White gradient glow behind header (fades in on scroll)
-            headerGradientOverlay
-                .offset(x: isSidebarOpen ? 250 : 0)
-
             if !isSidebarOpen {
                 edgeSwipeOverlay
             }
@@ -4104,6 +4080,22 @@ struct GalleryView: View {
             if isSelectMode && !selectedAssetIds.isEmpty {
                 bottomActionBar
             }
+        }
+        .overlay(alignment: .top) {
+            // White gradient glow behind header (fades in on scroll)
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white, location: 0.0),
+                    .init(color: Color.white, location: 0.5),
+                    .init(color: Color.white.opacity(0), location: 1.0)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 120)
+            .opacity(headerGradientOpacity)
+            .allowsHitTesting(false)
+            .offset(x: isSidebarOpen ? 250 : 0)
         }
     }
 
