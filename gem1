@@ -3627,9 +3627,6 @@ struct GalleryView: View {
     // Header visibility state
     @State private var showHeaderElements = true
 
-    // Scroll offset for header animation
-    @State private var scrollOffset: CGFloat = 0
-
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3701,97 +3698,39 @@ struct GalleryView: View {
 
     // MARK: - Extracted Sub-Views
 
-    // Calculate header animation progress (0 = at top/expanded, 1 = scrolled/collapsed)
-    private var headerProgress: CGFloat {
-        let threshold: CGFloat = 50
-        return min(1, max(0, scrollOffset / threshold))
-    }
-
-    // Interpolated font size for the title
-    private var headerTitleSize: CGFloat {
-        let largeSize: CGFloat = 34
-        let smallSize: CGFloat = 17
-        return largeSize - (largeSize - smallSize) * headerProgress
-    }
-
-    private var customHeaderView: some View {
-        VStack(spacing: 0) {
-            // Top toolbar row with buttons
-            HStack {
-                Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppColors.primary)
-                }
-                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: .clear))
-
-                Spacer()
-
-                // Inline title (visible when scrolled)
-                if isSelectMode {
-                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                        .font(AppFonts.nexaBold(17))
-                        .foregroundColor(AppColors.primary)
-                        .opacity(headerProgress)
-                } else {
-                    Text(currentSectionTitle)
-                        .font(AppFonts.nexaBold(17))
-                        .foregroundColor(AppColors.textPrimary)
-                        .opacity(headerProgress)
-                }
-
-                Spacer()
-
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isSelectMode.toggle()
-                        if !isSelectMode {
-                            selectedAssetIds.removeAll()
-                        }
-                    }
-                }) {
-                    Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppColors.primary)
-                }
-                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-
-            // Large title row (visible when at top, fades when scrolled)
-            HStack {
-                if isSelectMode {
-                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                        .font(AppFonts.nexaBold(headerTitleSize))
-                        .foregroundColor(AppColors.primary)
-                } else {
-                    Text(currentSectionTitle)
-                        .font(AppFonts.nexaBold(headerTitleSize))
-                        .foregroundColor(AppColors.textPrimary)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
-            .opacity(1 - headerProgress)
-            .frame(height: 44 * (1 - headerProgress), alignment: .top)
-            .clipped()
         }
-        .background(
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.white, location: 0.0),
-                    .init(color: Color.white, location: 0.6),
-                    .init(color: Color.white.opacity(0), location: 1.0)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .offset(x: isSidebarOpen ? 250 : 0)
-        .animation(.easeInOut(duration: 0.25), value: isSidebarOpen)
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSelectMode.toggle()
+                    if !isSelectMode {
+                        selectedAssetIds.removeAll()
+                    }
+                }
+            }) {
+                Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
+            }
+        }
     }
 
     @ViewBuilder
@@ -3866,15 +3805,6 @@ struct GalleryView: View {
     private var scrollContentView: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Invisible view for scroll offset tracking
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: ScrollOffsetPreferenceKey.self,
-                        value: -geometry.frame(in: .named("scrollView")).origin.y
-                    )
-                }
-                .frame(height: 0)
-
                 if selectedTooth != nil {
                     ForEach(["Preparation", "Restoration"], id: \.self) { stage in
                         let angleGroups = assetsByAngle(for: stage)
@@ -3924,11 +3854,7 @@ struct GalleryView: View {
                     .padding(.bottom, 120)
                 }
             }
-            .padding(.top, 100) // Increased to account for larger header
-        }
-        .coordinateSpace(name: "scrollView")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-            scrollOffset = value
+            .padding(.top, 20)
         }
     }
 
@@ -4114,12 +4040,6 @@ struct GalleryView: View {
             }
             .offset(x: isSidebarOpen ? 250 : 0)
 
-            // Custom header overlay with fading background
-            VStack {
-                customHeaderView
-                Spacer()
-            }
-
             if !isSidebarOpen {
                 edgeSwipeOverlay
             }
@@ -4135,10 +4055,24 @@ struct GalleryView: View {
         }
     }
 
+    // Dynamic navigation title based on mode
+    private var navigationTitle: String {
+        if isSelectMode {
+            return selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected"
+        } else {
+            return currentSectionTitle
+        }
+    }
+
     var body: some View {
         NavigationView {
             mainZStackContent
-            .navigationBarHidden(true)
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                toolbarContent
+            }
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
