@@ -17,54 +17,41 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 // MARK: - CUSTOM FONT SYSTEM
-// Typography using Inter for headings, Geist for body/subheadings
+// Typography using Nexa font family exclusively
+// Bold for titles, Regular for headings, Light for body
 struct AppFonts {
-    // Inter - Headings (requires Inter font to be added to app bundle)
-    static func interBold(_ size: CGFloat) -> Font {
-        .custom("Inter-Bold", size: size, relativeTo: .headline)
+    // Nexa - Bold (for titles and prominent text)
+    static func nexaBold(_ size: CGFloat) -> Font {
+        .custom("Nexa-Bold", size: size, relativeTo: .headline)
     }
 
-    static func interSemiBold(_ size: CGFloat) -> Font {
-        .custom("Inter-SemiBold", size: size, relativeTo: .headline)
+    // Nexa - Regular (for headings)
+    static func nexaRegular(_ size: CGFloat) -> Font {
+        .custom("Nexa-Regular", size: size, relativeTo: .headline)
     }
 
-    static func interMedium(_ size: CGFloat) -> Font {
-        .custom("Inter-Medium", size: size, relativeTo: .headline)
-    }
-
-    static func interRegular(_ size: CGFloat) -> Font {
-        .custom("Inter-Regular", size: size, relativeTo: .body)
-    }
-
-    // Geist - Body/Subheadings (requires Geist font to be added to app bundle)
-    static func geistBold(_ size: CGFloat) -> Font {
-        .custom("Geist-Bold", size: size, relativeTo: .body)
-    }
-
-    static func geistSemiBold(_ size: CGFloat) -> Font {
-        .custom("Geist-SemiBold", size: size, relativeTo: .body)
-    }
-
-    static func geistMedium(_ size: CGFloat) -> Font {
-        .custom("Geist-Medium", size: size, relativeTo: .body)
-    }
-
-    static func geistRegular(_ size: CGFloat) -> Font {
-        .custom("Geist-Regular", size: size, relativeTo: .body)
+    // Nexa - Light (for body text)
+    static func nexaLight(_ size: CGFloat) -> Font {
+        .custom("Nexa-Light", size: size, relativeTo: .body)
     }
 
     // Semantic typography styles
-    static var largeTitle: Font { interBold(34) }
-    static var title: Font { interBold(28) }
-    static var title2: Font { interSemiBold(22) }
-    static var title3: Font { interSemiBold(20) }
-    static var headline: Font { interSemiBold(17) }
-    static var subheadline: Font { geistMedium(15) }
-    static var body: Font { geistRegular(17) }
-    static var callout: Font { geistRegular(16) }
-    static var footnote: Font { geistRegular(13) }
-    static var caption: Font { geistMedium(12) }
-    static var caption2: Font { geistRegular(11) }
+    // Titles use Bold
+    static var largeTitle: Font { nexaBold(34) }
+    static var title: Font { nexaBold(28) }
+    static var title2: Font { nexaBold(22) }
+    static var title3: Font { nexaBold(20) }
+
+    // Headings use Regular
+    static var headline: Font { nexaRegular(17) }
+    static var subheadline: Font { nexaRegular(15) }
+
+    // Body text uses Light
+    static var body: Font { nexaLight(17) }
+    static var callout: Font { nexaLight(16) }
+    static var footnote: Font { nexaLight(13) }
+    static var caption: Font { nexaLight(12) }
+    static var caption2: Font { nexaLight(11) }
 }
 
 // MARK: - CUSTOM UI COMPONENTS
@@ -1072,7 +1059,7 @@ struct ToothEntry: Codable, Hashable, Identifiable {
     }
 }
 
-struct PhotoMetadata: Codable {
+struct PhotoMetadata: Codable, Equatable {
     var procedure: String?
     var toothNumber: Int?
     var toothDate: Date?
@@ -2379,81 +2366,89 @@ struct DentalCameraSetupView: View {
 
                 // TOP CENTER: Photo Info Pill (tag selector dropdown)
                 if cameraService.capturedImage == nil {
-                    PhotoInfoPillView(
-                        metadata: $currentMetadata,
-                        isDropdownOpen: $isInfoPillOpen
-                    )
+                    VStack {
+                        PhotoInfoPillView(
+                            metadata: $currentMetadata,
+                            isDropdownOpen: $isInfoPillOpen
+                        )
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: 500)
                     .position(
                         x: isLandscapeLeft ? geometry.size.width - 180 :
                            isLandscapeRight ? 180 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 60
+                        y: isLandscape ? geometry.size.height / 2 : 310
                     )
                     .zIndex(5)
                 }
 
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
-                    VStack(alignment: .trailing, spacing: 10) {
-                        Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
-                            Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
-                                .font(.title2)
-                                .rotationEffect(orientationManager.iconRotationAngle)
-                                .padding(10)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                                .foregroundColor(.white)
-                        }
-
-                        if isOptionsExpanded {
-                            // Flash Toggle
-                            Button(action: {
-                                switch cameraService.flashMode {
-                                case .off: cameraService.flashMode = .on
-                                case .on: cameraService.flashMode = .auto
-                                default: cameraService.flashMode = .off
-                                }
-                            }) {
-                                Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Grid Toggle
-                            Button(action: { showGrid.toggle() }) {
-                                Image(systemName: showGrid ? "square" : "grid")
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Ghost Toggle
-                            Button(action: {
-                                if ghostImage != nil { ghostImage = nil }
-                                else { isGhostPickerPresented = true }
-                            }) {
-                                Text("👻")
+                    VStack {
+                        VStack(alignment: .trailing, spacing: 10) {
+                            Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
+                                Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
                                     .font(.title2)
                                     .rotationEffect(orientationManager.iconRotationAngle)
                                     .padding(10)
                                     .background(Color.black.opacity(0.6))
                                     .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
-                                    )
+                                    .foregroundColor(.white)
                             }
-                            .transition(.move(edge: .top).combined(with: .opacity))
+
+                            if isOptionsExpanded {
+                                // Flash Toggle
+                                Button(action: {
+                                    switch cameraService.flashMode {
+                                    case .off: cameraService.flashMode = .on
+                                    case .on: cameraService.flashMode = .auto
+                                    default: cameraService.flashMode = .off
+                                    }
+                                }) {
+                                    Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Grid Toggle
+                                Button(action: { showGrid.toggle() }) {
+                                    Image(systemName: showGrid ? "square" : "grid")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Ghost Toggle
+                                Button(action: {
+                                    if ghostImage != nil { ghostImage = nil }
+                                    else { isGhostPickerPresented = true }
+                                }) {
+                                    Text("👻")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                        )
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
+                    .frame(height: 250)
                     .position(
                         x: geometry.size.width - 40,
-                        y: 100
+                        y: 185
                     )
                 }
 
@@ -2532,89 +2527,94 @@ struct DentalCameraSetupView: View {
                         y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
                     )
                 } else {
-                    // CAPTURE MODE
-                    ZStack {
+                    // CAPTURE MODE - Bottom controls
+                    VStack {
+                        Spacer()
+
                         // Ghost Opacity Slider (positioned above shutter button)
                         if ghostImage != nil {
                             Slider(value: $ghostOpacity, in: 0.1...0.8)
                                 .accentColor(.blue)
                                 .frame(width: 200)
-                                .padding(.bottom, 230)
+                                .padding(.bottom, 20)
                         }
 
-                        // Shutter Button (Center)
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { showShutterEffect = false }
-                            }
-                            cameraService.takePhoto()
-                        }) {
-                            ZStack {
-                                Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
-                                Circle().fill(Color.white).frame(width: 62, height: 62)
-                            }
-                        }
-                        .padding(.bottom, 100)
-
-                        // Bottom row: Photo Preview (left) and Flip Camera (right)
-                        HStack {
-                            // Last Photo Preview (bottom-left)
-                            if let lastPhoto = lastSavedPhoto {
-                                Button(action: {
-                                    // Set navigation state and switch to gallery tab
-                                    GalleryNavigationState.shared.setNavigation(
-                                        procedure: lastSavedMetadata?.procedure,
-                                        toothNumber: lastSavedMetadata?.toothNumber,
-                                        toothDate: lastSavedMetadata?.toothDate,
-                                        photoId: lastSavedPhotoId
-                                    )
-                                    selectedTab = 2
-                                }) {
-                                    Image(uiImage: lastPhoto)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .rotationEffect(orientationManager.iconRotationAngle)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                        // Bottom row with shutter, thumbnail, and flip camera aligned at bottom
+                        ZStack(alignment: .bottom) {
+                            // Photo Preview (left) and Flip Camera (right)
+                            HStack {
+                                // Last Photo Preview (bottom-left)
+                                if let lastPhoto = lastSavedPhoto {
+                                    Button(action: {
+                                        // Set navigation state and switch to gallery tab
+                                        GalleryNavigationState.shared.setNavigation(
+                                            procedure: lastSavedMetadata?.procedure,
+                                            toothNumber: lastSavedMetadata?.toothNumber,
+                                            toothDate: lastSavedMetadata?.toothDate,
+                                            photoId: lastSavedPhotoId
                                         )
-                                        .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
-                                        .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
-                                        .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
-                                }
-                                .padding(.leading, 20)
-                            } else {
-                                // Placeholder when no photo saved yet
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 50, height: 50)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .foregroundColor(.gray)
+                                        selectedTab = 2
+                                    }) {
+                                        Image(uiImage: lastPhoto)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
                                             .rotationEffect(orientationManager.iconRotationAngle)
-                                    )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                                            )
+                                            .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
+                                            .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
+                                            .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
+                                    }
                                     .padding(.leading, 20)
+                                } else {
+                                    // Placeholder when no photo saved yet
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 50, height: 50)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray)
+                                                .rotationEffect(orientationManager.iconRotationAngle)
+                                        )
+                                        .padding(.leading, 20)
+                                }
+
+                                Spacer()
+
+                                // Flip Camera Button (bottom-right) - matches thumbnail size
+                                Button(action: { cameraService.flipCamera() }) {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                        .font(.system(size: 22))
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .foregroundColor(.white)
+                                        .frame(width: 50, height: 50)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .padding(.trailing, 20)
                             }
 
-                            Spacer()
-
-                            // Flip Camera Button (bottom-right) - matches thumbnail size
-                            Button(action: { cameraService.flipCamera() }) {
-                                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                    .font(.system(size: 22))
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 50)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(Circle())
+                            // Shutter Button (Center) - bottom aligned with thumbnail and flip camera
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation { showShutterEffect = false }
+                                }
+                                cameraService.takePhoto()
+                            }) {
+                                ZStack {
+                                    Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
+                                    Circle().fill(Color.white).frame(width: 62, height: 62)
+                                }
                             }
-                            .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 76) // Positioned to maintain 10pt gap to nav bar top (matching nav bar top padding)
+                        .padding(.bottom, 90)
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
             .zIndex(2)
@@ -2805,7 +2805,7 @@ struct ZoomDialView: View {
         VStack(spacing: 4) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(AppFonts.interSemiBold(14))
+                .font(AppFonts.nexaRegular(14))
                 .foregroundColor(.yellow)
 
             // Horizontal strip with tick marks
@@ -2828,7 +2828,7 @@ struct ZoomDialView: View {
                             if isMainTick {
                                 let zoomValue = Int(displayMin) + (i / 10)
                                 Text("\(zoomValue)")
-                                    .font(AppFonts.geistMedium(8))
+                                    .font(AppFonts.nexaLight(8))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                         }
@@ -3004,7 +3004,7 @@ struct PhotoInfoPillView: View {
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
-                            .font(AppFonts.geistSemiBold(11))
+                            .font(AppFonts.nexaRegular(11))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(AppColors.primary.opacity(0.8))
@@ -3012,7 +3012,7 @@ struct PhotoInfoPillView: View {
 
                         if let tooth = metadata.toothNumber {
                             Text("#\(tooth)")
-                                .font(AppFonts.geistSemiBold(11))
+                                .font(AppFonts.nexaRegular(11))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
                                 .background(AppColors.success.opacity(0.8))
@@ -3100,10 +3100,10 @@ struct PhotoInfoPillView: View {
         }) {
             VStack(spacing: 4) {
                 Text(stageName(for: stage))
-                    .font(AppFonts.geistSemiBold(11))
+                    .font(AppFonts.nexaRegular(11))
                     .foregroundColor(currentStage == stage ? AppColors.textPrimary : AppColors.textSecondary)
                 Text(stageValue(for: stage))
-                    .font(AppFonts.geistRegular(9))
+                    .font(AppFonts.nexaLight(9))
                     .foregroundColor(stageColor(for: stage))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -3604,6 +3604,9 @@ struct GalleryView: View {
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDraggingFromEdge = false
 
+    // Header visibility state
+    @State private var showHeaderElements = true
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3673,322 +3676,389 @@ struct GalleryView: View {
         }.sorted { $0.avgRating > $1.avgRating }
     }
 
-    var body: some View {
-        NavigationView {
-            ZStack(alignment: .leading) {
-                AppColors.background
-                    .ignoresSafeArea()
+    // MARK: - Extracted Sub-Views
 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        if selectedTooth != nil {
-                            // Show grouped by stage and angle - always show both sections
-                            ForEach(["Preparation", "Restoration"], id: \.self) { stage in
-                                let angleGroups = assetsByAngle(for: stage)
-                                StageSection(
-                                    stage: stage,
-                                    angleGroups: angleGroups,
-                                    expandedAngle: $expandedAngleStack,
-                                    metadataManager: metadataManager,
-                                    isCollapsed: collapsedStages.contains(stage),
-                                    onToggleCollapse: {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            if collapsedStages.contains(stage) {
-                                                collapsedStages.remove(stage)
-                                            } else {
-                                                collapsedStages.insert(stage)
-                                            }
-                                        }
-                                    },
-                                    highlightedPhotoId: highlightedPhotoId,
-                                    showPhotoHighlight: showPhotoHighlight,
-                                    isSelectMode: isSelectMode,
-                                    selectedAssetIds: $selectedAssetIds
-                                )
-                            }
-                        } else if filteredAssets.isEmpty {
-                            VStack(spacing: 20) {
-                                Image(systemName: "folder")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(AppColors.textSecondary)
-                                Text("Select a procedure")
-                                    .font(AppFonts.subheadline)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 100)
-                        } else {
-                            // Show flat grid for procedure-level view
-                            LazyVGrid(columns: columns, spacing: 15) {
-                                ForEach(filteredAssets, id: \.localIdentifier) { asset in
-                                    let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                                    let isSelected = selectedAssetIds.contains(asset.localIdentifier)
-                                    let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
+    private var headerView: some View {
+        HStack {
+            Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppColors.primary)
+            }
+            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
 
-                                    if isSelectMode {
-                                        // Selection mode - tap to select/deselect
-                                        Button(action: {
-                                            withAnimation(.easeInOut(duration: 0.15)) {
-                                                if selectedAssetIds.contains(asset.localIdentifier) {
-                                                    selectedAssetIds.remove(asset.localIdentifier)
-                                                } else {
-                                                    selectedAssetIds.insert(asset.localIdentifier)
-                                                }
-                                            }
-                                        }) {
-                                            VStack(alignment: .center, spacing: 4) {
-                                                AssetThumbnail(asset: asset)
-                                                    .frame(height: 120)
-                                                    .clipped()
-                                                    .cornerRadius(8)
-                                                    .overlay(
-                                                        // Selection checkbox overlay
-                                                        ZStack {
-                                                            Circle()
-                                                                .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
-                                                                .frame(width: 24, height: 24)
-                                                            if isSelected {
-                                                                Image(systemName: "checkmark")
-                                                                    .font(.system(size: 12, weight: .bold))
-                                                                    .foregroundColor(.white)
-                                                            } else {
-                                                                Circle()
-                                                                    .stroke(Color.white, lineWidth: 2)
-                                                                    .frame(width: 22, height: 22)
-                                                            }
-                                                        }
-                                                        .padding(6),
-                                                        alignment: .topTrailing
-                                                    )
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
-                                                    )
+            Spacer()
 
-                                                // Tag info display (show in All Photos view) - fixed height for alignment
-                                                if selectedProcedure == nil {
-                                                    PhotoTagsLabel(metadata: metadata)
-                                                        .frame(height: 28)
-                                                }
-                                            }
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    } else {
-                                        // Normal mode - navigate to detail view
-                                        NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                            VStack(alignment: .center, spacing: 4) {
-                                                AssetThumbnail(asset: asset)
-                                                    .frame(height: 120)
-                                                    .clipped()
-                                                    .cornerRadius(8)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                                    )
-                                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
-
-                                                // Tag info display (show in All Photos view) - fixed height for alignment
-                                                if selectedProcedure == nil {
-                                                    PhotoTagsLabel(metadata: metadata)
-                                                        .frame(height: 28)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 120)
-                        }
-                        .padding(.top, 20)
-                    }
-                    .offset(x: isSidebarOpen ? 250 : 0)
-
-                // Edge swipe gesture overlay (left edge for opening, below header)
-                if !isSidebarOpen {
-                    VStack(spacing: 0) {
-                        // Spacer for navigation bar large title (~96pt)
-                        Color.clear.frame(height: 100)
-                            .allowsHitTesting(false)
-
-                        HStack {
-                            Color.clear
-                                .frame(width: 60)
-                                .contentShape(Rectangle())
-                                .highPriorityGesture(
-                                    DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                        .onChanged { value in
-                                            dragOffset = value.translation.width
-                                        }
-                                        .onEnded { value in
-                                            // Open sidebar if swiped right with enough distance
-                                            if value.translation.width > 20 {
-                                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
-                                            }
-                                            dragOffset = 0
-                                        }
-                                )
-                            Spacer()
-                                .allowsHitTesting(false)
-                        }
-                    }
+            VStack(spacing: 2) {
+                if isSelectMode {
+                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                        .font(AppFonts.nexaBold(22))
+                        .foregroundColor(AppColors.primary)
+                } else {
+                    Text(currentSectionTitle)
+                        .font(AppFonts.nexaBold(22))
+                        .foregroundColor(AppColors.textPrimary)
                 }
 
-                // Darkening overlay (fades in/out smoothly, independent of sidebar slide)
-                if isSidebarOpen {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                .onEnded { value in
-                                    // Close sidebar if swiped left
-                                    if value.translation.width < -20 {
-                                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
-                                    }
-                                }
-                        )
-                        .zIndex(1)
-                        .transition(.opacity)
-                }
-
-                // Sidebar (slides in/out from left edge)
-                if isSidebarOpen {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // All Photos button
-                        Button(action: {
-                            selectedProcedure = nil
-                            selectedTooth = nil
-                            withAnimation { isSidebarOpen = false }
-                        }) {
-                            HStack {
-                                Image(systemName: "square.grid.2x2")
-                                Text("All Photos")
-                                    .font(AppFonts.subheadline)
-                            }
-                            .padding(.leading, 16)
-                            .padding(.trailing, 8)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
-                            .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
-                        }
-                        .padding(.top, 50)
-
-                        Divider().background(AppColors.secondary)
-
-                        // Procedure folders with tooth subfolders
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                    ProcedureFolderView(
-                                        procedure: procedure,
-                                        toothEntries: metadataManager.getToothEntries(for: procedure),
-                                        selectedProcedure: $selectedProcedure,
-                                        selectedTooth: $selectedTooth,
-                                        isSidebarOpen: $isSidebarOpen,
-                                        metadataManager: metadataManager,
-                                        assets: library.assets,
-                                        onRename: { folder in
-                                            folderToRename = folder
-                                            renameFolderText = folder
-                                            showRenameSheet = true
-                                        },
-                                        onDelete: { folder in
-                                            folderToDelete = folder
-                                            showDeleteConfirmation = true
-                                        },
-                                        onColorEdit: { folder in
-                                            folderForColorEdit = folder
-                                            showColorPicker = true
-                                        }
-                                    )
-                                }
-
-                                // Add Procedure Folder button
-                                Button(action: {
-                                    newFolderName = ""
-                                    showAddFolderSheet = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "folder.badge.plus")
-                                            .foregroundColor(AppColors.success)
-                                        Text("Add Procedure Folder")
-                                            .font(AppFonts.subheadline)
-                                            .foregroundColor(AppColors.textPrimary)
-                                    }
-                                    .padding(.leading, 16)
-                                    .padding(.trailing, 8)
-                                    .padding(.vertical, 10)
-                                }
-                            }
-                        }
-
-                        Spacer()
+                if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
+                    HStack(spacing: 4) {
+                        Text(proc)
+                            .font(AppFonts.caption2)
+                            .foregroundColor(AppColors.textSecondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Tooth \(selectedTooth!.toothNumber)")
+                            .font(AppFonts.caption2)
+                            .foregroundColor(AppColors.textSecondary)
                     }
-                    .frame(minWidth: 250)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .background(AppColors.surface.opacity(0.98))
-                    .edgesIgnoringSafeArea(.vertical)
-                    .zIndex(2)
-                    .transition(.move(edge: .leading))
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 5, coordinateSpace: .global)
-                            .onEnded { value in
-                                // Close sidebar if swiped left anywhere
-                                if value.translation.width < -20 {
-                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
-                                }
-                            }
-                    )
-                }
-
-                // Bottom action bar for multi-select mode
-                if isSelectMode && !selectedAssetIds.isEmpty {
-                    VStack {
-                        Spacer()
-                            .allowsHitTesting(false)
-                        HStack(spacing: 0) {
-                            // Delete button
-                            Button(action: {
-                                showDeleteAlert = true
-                            }) {
-                                VStack(spacing: 4) {
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 22))
-                                    Text("Delete")
-                                        .font(AppFonts.caption2)
-                                }
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity)
-                            }
-
-                            // Move button
-                            Button(action: {
-                                showMoveSheet = true
-                            }) {
-                                VStack(spacing: 4) {
-                                    Image(systemName: "arrow.right.doc.on.clipboard")
-                                        .font(.system(size: 22))
-                                    Text("Move")
-                                        .font(AppFonts.caption2)
-                                }
-                                .foregroundColor(AppColors.primary)
-                                .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.bottom, 50)
-                        .background(
-                            AppColors.background
-                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
-                        )
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+
+            Spacer()
+
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSelectMode.toggle()
+                    if !isSelectMode {
+                        selectedAssetIds.removeAll()
+                    }
+                }
+            }) {
+                Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppColors.primary)
+            }
+            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .opacity(showHeaderElements ? 1 : 0)
+        .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
+    }
+
+    @ViewBuilder
+    private func photoGridItem(asset: PHAsset, isHighlighted: Bool, isSelected: Bool, metadata: PhotoMetadata?) -> some View {
+        if isSelectMode {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    if selectedAssetIds.contains(asset.localIdentifier) {
+                        selectedAssetIds.remove(asset.localIdentifier)
+                    } else {
+                        selectedAssetIds.insert(asset.localIdentifier)
+                    }
+                }
+            }) {
+                VStack(alignment: .center, spacing: 4) {
+                    AssetThumbnail(asset: asset)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(8)
+                        .overlay(
+                            ZStack {
+                                Circle()
+                                    .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                    .frame(width: 24, height: 24)
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                } else {
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                        .frame(width: 22, height: 22)
+                                }
+                            }
+                            .padding(6),
+                            alignment: .topTrailing
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                        )
+
+                    if selectedProcedure == nil {
+                        PhotoTagsLabel(metadata: metadata)
+                            .frame(height: 28)
+                    }
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                VStack(alignment: .center, spacing: 4) {
+                    AssetThumbnail(asset: asset)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                        )
+                        .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+
+                    if selectedProcedure == nil {
+                        PhotoTagsLabel(metadata: metadata)
+                            .frame(height: 28)
+                    }
+                }
+            }
+        }
+    }
+
+    private var scrollContentView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if selectedTooth != nil {
+                    ForEach(["Preparation", "Restoration"], id: \.self) { stage in
+                        let angleGroups = assetsByAngle(for: stage)
+                        StageSection(
+                            stage: stage,
+                            angleGroups: angleGroups,
+                            expandedAngle: $expandedAngleStack,
+                            metadataManager: metadataManager,
+                            isCollapsed: collapsedStages.contains(stage),
+                            onToggleCollapse: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    if collapsedStages.contains(stage) {
+                                        collapsedStages.remove(stage)
+                                    } else {
+                                        collapsedStages.insert(stage)
+                                    }
+                                }
+                            },
+                            highlightedPhotoId: highlightedPhotoId,
+                            showPhotoHighlight: showPhotoHighlight,
+                            isSelectMode: isSelectMode,
+                            selectedAssetIds: $selectedAssetIds
+                        )
+                    }
+                } else if filteredAssets.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 50))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Select a procedure")
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 100)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 15) {
+                        ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                            let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
+                            let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+                            let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
+                            photoGridItem(asset: asset, isHighlighted: isHighlighted, isSelected: isSelected, metadata: metadata)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 120)
+                }
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    private var sidebarView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: {
+                selectedProcedure = nil
+                selectedTooth = nil
+                withAnimation { isSidebarOpen = false }
+            }) {
+                HStack {
+                    Image(systemName: "square.grid.2x2")
+                    Text("All Photos")
+                        .font(AppFonts.subheadline)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
+                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
+            }
+            .padding(.top, 50)
+
+            Divider().background(AppColors.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                        ProcedureFolderView(
+                            procedure: procedure,
+                            toothEntries: metadataManager.getToothEntries(for: procedure),
+                            selectedProcedure: $selectedProcedure,
+                            selectedTooth: $selectedTooth,
+                            isSidebarOpen: $isSidebarOpen,
+                            metadataManager: metadataManager,
+                            assets: library.assets,
+                            onRename: { folder in
+                                folderToRename = folder
+                                renameFolderText = folder
+                                showRenameSheet = true
+                            },
+                            onDelete: { folder in
+                                folderToDelete = folder
+                                showDeleteConfirmation = true
+                            },
+                            onColorEdit: { folder in
+                                folderForColorEdit = folder
+                                showColorPicker = true
+                            }
+                        )
+                    }
+
+                    Button(action: {
+                        newFolderName = ""
+                        showAddFolderSheet = true
+                    }) {
+                        HStack {
+                            Image(systemName: "folder.badge.plus")
+                                .foregroundColor(AppColors.success)
+                            Text("Add Procedure Folder")
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.textPrimary)
+                        }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 8)
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .frame(minWidth: 250)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(AppColors.surface.opacity(0.98))
+        .edgesIgnoringSafeArea(.vertical)
+        .zIndex(2)
+        .transition(.move(edge: .leading))
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                .onEnded { value in
+                    if value.translation.width < -20 {
+                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                    }
+                }
+        )
+    }
+
+    private var bottomActionBar: some View {
+        VStack {
+            Spacer()
+                .allowsHitTesting(false)
+            HStack(spacing: 0) {
+                Button(action: {
+                    showDeleteAlert = true
+                }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 22))
+                        Text("Delete")
+                            .font(AppFonts.caption2)
+                    }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                }
+
+                Button(action: {
+                    showMoveSheet = true
+                }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.right.doc.on.clipboard")
+                            .font(.system(size: 22))
+                        Text("Move")
+                            .font(AppFonts.caption2)
+                    }
+                    .foregroundColor(AppColors.primary)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.vertical, 12)
+            .padding(.bottom, 50)
+            .background(
+                AppColors.background
+                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
+            )
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var edgeSwipeOverlay: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 100)
+                .allowsHitTesting(false)
+            HStack {
+                Color.clear
+                    .frame(width: 60)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                            .onChanged { value in
+                                dragOffset = value.translation.width
+                            }
+                            .onEnded { value in
+                                if value.translation.width > 20 {
+                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
+                                }
+                                dragOffset = 0
+                            }
+                    )
+                Spacer()
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var darkeningOverlay: some View {
+        Color.black.opacity(0.3)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                    .onEnded { value in
+                        if value.translation.width < -20 {
+                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                        }
+                    }
+            )
+            .zIndex(1)
+            .transition(.opacity)
+    }
+
+    private var mainZStackContent: some View {
+        ZStack(alignment: .leading) {
+            VStack(spacing: 0) {
+                headerView
+                scrollContentView
+            }
+            .offset(x: isSidebarOpen ? 250 : 0)
+
+            if !isSidebarOpen {
+                edgeSwipeOverlay
+            }
+
+            if isSidebarOpen {
+                darkeningOverlay
+                sidebarView
+            }
+
+            if isSelectMode && !selectedAssetIds.isEmpty {
+                bottomActionBar
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            mainZStackContent
             .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
@@ -4250,10 +4320,6 @@ struct MoveSelectProcedureView: View {
                             Text(procedure)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4283,6 +4349,8 @@ struct MoveSelectToothView: View {
 
     @State private var showNewToothSheet = false
     @State private var newToothNumber: Int = 1
+    @State private var createdToothEntry: ToothEntry? = nil
+    @State private var navigateToStage = false
 
     var toothEntries: [ToothEntry] {
         metadataManager.getToothEntries(for: procedure)
@@ -4290,25 +4358,6 @@ struct MoveSelectToothView: View {
 
     var body: some View {
         List {
-            // Move to folder root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(procedure)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Existing teeth
             if !toothEntries.isEmpty {
                 Section(header: Text("Select Tooth")) {
@@ -4332,10 +4381,6 @@ struct MoveSelectToothView: View {
                                         .font(AppFonts.caption2)
                                         .foregroundColor(AppColors.textSecondary)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppColors.textSecondary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -4363,6 +4408,26 @@ struct MoveSelectToothView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle(procedure)
         .navigationBarTitleDisplayMode(.inline)
+        .background(
+            NavigationLink(
+                destination: Group {
+                    if let tooth = createdToothEntry {
+                        MoveSelectStageView(
+                            selectedAssetIds: selectedAssetIds,
+                            metadataManager: metadataManager,
+                            procedure: procedure,
+                            toothEntry: tooth,
+                            isPresented: $isPresented,
+                            onComplete: onComplete
+                        )
+                    }
+                },
+                isActive: $navigateToStage
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
         .sheet(isPresented: $showNewToothSheet) {
             NavigationView {
                 Form {
@@ -4381,18 +4446,11 @@ struct MoveSelectToothView: View {
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Create") {
+                        Button("Next") {
                             let newTooth = ToothEntry(procedure: procedure, toothNumber: newToothNumber, date: Date())
-                            metadataManager.movePhotosWithMetadata(
-                                assetIds: selectedAssetIds,
-                                to: procedure,
-                                toothEntry: newTooth,
-                                stage: nil,
-                                angle: nil
-                            )
+                            createdToothEntry = newTooth
                             showNewToothSheet = false
-                            isPresented = false
-                            onComplete()
+                            navigateToStage = true
                         }
                     }
                 }
@@ -4412,31 +4470,6 @@ struct MoveSelectStageView: View {
 
     var body: some View {
         List {
-            // Move to tooth root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: nil,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to Tooth \(toothEntry.toothNumber)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Stage options
             Section(header: Text("Select Stage")) {
                 ForEach(metadataManager.stages, id: \.self) { stage in
@@ -4455,10 +4488,6 @@ struct MoveSelectStageView: View {
                             Text(stage)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4483,31 +4512,6 @@ struct MoveSelectAngleView: View {
 
     var body: some View {
         List {
-            // Move to stage root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: stage,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(stage)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Angle options
             Section(header: Text("Select Angle")) {
                 ForEach(metadataManager.angles, id: \.self) { angle in
@@ -4754,7 +4758,7 @@ struct ToothSubfolderRow: View {
                     .font(AppFonts.caption)
                     .foregroundColor(AppColors.success)
                 Text("#\(entry.toothNumber)")
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textPrimary)
                 Text(entry.dateString)
                     .font(AppFonts.caption2)
@@ -4919,7 +4923,7 @@ struct AngleStackView: View {
 
                 HStack {
                     Text(angle)
-                        .font(AppFonts.geistSemiBold(11))
+                        .font(AppFonts.nexaRegular(11))
                         .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(assets.count)")
@@ -4968,7 +4972,7 @@ struct ExpandedAngleView: View {
             // Header showing angle name
             HStack {
                 Text(angle)
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
                 Text("\(assets.count) photos")
@@ -5131,7 +5135,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let proc = metadata.procedure {
                         Text(proc)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -5140,7 +5144,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let tooth = metadata.toothNumber {
                         Text("#\(tooth)")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5154,7 +5158,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let stage = metadata.stage {
                         Text(stage == "Preparation" ? "Prep" : "Resto")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5163,7 +5167,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5203,7 +5207,7 @@ struct PhotoDetailView: View {
                             // Procedure badge (blue)
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -5213,7 +5217,7 @@ struct PhotoDetailView: View {
                             // Tooth badge (green)
                             if let tooth = meta.toothNumber {
                                 Text("#\(tooth)")
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
@@ -5680,7 +5684,7 @@ struct PhotoEditorView: View {
         // Apply rotation first
         var processedImage = img
         if cropRotation != 0 {
-            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: .degrees)) {
+            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
                 processedImage = rotated
             }
         }
@@ -5763,7 +5767,7 @@ struct PhotoEditorView: View {
 
     func rotateImage() {
         guard let img = baseImage else { return }
-        baseImage = img.rotated(by: Measurement(value: -90, unit: .degrees))
+        baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
         applyProcessing()
     }
 
@@ -6648,7 +6652,7 @@ struct PortfolioCardView: View {
                         .foregroundColor(AppColors.textSecondary)
                     Spacer()
                     Text(String(format: "%.0f%%", completionPercentage))
-                        .font(AppFonts.geistSemiBold(12))
+                        .font(AppFonts.nexaRegular(12))
                         .foregroundColor(isComplete ? AppColors.success : AppColors.primary)
                 }
 
@@ -6930,7 +6934,7 @@ struct PortfolioDetailView: View {
                                     .font(AppFonts.subheadline)
                                     .foregroundColor(AppColors.textSecondary)
                                 Text(String(format: "%.0f%%", completionPercentage))
-                                    .font(AppFonts.interBold(36))
+                                    .font(AppFonts.nexaBold(36))
                                     .foregroundColor(completionPercentage >= 100 ? AppColors.success : AppColors.primary)
                             }
 
@@ -7239,7 +7243,7 @@ struct RequirementStatusView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(requirement.procedure)
-                            .font(AppFonts.geistSemiBold(15))
+                            .font(AppFonts.nexaRegular(15))
                             .foregroundColor(AppColors.textPrimary)
                         Text("\(fulfilled)/\(total) photos")
                             .font(AppFonts.caption)
@@ -7277,7 +7281,7 @@ struct RequirementStatusView: View {
                                     .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                                     .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(AppFonts.geistSemiBold(12))
+                                    .font(AppFonts.nexaRegular(12))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
