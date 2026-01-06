@@ -7,6 +7,15 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UserNotifications
 
+// MARK: - APP DELEGATE FOR ORIENTATION LOCK
+class AppDelegate: NSObject, UIApplicationDelegate {
+    static var orientationLock = UIInterfaceOrientationMask.portrait
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return AppDelegate.orientationLock
+    }
+}
+
 // MARK: - CUSTOM FONT SYSTEM
 // Typography using Inter for headings, Geist for body/subheadings
 struct AppFonts {
@@ -8044,4 +8053,16 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - MAIN APP ENTRY POINT
+@main
+struct SimFolioApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
 }
