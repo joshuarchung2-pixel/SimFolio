@@ -2377,6 +2377,21 @@ struct DentalCameraSetupView: View {
                     )
                 }
 
+                // TOP CENTER: Photo Info Pill (tag selector dropdown)
+                if cameraService.capturedImage == nil {
+                    PhotoInfoPillView(
+                        metadata: $currentMetadata,
+                        isDropdownOpen: $isInfoPillOpen
+                    )
+                    .position(
+                        x: isLandscapeLeft ? geometry.size.width - 180 :
+                           isLandscapeRight ? 180 :
+                           geometry.size.width / 2,
+                        y: isLandscape ? geometry.size.height / 2 : 60
+                    )
+                    .zIndex(5)
+                }
+
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
                     VStack(alignment: .trailing, spacing: 10) {
