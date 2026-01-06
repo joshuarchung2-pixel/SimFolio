@@ -3107,16 +3107,14 @@ struct PhotoInfoPillView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(AppColors.surface.opacity(0.9))
+                .background(Color.blue.opacity(0.15))
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(pillStrokeColor, lineWidth: pillStrokeWidth)
+                        .stroke(Color.blue.opacity(0.4), lineWidth: 1)
                 )
-                .shadow(color: pillGlowColor, radius: 8)
-                .shadow(color: pillGlowColorOuter, radius: 16)
             }
-            .foregroundColor(.white)
+            .foregroundColor(.primary)
 
             // Dropdown content
             if isDropdownOpen {
@@ -5253,6 +5251,9 @@ struct PhotoDetailView: View {
     let asset: PHAsset
     @State private var image: UIImage?
     @State private var isEditing = false
+    @State private var isImmersiveMode = false
+    @State private var isTagDropdownOpen = false
+    @State private var editableMetadata = PhotoMetadata()
     @ObservedObject var metadataManager = MetadataManager.shared
 
     var metadata: PhotoMetadata? {
@@ -5261,95 +5262,67 @@ struct PhotoDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // Background: white by default, black in immersive mode
+            (isImmersiveMode ? Color.black : Color.white).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Tags/Metadata at the top
-                if let meta = metadata {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            if let proc = meta.procedure {
-                                Text(proc)
-                                    .font(AppFonts.geistSemiBold(12))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.success.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            if let stage = meta.stage {
-                                HStack(spacing: 3) {
-                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                        .font(.system(size: 10))
-                                    Text(stage)
-                                        .font(AppFonts.geistSemiBold(11))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
-                                .cornerRadius(4)
-                            }
-                            if let angle = meta.angle {
-                                Text(angle)
-                                    .font(AppFonts.geistSemiBold(11))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.purple.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            if let date = meta.toothDate {
-                                let formatter = DateFormatter()
-                                let _ = formatter.dateStyle = .short
-                                Text(formatter.string(from: date))
-                                    .font(AppFonts.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.gray.opacity(0.7))
-                                    .cornerRadius(4)
-                            }
-                        }
-                        .padding(.horizontal, 16)
+                // Tags pill at the top (hidden in immersive mode)
+                if !isImmersiveMode {
+                    HStack {
+                        Spacer()
+                        PhotoInfoPillView(
+                            metadata: $editableMetadata,
+                            isDropdownOpen: $isTagDropdownOpen
+                        )
+                        Spacer()
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 12)
+                    .zIndex(10)
                 }
 
                 Spacer()
 
-                // Photo display in the center
+                // Photo display in the center (tappable to toggle immersive mode)
                 if let img = image {
                     Image(uiImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isImmersiveMode.toggle()
+                            }
+                        }
                 } else {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .progressViewStyle(CircularProgressViewStyle(tint: isImmersiveMode ? .white : .gray))
                         .scaleEffect(1.5)
                 }
 
                 Spacer()
 
-                // Rating at the bottom
-                VStack(spacing: 8) {
-                    HStack {
-                        Text("Rating:")
-                            .font(AppFonts.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                        RatingView(
-                            rating: metadata?.rating ?? 0,
-                            assetID: asset.localIdentifier,
-                            metadataManager: metadataManager
-                        )
+                // Rating at the bottom (hidden in immersive mode)
+                if !isImmersiveMode {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Rating:")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                            RatingView(
+                                rating: metadata?.rating ?? 0,
+                                assetID: asset.localIdentifier,
+                                metadataManager: metadataManager
+                            )
+                        }
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(AppColors.surface.opacity(0.95))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 60)
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(AppColors.surface.opacity(0.9))
-                .cornerRadius(10)
-                .padding(.horizontal, 16)
             }
             .safeAreaInset(edge: .bottom) {
                 Color.clear.frame(height: 16)
@@ -5357,7 +5330,9 @@ struct PhotoDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") { isEditing = true }
+                if !isImmersiveMode {
+                    Button("Edit") { isEditing = true }
+                }
             }
         }
         .fullScreenCover(isPresented: $isEditing) {
@@ -5367,6 +5342,14 @@ struct PhotoDetailView: View {
             PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
                 self.image = loadedImg
             }
+            // Load existing metadata into editable state
+            if let existingMetadata = metadataManager.getMetadata(for: asset.localIdentifier) {
+                editableMetadata = existingMetadata
+            }
+        }
+        .onChange(of: editableMetadata) { _, newMetadata in
+            // Sync editable metadata back to MetadataManager
+            metadataManager.assignMetadata(newMetadata, to: asset.localIdentifier)
         }
     }
 }
