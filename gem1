@@ -1208,7 +1208,7 @@ struct PhotoMetadata: Codable {
         var parts: [String] = []
         if let p = procedure { parts.append(p) }
         if let t = toothNumber { parts.append("#\(t)") }
-        if let s = stage { parts.append(s.prefix(4).description) }
+        if let s = stage { parts.append(s.prefix(5).description) }
         if let a = angle { parts.append(a) }
         return parts.isEmpty ? "Choose procedure" : parts.joined(separator: " · ")
     }
@@ -3083,7 +3083,7 @@ struct PhotoInfoPillView: View {
                         }
 
                         if let stage = metadata.stage {
-                            Text(String(stage.prefix(4)))
+                            Text(String(stage.prefix(5)))
                                 .font(AppFonts.caption2)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
@@ -5279,7 +5279,7 @@ struct PhotoTagsLabel: View {
                 // Second row: Stage and Angle (orange and purple)
                 HStack(spacing: 3) {
                     if let stage = metadata.stage {
-                        Text(String(stage.prefix(4)))
+                        Text(String(stage.prefix(5)))
                             .font(AppFonts.caption2)
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
@@ -5344,7 +5344,7 @@ struct PhotoDetailView: View {
                             }
                             // Stage badge (orange)
                             if let stage = meta.stage {
-                                Text(String(stage.prefix(4)))
+                                Text(String(stage.prefix(5)))
                                     .font(AppFonts.caption2)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6)
