@@ -6445,35 +6445,11 @@ struct PortfoliosView: View {
                 }
             }
             .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if metadataManager.portfolios.count > 1, let portfolio = currentPortfolio {
-                        Menu {
-                            ForEach(metadataManager.portfolios) { p in
-                                Button(action: {
-                                    if p.id != portfolio.id {
-                                        selectedPortfolioId = p.id
-                                        animatePortfolioChange()
-                                    }
-                                }) {
-                                    HStack {
-                                        Text(p.name)
-                                        if p.id == portfolio.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "folder.fill.badge.gearshape")
-                                .foregroundColor(AppColors.primary)
-                        }
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         Menu {
                             ForEach(metadataManager.portfolios) { p in
                                 Button(action: {
@@ -6492,15 +6468,29 @@ struct PortfoliosView: View {
                             }
                         } label: {
                             Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(AppColors.primary)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .stroke(Color(white: 0.85), lineWidth: 1)
+                                )
                         }
                         Button(action: { showAddPortfolioSheet = true }) {
                             Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(AppColors.primary)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .stroke(Color(white: 0.85), lineWidth: 1)
+                                )
                         }
                     }
+                    .id("portfolio-toolbar-\(currentPortfolio?.id.uuidString ?? "none")")
                 }
             }
+            .tint(AppColors.primary)
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
