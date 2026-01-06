@@ -3966,9 +3966,6 @@ struct GalleryView: View {
                                                         RoundedRectangle(cornerRadius: 8)
                                                             .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
                                                     )
-                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
                                                     .animation(.easeInOut(duration: 0.3), value: isHighlighted)
 
                                                 // Tag info display (show in All Photos view) - fixed height for alignment
@@ -4195,13 +4192,6 @@ struct GalleryView: View {
                         highlightedPhotoId = photoId
                         showPhotoHighlight = true
 
-                        // Auto-expand the angle group containing the highlighted photo
-                        if let metadata = metadataManager.getMetadata(for: photoId),
-                           let stage = metadata.stage,
-                           let angle = metadata.angle {
-                            expandedAngleStack = "\(stage)-\(angle)"
-                        }
-
                         // Remove highlight after 1 second
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             withAnimation(.easeOut(duration: 0.3)) {
@@ -4232,13 +4222,6 @@ struct GalleryView: View {
                     if let photoId = galleryNavState.pendingHighlightPhotoId {
                         highlightedPhotoId = photoId
                         showPhotoHighlight = true
-
-                        // Auto-expand the angle group containing the highlighted photo
-                        if let metadata = metadataManager.getMetadata(for: photoId),
-                           let stage = metadata.stage,
-                           let angle = metadata.angle {
-                            expandedAngleStack = "\(stage)-\(angle)"
-                        }
 
                         // Remove highlight after 1 second
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -5257,9 +5240,6 @@ struct ExpandedAngleView: View {
                                         RoundedRectangle(cornerRadius: 10)
                                             .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
                                     )
-                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
                                     .animation(.easeInOut(duration: 0.3), value: isHighlighted)
                                 }
                             }
