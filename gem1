@@ -4045,7 +4045,6 @@ struct GalleryView: View {
     private var mainZStackContent: some View {
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
-                headerView
                 scrollContentView
             }
             .offset(x: isSidebarOpen ? 250 : 0)
@@ -4069,7 +4068,7 @@ struct GalleryView: View {
         NavigationView {
             mainZStackContent
             .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
