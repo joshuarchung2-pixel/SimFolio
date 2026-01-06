@@ -7,6 +7,14 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UserNotifications
 
+// MARK: - SCROLL OFFSET PREFERENCE KEY
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - APP DELEGATE FOR ORIENTATION LOCK
 class AppDelegate: NSObject, UIApplicationDelegate {
     static var orientationLock = UIInterfaceOrientationMask.portrait
@@ -3619,6 +3627,9 @@ struct GalleryView: View {
     // Header visibility state
     @State private var showHeaderElements = true
 
+    // Scroll offset for header animation
+    @State private var scrollOffset: CGFloat = 0
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3690,8 +3701,22 @@ struct GalleryView: View {
 
     // MARK: - Extracted Sub-Views
 
+    // Calculate header animation progress (0 = at top/expanded, 1 = scrolled/collapsed)
+    private var headerProgress: CGFloat {
+        let threshold: CGFloat = 50
+        return min(1, max(0, scrollOffset / threshold))
+    }
+
+    // Interpolated font size for the title
+    private var headerTitleSize: CGFloat {
+        let largeSize: CGFloat = 34
+        let smallSize: CGFloat = 17
+        return largeSize - (largeSize - smallSize) * headerProgress
+    }
+
     private var customHeaderView: some View {
         VStack(spacing: 0) {
+            // Top toolbar row with buttons
             HStack {
                 Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
                     Image(systemName: "sidebar.left")
@@ -3702,16 +3727,17 @@ struct GalleryView: View {
 
                 Spacer()
 
-                VStack(spacing: 2) {
-                    if isSelectMode {
-                        Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                            .font(AppFonts.nexaBold(18))
-                            .foregroundColor(AppColors.primary)
-                    } else {
-                        Text(currentSectionTitle)
-                            .font(AppFonts.nexaBold(18))
-                            .foregroundColor(AppColors.textPrimary)
-                    }
+                // Inline title (visible when scrolled)
+                if isSelectMode {
+                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                        .font(AppFonts.nexaBold(17))
+                        .foregroundColor(AppColors.primary)
+                        .opacity(headerProgress)
+                } else {
+                    Text(currentSectionTitle)
+                        .font(AppFonts.nexaBold(17))
+                        .foregroundColor(AppColors.textPrimary)
+                        .opacity(headerProgress)
                 }
 
                 Spacer()
@@ -3732,7 +3758,26 @@ struct GalleryView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            // Large title row (visible when at top, fades when scrolled)
+            HStack {
+                if isSelectMode {
+                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                        .font(AppFonts.nexaBold(headerTitleSize))
+                        .foregroundColor(AppColors.primary)
+                } else {
+                    Text(currentSectionTitle)
+                        .font(AppFonts.nexaBold(headerTitleSize))
+                        .foregroundColor(AppColors.textPrimary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
             .padding(.bottom, 8)
+            .opacity(1 - headerProgress)
+            .frame(height: 44 * (1 - headerProgress), alignment: .top)
+            .clipped()
         }
         .background(
             LinearGradient(
@@ -3821,6 +3866,15 @@ struct GalleryView: View {
     private var scrollContentView: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Invisible view for scroll offset tracking
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: -geometry.frame(in: .named("scrollView")).origin.y
+                    )
+                }
+                .frame(height: 0)
+
                 if selectedTooth != nil {
                     ForEach(["Preparation", "Restoration"], id: \.self) { stage in
                         let angleGroups = assetsByAngle(for: stage)
@@ -3870,7 +3924,11 @@ struct GalleryView: View {
                     .padding(.bottom, 120)
                 }
             }
-            .padding(.top, 60)
+            .padding(.top, 100) // Increased to account for larger header
+        }
+        .coordinateSpace(name: "scrollView")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            scrollOffset = value
         }
     }
 
@@ -6512,7 +6570,7 @@ struct PortfoliosView: View {
                 }
             }
             .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 toolbarContent
