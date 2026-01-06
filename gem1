@@ -1093,7 +1093,7 @@ struct PhotoMetadata: Codable {
         var parts: [String] = []
         if let p = procedure { parts.append(p) }
         if let t = toothNumber { parts.append("#\(t)") }
-        if let s = stage { parts.append(s.prefix(4).description) }
+        if let s = stage { parts.append(s == "Preparation" ? "Prep" : "Resto") }
         if let a = angle { parts.append(a) }
         return parts.isEmpty ? "Choose procedure" : parts.joined(separator: " · ")
     }
@@ -3020,7 +3020,7 @@ struct PhotoInfoPillView: View {
                         }
 
                         if let stage = metadata.stage {
-                            Text(String(stage.prefix(4)))
+                            Text(stage == "Preparation" ? "Prep" : "Resto")
                                 .font(AppFonts.caption2)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
@@ -5196,8 +5196,8 @@ struct PhotoTagsLabel: View {
                 // Second row: Stage and Angle (orange and purple)
                 HStack(spacing: 3) {
                     if let stage = metadata.stage {
-                        Text(String(stage.prefix(4)))
-                            .font(AppFonts.caption2)
+                        Text(stage == "Preparation" ? "Prep" : "Resto")
+                            .font(AppFonts.geistSemiBold(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5206,7 +5206,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(AppFonts.caption2)
+                            .font(AppFonts.geistSemiBold(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5261,7 +5261,7 @@ struct PhotoDetailView: View {
                             }
                             // Stage badge (orange)
                             if let stage = meta.stage {
-                                Text(String(stage.prefix(4)))
+                                Text(stage == "Preparation" ? "Prep" : "Resto")
                                     .font(AppFonts.caption2)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6)
