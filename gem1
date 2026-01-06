@@ -3687,64 +3687,63 @@ struct GalleryView: View {
 
     // MARK: - Extracted Sub-Views
 
-    private var headerView: some View {
-        HStack {
-            Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 22))
-                    .foregroundColor(AppColors.primary)
-            }
-            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
-
-            Spacer()
-
-            VStack(spacing: 2) {
-                if isSelectMode {
-                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                        .font(AppFonts.nexaBold(22))
+    private var customHeaderView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 20))
                         .foregroundColor(AppColors.primary)
-                } else {
-                    Text(currentSectionTitle)
-                        .font(AppFonts.nexaBold(22))
-                        .foregroundColor(AppColors.textPrimary)
                 }
+                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: .clear))
 
-                if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
-                    HStack(spacing: 4) {
-                        Text(proc)
-                            .font(AppFonts.caption2)
-                            .foregroundColor(AppColors.textSecondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8))
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("Tooth \(selectedTooth!.toothNumber)")
-                            .font(AppFonts.caption2)
-                            .foregroundColor(AppColors.textSecondary)
+                Spacer()
+
+                VStack(spacing: 2) {
+                    if isSelectMode {
+                        Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                            .font(AppFonts.nexaBold(18))
+                            .foregroundColor(AppColors.primary)
+                    } else {
+                        Text(currentSectionTitle)
+                            .font(AppFonts.nexaBold(18))
+                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
-            }
 
-            Spacer()
+                Spacer()
 
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isSelectMode.toggle()
-                    if !isSelectMode {
-                        selectedAssetIds.removeAll()
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSelectMode.toggle()
+                        if !isSelectMode {
+                            selectedAssetIds.removeAll()
+                        }
                     }
+                }) {
+                    Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppColors.primary)
                 }
-            }) {
-                Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.system(size: 22))
-                    .foregroundColor(AppColors.primary)
+                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
             }
-            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .opacity(showHeaderElements ? 1 : 0)
-        .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
+        .background(
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white, location: 0.0),
+                    .init(color: Color.white, location: 0.6),
+                    .init(color: Color.white.opacity(0), location: 1.0)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .offset(x: isSidebarOpen ? 250 : 0)
+        .animation(.easeInOut(duration: 0.25), value: isSidebarOpen)
     }
 
     @ViewBuilder
@@ -3868,35 +3867,40 @@ struct GalleryView: View {
                     .padding(.bottom, 120)
                 }
             }
-            .padding(.top, 20)
+            .padding(.top, 60)
         }
     }
 
     private var sidebarView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: {
-                selectedProcedure = nil
-                selectedTooth = nil
-                withAnimation { isSidebarOpen = false }
-            }) {
-                HStack {
-                    Image(systemName: "square.grid.2x2")
-                    Text("All Photos")
-                        .font(AppFonts.subheadline)
-                }
-                .padding(.leading, 16)
-                .padding(.trailing, 8)
-                .padding(.vertical, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
-                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
-            }
-            .padding(.top, 50)
-
-            Divider().background(AppColors.secondary)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // All Photos folder (gray)
+                    Button(action: {
+                        selectedProcedure = nil
+                        selectedTooth = nil
+                        withAnimation { isSidebarOpen = false }
+                    }) {
+                        HStack(spacing: 10) {
+                            Image(systemName: selectedProcedure == nil ? "folder.fill" : "folder")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color.gray)
+                            Text("All Photos")
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.textPrimary)
+                            Spacer()
+                            Text("\(library.assets.count)")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 12)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(selectedProcedure == nil ? AppColors.primary.opacity(0.1) : Color.clear)
+                    }
+                    .padding(.top, 50)
+
                     ForEach(metadataManager.procedures, id: \.self) { procedure in
                         ProcedureFolderView(
                             procedure: procedure,
@@ -4049,6 +4053,12 @@ struct GalleryView: View {
             }
             .offset(x: isSidebarOpen ? 250 : 0)
 
+            // Custom header overlay with fading background
+            VStack {
+                customHeaderView
+                Spacer()
+            }
+
             if !isSidebarOpen {
                 edgeSwipeOverlay
             }
@@ -4067,30 +4077,7 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             mainZStackContent
-            .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                        Image(systemName: "sidebar.left")
-                            .foregroundColor(AppColors.primary)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isSelectMode.toggle()
-                            if !isSelectMode {
-                                selectedAssetIds.removeAll()
-                            }
-                        }
-                    }) {
-                        Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                            .foregroundColor(AppColors.primary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
