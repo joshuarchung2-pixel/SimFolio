@@ -2366,81 +2366,89 @@ struct DentalCameraSetupView: View {
 
                 // TOP CENTER: Photo Info Pill (tag selector dropdown)
                 if cameraService.capturedImage == nil {
-                    PhotoInfoPillView(
-                        metadata: $currentMetadata,
-                        isDropdownOpen: $isInfoPillOpen
-                    )
+                    VStack {
+                        PhotoInfoPillView(
+                            metadata: $currentMetadata,
+                            isDropdownOpen: $isInfoPillOpen
+                        )
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: 500)
                     .position(
                         x: isLandscapeLeft ? geometry.size.width - 180 :
                            isLandscapeRight ? 180 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 60
+                        y: isLandscape ? geometry.size.height / 2 : 310
                     )
                     .zIndex(5)
                 }
 
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
-                    VStack(alignment: .trailing, spacing: 10) {
-                        Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
-                            Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
-                                .font(.title2)
-                                .rotationEffect(orientationManager.iconRotationAngle)
-                                .padding(10)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                                .foregroundColor(.white)
-                        }
-
-                        if isOptionsExpanded {
-                            // Flash Toggle
-                            Button(action: {
-                                switch cameraService.flashMode {
-                                case .off: cameraService.flashMode = .on
-                                case .on: cameraService.flashMode = .auto
-                                default: cameraService.flashMode = .off
-                                }
-                            }) {
-                                Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Grid Toggle
-                            Button(action: { showGrid.toggle() }) {
-                                Image(systemName: showGrid ? "square" : "grid")
-                                    .font(.title2)
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-
-                            // Ghost Toggle
-                            Button(action: {
-                                if ghostImage != nil { ghostImage = nil }
-                                else { isGhostPickerPresented = true }
-                            }) {
-                                Text("👻")
+                    VStack {
+                        VStack(alignment: .trailing, spacing: 10) {
+                            Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
+                                Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
                                     .font(.title2)
                                     .rotationEffect(orientationManager.iconRotationAngle)
                                     .padding(10)
                                     .background(Color.black.opacity(0.6))
                                     .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
-                                    )
+                                    .foregroundColor(.white)
                             }
-                            .transition(.move(edge: .top).combined(with: .opacity))
+
+                            if isOptionsExpanded {
+                                // Flash Toggle
+                                Button(action: {
+                                    switch cameraService.flashMode {
+                                    case .off: cameraService.flashMode = .on
+                                    case .on: cameraService.flashMode = .auto
+                                    default: cameraService.flashMode = .off
+                                    }
+                                }) {
+                                    Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Grid Toggle
+                                Button(action: { showGrid.toggle() }) {
+                                    Image(systemName: showGrid ? "square" : "grid")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                // Ghost Toggle
+                                Button(action: {
+                                    if ghostImage != nil { ghostImage = nil }
+                                    else { isGhostPickerPresented = true }
+                                }) {
+                                    Text("👻")
+                                        .font(.title2)
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                        )
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
+                    .frame(height: 250)
                     .position(
                         x: geometry.size.width - 40,
-                        y: 100
+                        y: 185
                     )
                 }
 
@@ -2531,76 +2539,78 @@ struct DentalCameraSetupView: View {
                                 .padding(.bottom, 20)
                         }
 
-                        // Shutter Button (Center)
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { showShutterEffect = false }
-                            }
-                            cameraService.takePhoto()
-                        }) {
-                            ZStack {
-                                Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
-                                Circle().fill(Color.white).frame(width: 62, height: 62)
-                            }
-                        }
-                        .padding(.bottom, 20)
-
-                        // Bottom row: Photo Preview (left) and Flip Camera (right)
-                        HStack {
-                            // Last Photo Preview (bottom-left)
-                            if let lastPhoto = lastSavedPhoto {
-                                Button(action: {
-                                    // Set navigation state and switch to gallery tab
-                                    GalleryNavigationState.shared.setNavigation(
-                                        procedure: lastSavedMetadata?.procedure,
-                                        toothNumber: lastSavedMetadata?.toothNumber,
-                                        toothDate: lastSavedMetadata?.toothDate,
-                                        photoId: lastSavedPhotoId
-                                    )
-                                    selectedTab = 2
-                                }) {
-                                    Image(uiImage: lastPhoto)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .rotationEffect(orientationManager.iconRotationAngle)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                        // Bottom row with shutter, thumbnail, and flip camera aligned at bottom
+                        ZStack(alignment: .bottom) {
+                            // Photo Preview (left) and Flip Camera (right)
+                            HStack {
+                                // Last Photo Preview (bottom-left)
+                                if let lastPhoto = lastSavedPhoto {
+                                    Button(action: {
+                                        // Set navigation state and switch to gallery tab
+                                        GalleryNavigationState.shared.setNavigation(
+                                            procedure: lastSavedMetadata?.procedure,
+                                            toothNumber: lastSavedMetadata?.toothNumber,
+                                            toothDate: lastSavedMetadata?.toothDate,
+                                            photoId: lastSavedPhotoId
                                         )
-                                        .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
-                                        .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
-                                        .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
-                                }
-                                .padding(.leading, 20)
-                            } else {
-                                // Placeholder when no photo saved yet
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 50, height: 50)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .foregroundColor(.gray)
+                                        selectedTab = 2
+                                    }) {
+                                        Image(uiImage: lastPhoto)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
                                             .rotationEffect(orientationManager.iconRotationAngle)
-                                    )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
+                                            )
+                                            .shadow(color: .white.opacity(showThumbnailGlow ? 0.8 : 0), radius: 12)
+                                            .shadow(color: .blue.opacity(showThumbnailGlow ? 0.6 : 0), radius: 16)
+                                            .scaleEffect(showThumbnailGlow ? 1.3 : 1.0)
+                                    }
                                     .padding(.leading, 20)
+                                } else {
+                                    // Placeholder when no photo saved yet
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 50, height: 50)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray)
+                                                .rotationEffect(orientationManager.iconRotationAngle)
+                                        )
+                                        .padding(.leading, 20)
+                                }
+
+                                Spacer()
+
+                                // Flip Camera Button (bottom-right) - matches thumbnail size
+                                Button(action: { cameraService.flipCamera() }) {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                        .font(.system(size: 22))
+                                        .rotationEffect(orientationManager.iconRotationAngle)
+                                        .foregroundColor(.white)
+                                        .frame(width: 50, height: 50)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .padding(.trailing, 20)
                             }
 
-                            Spacer()
-
-                            // Flip Camera Button (bottom-right) - matches thumbnail size
-                            Button(action: { cameraService.flipCamera() }) {
-                                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                    .font(.system(size: 22))
-                                    .rotationEffect(orientationManager.iconRotationAngle)
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 50)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(Circle())
+                            // Shutter Button (Center) - bottom aligned with thumbnail and flip camera
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation { showShutterEffect = false }
+                                }
+                                cameraService.takePhoto()
+                            }) {
+                                ZStack {
+                                    Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
+                                    Circle().fill(Color.white).frame(width: 62, height: 62)
+                                }
                             }
-                            .padding(.trailing, 20)
                         }
                         .padding(.bottom, 90)
                     }
