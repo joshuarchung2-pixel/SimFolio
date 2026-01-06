@@ -6500,6 +6500,7 @@ struct PortfoliosView: View {
     private func portfolioContentView(portfolio: Portfolio) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                actionsCardView
                 statsCardView(portfolio: portfolio)
                 dueDateCardView(portfolio: portfolio)
                 requirementsSectionView(portfolio: portfolio)
@@ -6512,49 +6513,56 @@ struct PortfoliosView: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            HStack(spacing: 12) {
-                Menu {
-                    ForEach(metadataManager.portfolios) { p in
-                        Button(action: {
-                            if p.id != currentPortfolio?.id {
-                                selectedPortfolioId = p.id
-                                animatePortfolioChange()
-                            }
-                        }) {
-                            HStack {
-                                Text(p.name)
-                                if p.id == currentPortfolio?.id {
-                                    Image(systemName: "checkmark")
-                                }
+    @ViewBuilder
+    private var actionsCardView: some View {
+        HStack(spacing: 12) {
+            Menu {
+                ForEach(metadataManager.portfolios) { p in
+                    Button(action: {
+                        if p.id != currentPortfolio?.id {
+                            selectedPortfolioId = p.id
+                            animatePortfolioChange()
+                        }
+                    }) {
+                        HStack {
+                            Text(p.name)
+                            if p.id == currentPortfolio?.id {
+                                Image(systemName: "checkmark")
                             }
                         }
                     }
-                } label: {
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .stroke(Color(white: 0.85), lineWidth: 1)
-                        )
                 }
-                Button(action: { showAddPortfolioSheet = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .stroke(Color(white: 0.85), lineWidth: 1)
-                        )
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 16))
+                    Text("Switch Portfolio")
+                        .font(.subheadline)
                 }
+                .foregroundColor(AppColors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AppColors.primary.opacity(0.1))
+                .cornerRadius(8)
             }
-            .id("portfolio-toolbar-\(currentPortfolio?.id ?? "none")")
+
+            Button(action: { showAddPortfolioSheet = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                    Text("New Portfolio")
+                        .font(.subheadline)
+                }
+                .foregroundColor(AppColors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AppColors.primary.opacity(0.1))
+                .cornerRadius(8)
+            }
         }
+        .padding(16)
+        .background(AppColors.surface)
+        .cornerRadius(12)
     }
 
     var body: some View {
@@ -6572,9 +6580,6 @@ struct PortfoliosView: View {
             .navigationTitle(currentPortfolio?.name ?? "Portfolios")
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                toolbarContent
-            }
             .tint(AppColors.primary)
         }
         .navigationViewStyle(StackNavigationViewStyle())
