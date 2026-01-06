@@ -17,54 +17,41 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 // MARK: - CUSTOM FONT SYSTEM
-// Typography using Inter for headings, Geist for body/subheadings
+// Typography using Nexa font family exclusively
+// Bold for titles, Regular for headings, Light for body
 struct AppFonts {
-    // Inter - Headings (requires Inter font to be added to app bundle)
-    static func interBold(_ size: CGFloat) -> Font {
-        .custom("Inter-Bold", size: size, relativeTo: .headline)
+    // Nexa - Bold (for titles and prominent text)
+    static func nexaBold(_ size: CGFloat) -> Font {
+        .custom("Nexa-Bold", size: size, relativeTo: .headline)
     }
 
-    static func interSemiBold(_ size: CGFloat) -> Font {
-        .custom("Inter-SemiBold", size: size, relativeTo: .headline)
+    // Nexa - Regular (for headings)
+    static func nexaRegular(_ size: CGFloat) -> Font {
+        .custom("Nexa-Regular", size: size, relativeTo: .headline)
     }
 
-    static func interMedium(_ size: CGFloat) -> Font {
-        .custom("Inter-Medium", size: size, relativeTo: .headline)
-    }
-
-    static func interRegular(_ size: CGFloat) -> Font {
-        .custom("Inter-Regular", size: size, relativeTo: .body)
-    }
-
-    // Geist - Body/Subheadings (requires Geist font to be added to app bundle)
-    static func geistBold(_ size: CGFloat) -> Font {
-        .custom("Geist-Bold", size: size, relativeTo: .body)
-    }
-
-    static func geistSemiBold(_ size: CGFloat) -> Font {
-        .custom("Geist-SemiBold", size: size, relativeTo: .body)
-    }
-
-    static func geistMedium(_ size: CGFloat) -> Font {
-        .custom("Geist-Medium", size: size, relativeTo: .body)
-    }
-
-    static func geistRegular(_ size: CGFloat) -> Font {
-        .custom("Geist-Regular", size: size, relativeTo: .body)
+    // Nexa - Light (for body text)
+    static func nexaLight(_ size: CGFloat) -> Font {
+        .custom("Nexa-Light", size: size, relativeTo: .body)
     }
 
     // Semantic typography styles
-    static var largeTitle: Font { interBold(34) }
-    static var title: Font { interBold(28) }
-    static var title2: Font { interSemiBold(22) }
-    static var title3: Font { interSemiBold(20) }
-    static var headline: Font { interSemiBold(17) }
-    static var subheadline: Font { geistMedium(15) }
-    static var body: Font { geistRegular(17) }
-    static var callout: Font { geistRegular(16) }
-    static var footnote: Font { geistRegular(13) }
-    static var caption: Font { geistMedium(12) }
-    static var caption2: Font { geistRegular(11) }
+    // Titles use Bold
+    static var largeTitle: Font { nexaBold(34) }
+    static var title: Font { nexaBold(28) }
+    static var title2: Font { nexaBold(22) }
+    static var title3: Font { nexaBold(20) }
+
+    // Headings use Regular
+    static var headline: Font { nexaRegular(17) }
+    static var subheadline: Font { nexaRegular(15) }
+
+    // Body text uses Light
+    static var body: Font { nexaLight(17) }
+    static var callout: Font { nexaLight(16) }
+    static var footnote: Font { nexaLight(13) }
+    static var caption: Font { nexaLight(12) }
+    static var caption2: Font { nexaLight(11) }
 }
 
 // MARK: - CUSTOM UI COMPONENTS
@@ -1072,7 +1059,7 @@ struct ToothEntry: Codable, Hashable, Identifiable {
     }
 }
 
-struct PhotoMetadata: Codable {
+struct PhotoMetadata: Codable, Equatable {
     var procedure: String?
     var toothNumber: Int?
     var toothDate: Date?
@@ -2532,14 +2519,16 @@ struct DentalCameraSetupView: View {
                         y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
                     )
                 } else {
-                    // CAPTURE MODE
-                    ZStack {
+                    // CAPTURE MODE - Bottom controls
+                    VStack {
+                        Spacer()
+
                         // Ghost Opacity Slider (positioned above shutter button)
                         if ghostImage != nil {
                             Slider(value: $ghostOpacity, in: 0.1...0.8)
                                 .accentColor(.blue)
                                 .frame(width: 200)
-                                .padding(.bottom, 230)
+                                .padding(.bottom, 20)
                         }
 
                         // Shutter Button (Center)
@@ -2555,7 +2544,7 @@ struct DentalCameraSetupView: View {
                                 Circle().fill(Color.white).frame(width: 62, height: 62)
                             }
                         }
-                        .padding(.bottom, 100)
+                        .padding(.bottom, 20)
 
                         // Bottom row: Photo Preview (left) and Flip Camera (right)
                         HStack {
@@ -2613,8 +2602,9 @@ struct DentalCameraSetupView: View {
                             }
                             .padding(.trailing, 20)
                         }
-                        .padding(.bottom, 76) // Positioned to maintain 10pt gap to nav bar top (matching nav bar top padding)
+                        .padding(.bottom, 90)
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
             .zIndex(2)
@@ -2805,7 +2795,7 @@ struct ZoomDialView: View {
         VStack(spacing: 4) {
             // Zoom value display
             Text(String(format: "%.1fx", currentZoom))
-                .font(AppFonts.interSemiBold(14))
+                .font(AppFonts.nexaRegular(14))
                 .foregroundColor(.yellow)
 
             // Horizontal strip with tick marks
@@ -2828,7 +2818,7 @@ struct ZoomDialView: View {
                             if isMainTick {
                                 let zoomValue = Int(displayMin) + (i / 10)
                                 Text("\(zoomValue)")
-                                    .font(AppFonts.geistMedium(8))
+                                    .font(AppFonts.nexaLight(8))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                         }
@@ -3004,7 +2994,7 @@ struct PhotoInfoPillView: View {
                     } else {
                         // Procedure badge
                         Text(metadata.procedure ?? "")
-                            .font(AppFonts.geistSemiBold(11))
+                            .font(AppFonts.nexaRegular(11))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(AppColors.primary.opacity(0.8))
@@ -3012,7 +3002,7 @@ struct PhotoInfoPillView: View {
 
                         if let tooth = metadata.toothNumber {
                             Text("#\(tooth)")
-                                .font(AppFonts.geistSemiBold(11))
+                                .font(AppFonts.nexaRegular(11))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
                                 .background(AppColors.success.opacity(0.8))
@@ -3100,10 +3090,10 @@ struct PhotoInfoPillView: View {
         }) {
             VStack(spacing: 4) {
                 Text(stageName(for: stage))
-                    .font(AppFonts.geistSemiBold(11))
+                    .font(AppFonts.nexaRegular(11))
                     .foregroundColor(currentStage == stage ? AppColors.textPrimary : AppColors.textSecondary)
                 Text(stageValue(for: stage))
-                    .font(AppFonts.geistRegular(9))
+                    .font(AppFonts.nexaLight(9))
                     .foregroundColor(stageColor(for: stage))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -3676,10 +3666,68 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .leading) {
-                // Main content area
-                ZStack {
-                    AppColors.background
-                        .ignoresSafeArea()
+                VStack(spacing: 0) {
+                    // Scroll-responsive header elements (sidebar and select buttons)
+                    HStack {
+                        Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                            Image(systemName: "sidebar.left")
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.primary)
+                        }
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
+
+                        Spacer()
+
+                        // Current section name (centered header)
+                        VStack(spacing: 2) {
+                            if isSelectMode {
+                                Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                                    .font(AppFonts.nexaBold(22))
+                                    .foregroundColor(AppColors.primary)
+                            } else {
+                                Text(currentSectionTitle)
+                                    .font(AppFonts.nexaBold(22))
+                                    .foregroundColor(AppColors.textPrimary)
+                            }
+
+                            // Breadcrumb for tooth selection (only show when not in select mode)
+                            if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
+                                HStack(spacing: 4) {
+                                    Text(proc)
+                                        .font(AppFonts.caption2)
+                                        .foregroundColor(AppColors.textSecondary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(AppColors.textSecondary)
+                                    Text("Tooth \(selectedTooth!.toothNumber)")
+                                        .font(AppFonts.caption2)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        // Select mode toggle button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isSelectMode.toggle()
+                                if !isSelectMode {
+                                    selectedAssetIds.removeAll()
+                                }
+                            }
+                        }) {
+                            Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                                .font(.system(size: 22))
+                                .foregroundColor(isSelectMode ? AppColors.primary : AppColors.primary)
+                        }
+                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .opacity(showHeaderElements ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
 
                     ScrollView {
                         VStack(spacing: 20) {
@@ -4253,10 +4301,6 @@ struct MoveSelectProcedureView: View {
                             Text(procedure)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4286,6 +4330,8 @@ struct MoveSelectToothView: View {
 
     @State private var showNewToothSheet = false
     @State private var newToothNumber: Int = 1
+    @State private var createdToothEntry: ToothEntry? = nil
+    @State private var navigateToStage = false
 
     var toothEntries: [ToothEntry] {
         metadataManager.getToothEntries(for: procedure)
@@ -4293,25 +4339,6 @@ struct MoveSelectToothView: View {
 
     var body: some View {
         List {
-            // Move to folder root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(procedure)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Existing teeth
             if !toothEntries.isEmpty {
                 Section(header: Text("Select Tooth")) {
@@ -4335,10 +4362,6 @@ struct MoveSelectToothView: View {
                                         .font(AppFonts.caption2)
                                         .foregroundColor(AppColors.textSecondary)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppColors.textSecondary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -4366,6 +4389,26 @@ struct MoveSelectToothView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle(procedure)
         .navigationBarTitleDisplayMode(.inline)
+        .background(
+            NavigationLink(
+                destination: Group {
+                    if let tooth = createdToothEntry {
+                        MoveSelectStageView(
+                            selectedAssetIds: selectedAssetIds,
+                            metadataManager: metadataManager,
+                            procedure: procedure,
+                            toothEntry: tooth,
+                            isPresented: $isPresented,
+                            onComplete: onComplete
+                        )
+                    }
+                },
+                isActive: $navigateToStage
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
         .sheet(isPresented: $showNewToothSheet) {
             NavigationView {
                 Form {
@@ -4384,18 +4427,11 @@ struct MoveSelectToothView: View {
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Create") {
+                        Button("Next") {
                             let newTooth = ToothEntry(procedure: procedure, toothNumber: newToothNumber, date: Date())
-                            metadataManager.movePhotosWithMetadata(
-                                assetIds: selectedAssetIds,
-                                to: procedure,
-                                toothEntry: newTooth,
-                                stage: nil,
-                                angle: nil
-                            )
+                            createdToothEntry = newTooth
                             showNewToothSheet = false
-                            isPresented = false
-                            onComplete()
+                            navigateToStage = true
                         }
                     }
                 }
@@ -4415,31 +4451,6 @@ struct MoveSelectStageView: View {
 
     var body: some View {
         List {
-            // Move to tooth root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: nil,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to Tooth \(toothEntry.toothNumber)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Stage options
             Section(header: Text("Select Stage")) {
                 ForEach(metadataManager.stages, id: \.self) { stage in
@@ -4458,10 +4469,6 @@ struct MoveSelectStageView: View {
                             Text(stage)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4486,31 +4493,6 @@ struct MoveSelectAngleView: View {
 
     var body: some View {
         List {
-            // Move to stage root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: stage,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(stage)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Angle options
             Section(header: Text("Select Angle")) {
                 ForEach(metadataManager.angles, id: \.self) { angle in
@@ -4757,7 +4739,7 @@ struct ToothSubfolderRow: View {
                     .font(AppFonts.caption)
                     .foregroundColor(AppColors.success)
                 Text("#\(entry.toothNumber)")
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textPrimary)
                 Text(entry.dateString)
                     .font(AppFonts.caption2)
@@ -4922,7 +4904,7 @@ struct AngleStackView: View {
 
                 HStack {
                     Text(angle)
-                        .font(AppFonts.geistSemiBold(11))
+                        .font(AppFonts.nexaRegular(11))
                         .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(assets.count)")
@@ -4971,7 +4953,7 @@ struct ExpandedAngleView: View {
             // Header showing angle name
             HStack {
                 Text(angle)
-                    .font(AppFonts.geistSemiBold(12))
+                    .font(AppFonts.nexaRegular(12))
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
                 Text("\(assets.count) photos")
@@ -5134,7 +5116,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let proc = metadata.procedure {
                         Text(proc)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -5143,7 +5125,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let tooth = metadata.toothNumber {
                         Text("#\(tooth)")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5157,7 +5139,7 @@ struct PhotoTagsLabel: View {
                 HStack(spacing: 3) {
                     if let stage = metadata.stage {
                         Text(stage == "Preparation" ? "Prep" : "Resto")
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5166,7 +5148,7 @@ struct PhotoTagsLabel: View {
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(AppFonts.geistSemiBold(8))
+                            .font(AppFonts.nexaRegular(8))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -5206,7 +5188,7 @@ struct PhotoDetailView: View {
                             // Procedure badge (blue)
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -5216,7 +5198,7 @@ struct PhotoDetailView: View {
                             // Tooth badge (green)
                             if let tooth = meta.toothNumber {
                                 Text("#\(tooth)")
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.nexaRegular(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
@@ -6476,6 +6458,7 @@ struct PortfoliosView: View {
             }
         }
     }
+    }
 
     // Generate a zip file with portfolio photos organized by requirement/stage/angle
     func generatePortfolioZip(portfolio: Portfolio) {
@@ -6651,7 +6634,7 @@ struct PortfolioCardView: View {
                         .foregroundColor(AppColors.textSecondary)
                     Spacer()
                     Text(String(format: "%.0f%%", completionPercentage))
-                        .font(AppFonts.geistSemiBold(12))
+                        .font(AppFonts.nexaRegular(12))
                         .foregroundColor(isComplete ? AppColors.success : AppColors.primary)
                 }
 
@@ -6933,7 +6916,7 @@ struct PortfolioDetailView: View {
                                     .font(AppFonts.subheadline)
                                     .foregroundColor(AppColors.textSecondary)
                                 Text(String(format: "%.0f%%", completionPercentage))
-                                    .font(AppFonts.interBold(36))
+                                    .font(AppFonts.nexaBold(36))
                                     .foregroundColor(completionPercentage >= 100 ? AppColors.success : AppColors.primary)
                             }
 
@@ -7242,7 +7225,7 @@ struct RequirementStatusView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(requirement.procedure)
-                            .font(AppFonts.geistSemiBold(15))
+                            .font(AppFonts.nexaRegular(15))
                             .foregroundColor(AppColors.textPrimary)
                         Text("\(fulfilled)/\(total) photos")
                             .font(AppFonts.caption)
@@ -7280,7 +7263,7 @@ struct RequirementStatusView: View {
                                     .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                                     .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(AppFonts.geistSemiBold(12))
+                                    .font(AppFonts.nexaRegular(12))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
