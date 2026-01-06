@@ -5445,7 +5445,9 @@ struct PhotoDetailView: View {
                 .background(AppColors.surface.opacity(0.9))
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 16)
             }
         }
         .toolbar {
