@@ -6403,40 +6403,10 @@ struct PortfoliosView: View {
                     }
                 }
             }
+            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if !metadataManager.portfolios.isEmpty, let portfolio = currentPortfolio {
-                        Menu {
-                            ForEach(metadataManager.portfolios) { p in
-                                Button(action: {
-                                    selectedPortfolioId = p.id
-                                }) {
-                                    HStack {
-                                        Text(p.name)
-                                        if p.id == portfolio.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(portfolio.name)
-                                    .font(.headline)
-                                    .foregroundColor(AppColors.textPrimary)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                        }
-                    } else {
-                        Text("Portfolios")
-                            .font(.headline)
-                            .foregroundColor(AppColors.textPrimary)
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showAddPortfolioSheet = true }) {
                         Image(systemName: "plus")
@@ -7252,14 +7222,16 @@ struct RequirementStatusView: View {
 
                     Spacer()
 
-                    // Edit button
-                    Button(action: { showEditSheet = true }) {
-                        Image(systemName: "pencil.circle.fill")
-                            .foregroundColor(.blue)
-                            .font(.title3)
+                    // Edit button - only shown when expanded
+                    if isExpanded {
+                        Button(action: { showEditSheet = true }) {
+                            Image(systemName: "pencil.circle")
+                                .foregroundColor(.gray)
+                                .font(.title3)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .padding(.trailing, 12)
                     }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .padding(.trailing, 12)
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .foregroundColor(AppColors.textSecondary)
@@ -7287,8 +7259,7 @@ struct RequirementStatusView: View {
                                     .foregroundColor(stage == "Preparation" ? AppColors.warning : AppColors.success)
                                     .font(AppFonts.caption)
                                 Text(stage)
-                                    .font(AppFonts.nexaRegular(12))
-                                    .fontWeight(.bold)
+                                    .font(AppFonts.nexaBold(14))
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
