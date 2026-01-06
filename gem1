@@ -54,6 +54,32 @@ struct AppFonts {
     static var caption2: Font { nexaLight(11) }
 }
 
+// MARK: - SCROLL OFFSET TRACKING
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+struct ScrollOffsetModifier: ViewModifier {
+    let coordinateSpace: String
+    @Binding var offset: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named(coordinateSpace)).minY)
+                }
+            )
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                offset = value
+            }
+    }
+}
+
 // MARK: - CUSTOM UI COMPONENTS
 // Custom color scheme
 
@@ -3591,6 +3617,11 @@ struct GalleryView: View {
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDraggingFromEdge = false
 
+    // Scroll-responsive header state
+    @State private var scrollOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var showHeaderElements = true
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3664,7 +3695,7 @@ struct GalleryView: View {
         NavigationView {
             ZStack(alignment: .leading) {
                 VStack(spacing: 0) {
-                    // Header bar
+                    // Scroll-responsive header elements (sidebar and select buttons)
                     HStack {
                         Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
                             Image(systemName: "sidebar.left")
@@ -3720,25 +3751,33 @@ struct GalleryView: View {
                         }
                         .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 60)
-                    .padding(.bottom, 16)
-                    .background(AppColors.background)
-                    .zIndex(20)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .opacity(showHeaderElements ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
 
                     // Main content
                     ScrollView {
-                        if selectedTooth != nil {
-                            // Show grouped by stage and angle - always show both sections
-                            VStack(alignment: .leading, spacing: 20) {
-                                ForEach(["Preparation", "Restoration"], id: \.self) { stage in
-                                    let angleGroups = assetsByAngle(for: stage)
-                                    StageSection(
-                                        stage: stage,
-                                        angleGroups: angleGroups,
-                                        expandedAngle: $expandedAngleStack,
-                                        metadataManager: metadataManager,
-                                        isCollapsed: collapsedStages.contains(stage),
+                        VStack(spacing: 0) {
+                            // Invisible scroll offset tracker
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("galleryScroll")).minY)
+                            }
+                            .frame(height: 0)
+
+                            if selectedTooth != nil {
+                                // Show grouped by stage and angle - always show both sections
+                                VStack(alignment: .leading, spacing: 20) {
+                                    ForEach(["Preparation", "Restoration"], id: \.self) { stage in
+                                        let angleGroups = assetsByAngle(for: stage)
+                                        StageSection(
+                                            stage: stage,
+                                            angleGroups: angleGroups,
+                                            expandedAngle: $expandedAngleStack,
+                                            metadataManager: metadataManager,
+                                            isCollapsed: collapsedStages.contains(stage),
                                         onToggleCollapse: {
                                             withAnimation(.easeInOut(duration: 0.2)) {
                                                 if collapsedStages.contains(stage) {
@@ -3851,15 +3890,39 @@ struct GalleryView: View {
                             .padding(16)
                         }
                     }
+                    }
+                    .coordinateSpace(name: "galleryScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                        let scrollingDown = value < lastScrollOffset
+                        let scrollingUp = value > lastScrollOffset
+                        let scrollThreshold: CGFloat = 10
+
+                        if scrollingDown && (lastScrollOffset - value) > scrollThreshold {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = false
+                            }
+                        } else if scrollingUp && (value - lastScrollOffset) > scrollThreshold {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = true
+                            }
+                        }
+                        // Reset to showing elements when near top
+                        if value > -20 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = true
+                            }
+                        }
+                        lastScrollOffset = value
+                    }
                 }
                 .offset(x: isSidebarOpen ? 250 : 0)
 
                 // Edge swipe gesture overlay (left edge for opening, below header)
                 if !isSidebarOpen {
                     VStack(spacing: 0) {
-                        // Spacer for full header height (60pt top padding + 40pt button + 16pt bottom padding = 116pt)
-                        // Using 120pt to ensure sidebar toggle button is not blocked by gesture overlay
-                        Color.clear.frame(height: 120)
+                        // Spacer for navigation bar + subheader elements
+                        // Navigation bar large title ~96pt + subheader ~52pt = ~148pt total
+                        Color.clear.frame(height: 150)
                             .allowsHitTesting(false)
 
                         HStack {
@@ -4039,8 +4102,9 @@ struct GalleryView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .navigationBarHidden(true)
-            .ignoresSafeArea(edges: .top)
+            .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
@@ -6081,6 +6145,11 @@ struct PortfoliosView: View {
     @State private var zipFileURL: IdentifiableURL? = nil
     @ObservedObject var library = PhotoLibraryManager.shared
 
+    // Scroll-responsive header state
+    @State private var scrollOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var showHeaderElements = true
+
     // Get the most recently created portfolio, or the selected one
     var currentPortfolio: Portfolio? {
         if let id = selectedPortfolioId {
@@ -6113,107 +6182,112 @@ struct PortfoliosView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppColors.background.ignoresSafeArea()
+        NavigationView {
+            ZStack {
+                AppColors.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Custom header bar
-                HStack {
-                    // Portfolio dropdown selector acting as header
+                VStack(spacing: 0) {
+                    // Scroll-responsive header elements (dropdown and plus button)
                     if !metadataManager.portfolios.isEmpty {
-                        Menu {
-                            ForEach(metadataManager.portfolios) { portfolio in
-                                Button(action: {
-                                    selectedPortfolioId = portfolio.id
-                                }) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(portfolio.name)
-                                            if let _ = portfolio.dueDate {
-                                                if let days = portfolio.daysUntilDue {
-                                                    if portfolio.isOverdue {
-                                                        Text("Overdue by \(abs(days))d")
-                                                            .font(.caption2)
-                                                            .foregroundColor(.red)
-                                                    } else if days == 0 {
-                                                        Text("Due today")
-                                                            .font(.caption2)
-                                                            .foregroundColor(.red)
-                                                    } else {
-                                                        Text("Due in \(days)d")
-                                                            .font(.caption2)
-                                                            .foregroundColor(portfolio.isDueSoon ? .orange : .secondary)
+                        HStack {
+                            // Portfolio dropdown selector
+                            Menu {
+                                ForEach(metadataManager.portfolios) { portfolio in
+                                    Button(action: {
+                                        selectedPortfolioId = portfolio.id
+                                    }) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(portfolio.name)
+                                                if let _ = portfolio.dueDate {
+                                                    if let days = portfolio.daysUntilDue {
+                                                        if portfolio.isOverdue {
+                                                            Text("Overdue by \(abs(days))d")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.red)
+                                                        } else if days == 0 {
+                                                            Text("Due today")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.red)
+                                                        } else {
+                                                            Text("Due in \(days)d")
+                                                                .font(.caption2)
+                                                                .foregroundColor(portfolio.isDueSoon ? .orange : .secondary)
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                        Spacer()
-                                        if portfolio.id == currentPortfolio?.id {
-                                            Image(systemName: "checkmark")
+                                            Spacer()
+                                            if portfolio.id == currentPortfolio?.id {
+                                                Image(systemName: "checkmark")
+                                            }
                                         }
                                     }
                                 }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(AppColors.primary)
+                                    Text("Switch Portfolio")
+                                        .font(AppFonts.subheadline)
+                                        .foregroundColor(AppColors.primary)
+                                }
                             }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text(currentPortfolio?.name ?? "Select Portfolio")
-                                    .font(AppFonts.largeTitle)
-                                    .foregroundColor(AppColors.textPrimary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                Image(systemName: "chevron.down")
-                                    .font(.body)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                        }
-                        .id(currentPortfolio?.id)  // Force redraw on portfolio change
-                    } else {
-                        Text("Portfolios")
-                            .font(AppFonts.largeTitle)
-                            .foregroundColor(AppColors.textPrimary)
-                    }
+                            .id(currentPortfolio?.id)
 
-                    Spacer()
+                            Spacer()
 
-                    // Plus button
-                    Button(action: { showAddPortfolioSheet = true }) {
-                        Image(systemName: "plus")
-                            .font(.title3)
-                            .foregroundColor(.blue)
-                            .padding(8)
-                    }
-                }
-                .padding(16)
-
-                // Main content
-                if metadataManager.portfolios.isEmpty {
-                    // Empty state
-                    Spacer()
-                    VStack(spacing: 20) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("No Portfolios Yet")
-                            .font(AppFonts.title2)
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("Create a portfolio to track\nrequired photos for assignments")
-                            .font(AppFonts.subheadline)
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                        Button(action: { showAddPortfolioSheet = true }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Create Portfolio")
+                            // Plus button
+                            Button(action: { showAddPortfolioSheet = true }) {
+                                Image(systemName: "plus")
+                                    .font(.title3)
+                                    .foregroundColor(.blue)
+                                    .padding(8)
                             }
                         }
-                        .buttonStyle(CustomPrimaryButtonStyle())
-                        .padding(.top, 10)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                        .opacity(showHeaderElements ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
                     }
-                    Spacer()
-                } else if let portfolio = currentPortfolio {
-                    // Expanded portfolio view
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
+
+                    // Main content
+                    if metadataManager.portfolios.isEmpty {
+                        // Empty state
+                        Spacer()
+                        VStack(spacing: 20) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 60))
+                                .foregroundColor(AppColors.textSecondary)
+                            Text("No Portfolios Yet")
+                                .font(AppFonts.title2)
+                                .foregroundColor(AppColors.textSecondary)
+                            Text("Create a portfolio to track\nrequired photos for assignments")
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                            Button(action: { showAddPortfolioSheet = true }) {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Create Portfolio")
+                                }
+                            }
+                            .buttonStyle(CustomPrimaryButtonStyle())
+                            .padding(.top, 10)
+                        }
+                        Spacer()
+                    } else if let portfolio = currentPortfolio {
+                        // Expanded portfolio view
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                // Invisible scroll offset tracker
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("portfolioScroll")).minY)
+                                }
+                                .frame(height: 0)
                             // Header stats card (animated)
                             VStack(spacing: 16) {
                                 HStack {
@@ -6433,9 +6507,36 @@ struct PortfoliosView: View {
                         .padding()
                         .animation(.easeInOut(duration: 0.2), value: portfolio.id)
                     }
+                    .coordinateSpace(name: "portfolioScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                        let scrollingDown = value < lastScrollOffset
+                        let scrollingUp = value > lastScrollOffset
+                        let scrollThreshold: CGFloat = 10
+
+                        if scrollingDown && (lastScrollOffset - value) > scrollThreshold {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = false
+                            }
+                        } else if scrollingUp && (value - lastScrollOffset) > scrollThreshold {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = true
+                            }
+                        }
+                        // Reset to showing elements when near top
+                        if value > -20 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHeaderElements = true
+                            }
+                        }
+                        lastScrollOffset = value
+                    }
                 }
             }
+            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .sheet(isPresented: $showAddPortfolioSheet) {
             AddPortfolioSheet(isPresented: $showAddPortfolioSheet)
         }
