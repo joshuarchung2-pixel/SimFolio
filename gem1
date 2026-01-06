@@ -4293,10 +4293,6 @@ struct MoveSelectProcedureView: View {
                             Text(procedure)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4326,6 +4322,8 @@ struct MoveSelectToothView: View {
 
     @State private var showNewToothSheet = false
     @State private var newToothNumber: Int = 1
+    @State private var createdToothEntry: ToothEntry? = nil
+    @State private var navigateToStage = false
 
     var toothEntries: [ToothEntry] {
         metadataManager.getToothEntries(for: procedure)
@@ -4333,25 +4331,6 @@ struct MoveSelectToothView: View {
 
     var body: some View {
         List {
-            // Move to folder root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotos(assetIds: selectedAssetIds, to: procedure)
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(procedure)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Existing teeth
             if !toothEntries.isEmpty {
                 Section(header: Text("Select Tooth")) {
@@ -4375,10 +4354,6 @@ struct MoveSelectToothView: View {
                                         .font(AppFonts.caption2)
                                         .foregroundColor(AppColors.textSecondary)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppColors.textSecondary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -4406,6 +4381,26 @@ struct MoveSelectToothView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle(procedure)
         .navigationBarTitleDisplayMode(.inline)
+        .background(
+            NavigationLink(
+                destination: Group {
+                    if let tooth = createdToothEntry {
+                        MoveSelectStageView(
+                            selectedAssetIds: selectedAssetIds,
+                            metadataManager: metadataManager,
+                            procedure: procedure,
+                            toothEntry: tooth,
+                            isPresented: $isPresented,
+                            onComplete: onComplete
+                        )
+                    }
+                },
+                isActive: $navigateToStage
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
         .sheet(isPresented: $showNewToothSheet) {
             NavigationView {
                 Form {
@@ -4424,18 +4419,11 @@ struct MoveSelectToothView: View {
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Create") {
+                        Button("Next") {
                             let newTooth = ToothEntry(procedure: procedure, toothNumber: newToothNumber, date: Date())
-                            metadataManager.movePhotosWithMetadata(
-                                assetIds: selectedAssetIds,
-                                to: procedure,
-                                toothEntry: newTooth,
-                                stage: nil,
-                                angle: nil
-                            )
+                            createdToothEntry = newTooth
                             showNewToothSheet = false
-                            isPresented = false
-                            onComplete()
+                            navigateToStage = true
                         }
                     }
                 }
@@ -4455,31 +4443,6 @@ struct MoveSelectStageView: View {
 
     var body: some View {
         List {
-            // Move to tooth root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: nil,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to Tooth \(toothEntry.toothNumber)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Stage options
             Section(header: Text("Select Stage")) {
                 ForEach(metadataManager.stages, id: \.self) { stage in
@@ -4498,10 +4461,6 @@ struct MoveSelectStageView: View {
                             Text(stage)
                                 .font(AppFonts.body)
                                 .foregroundColor(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -4526,31 +4485,6 @@ struct MoveSelectAngleView: View {
 
     var body: some View {
         List {
-            // Move to stage root option
-            Section {
-                Button(action: {
-                    metadataManager.movePhotosWithMetadata(
-                        assetIds: selectedAssetIds,
-                        to: procedure,
-                        toothEntry: toothEntry,
-                        stage: stage,
-                        angle: nil
-                    )
-                    isPresented = false
-                    onComplete()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(AppColors.primary)
-                        Text("Move to \(stage)")
-                            .font(AppFonts.body)
-                            .foregroundColor(AppColors.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
             // Angle options
             Section(header: Text("Select Angle")) {
                 ForEach(metadataManager.angles, id: \.self) { angle in
