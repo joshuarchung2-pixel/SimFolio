@@ -669,6 +669,13 @@ struct CustomIconButtonStyle: ButtonStyle {
 // MARK: - CUSTOM BOTTOM NAVIGATION BAR
 struct CustomBottomNavBar: View {
     @Binding var selectedTab: Int
+    @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var orientationManager = OrientationManager.shared
+
+    // Only rotate icons when on camera tab (tab 0)
+    var iconRotation: Angle {
+        selectedTab == 0 ? orientationManager.iconRotationAngle : .zero
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -676,6 +683,7 @@ struct CustomBottomNavBar: View {
                 icon: "camera.fill",
                 label: "Camera",
                 isSelected: selectedTab == 0,
+                iconRotation: iconRotation,
                 action: { selectedTab = 0 }
             )
 
@@ -683,6 +691,7 @@ struct CustomBottomNavBar: View {
                 icon: "folder.fill",
                 label: "Portfolios",
                 isSelected: selectedTab == 1,
+                iconRotation: iconRotation,
                 action: { selectedTab = 1 }
             )
 
@@ -690,6 +699,7 @@ struct CustomBottomNavBar: View {
                 icon: "photo.on.rectangle",
                 label: "Gallery",
                 isSelected: selectedTab == 2,
+                iconRotation: iconRotation,
                 action: { selectedTab = 2 }
             )
 
@@ -697,6 +707,7 @@ struct CustomBottomNavBar: View {
                 icon: "gearshape.fill",
                 label: "Settings",
                 isSelected: selectedTab == 3,
+                iconRotation: iconRotation,
                 action: { selectedTab = 3 }
             )
         }
@@ -720,6 +731,7 @@ struct NavBarItem: View {
     let icon: String
     let label: String
     let isSelected: Bool
+    var iconRotation: Angle = .zero
     let action: () -> Void
 
     var body: some View {
@@ -728,10 +740,12 @@ struct NavBarItem: View {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
+                    .rotationEffect(iconRotation)
 
                 Text(label)
                     .font(AppFonts.caption2)
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
+                    .rotationEffect(iconRotation)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
@@ -2310,15 +2324,10 @@ struct DentalCameraSetupView: View {
                     }
             }
 
-            VStack {
-                // TOP BAR
-                ZStack(alignment: .top) {
-                    // Center: Unified Photo Info Pill with Blank Fields Warning
-                    VStack(spacing: 8) {
-                        PhotoInfoPillView(
-                            metadata: $currentMetadata,
-                            isDropdownOpen: $isInfoPillOpen
-                        )
+            GeometryReader { geometry in
+                let isLandscape = orientationManager.isLandscape
+                let isLandscapeLeft = orientationManager.deviceOrientation == .landscapeLeft
+                let isLandscapeRight = orientationManager.deviceOrientation == .landscapeRight
 
                         // Blank fields warning popup
                         if showBlankFieldsWarning {
@@ -2346,127 +2355,170 @@ struct DentalCameraSetupView: View {
                                         .cornerRadius(8)
                                 }
                             }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                            .background(AppColors.surface.opacity(0.95))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(AppColors.warning.opacity(0.5), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
-                                removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
-                            ))
                         }
-                    }
-                    .zIndex(10)
-
-                    // Right: Unified Options Button (Expanding Downward)
-                    if cameraService.capturedImage == nil {
-                        HStack {
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 10) {
-                                Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
-                                    Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
-                                        .font(.title2)
-                                        .rotationEffect(orientationManager.iconRotationAngle)
-                                        .padding(10)
-                                        .background(Color.black.opacity(0.6))
-                                        .clipShape(Circle())
-                                        .foregroundColor(.white)
-                                }
-
-                                if isOptionsExpanded {
-                                    // Flash Toggle
-                                    Button(action: {
-                                        switch cameraService.flashMode {
-                                        case .off: cameraService.flashMode = .on
-                                        case .on: cameraService.flashMode = .auto
-                                        default: cameraService.flashMode = .off
-                                        }
-                                    }) {
-                                        Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
-                                            .font(.title2)
-                                            .rotationEffect(orientationManager.iconRotationAngle)
-                                            .padding(10)
-                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
-                                    }
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-
-                                    // Grid Toggle
-                                    Button(action: { showGrid.toggle() }) {
-                                        Image(systemName: showGrid ? "square" : "grid")
-                                            .font(.title2)
-                                            .rotationEffect(orientationManager.iconRotationAngle)
-                                            .padding(10)
-                                            .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
-                                    }
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-
-                                    // Ghost Toggle
-                                    Button(action: {
-                                        if ghostImage != nil { ghostImage = nil }
-                                        else { isGhostPickerPresented = true }
-                                    }) {
-                                        Text("👻")
-                                            .font(.title2)
-                                            .rotationEffect(orientationManager.iconRotationAngle)
-                                            .padding(10)
-                                            .background(Color.black.opacity(0.6))
-                                            .clipShape(Circle())
-                                            .overlay(
-                                                Circle()
-                                                    .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
-                                            )
-                                    }
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                                }
-                            }
-                        }
+                        .rotationEffect(orientationManager.iconRotationAngle)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(AppColors.surface.opacity(0.95))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(AppColors.warning.opacity(0.5), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
+                            removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                        ))
                     }
                 }
-                .padding(.horizontal)
-                .padding(.top, 60)
-                
-                Spacer()
-                
-                // BOTTOM BAR
-                if let captured = cameraService.capturedImage {
-                    // REVIEW MODE
-                    HStack(alignment: .center, spacing: 50) {
-                        Button(action: {
-                            isPhotoFading = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                cameraService.retake()
-                                isPhotoFading = false
-                            }
-                        }) {
-                            Text("Retake")
-                                .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
-                        }
-                        .buttonStyle(CustomSecondaryButtonStyle())
+                .zIndex(10)
+                .position(
+                    x: isLandscapeLeft ? geometry.size.width - 80 :
+                       isLandscapeRight ? 80 :
+                       geometry.size.width / 2,
+                    y: isLandscape ? geometry.size.height / 2 : 80
+                )
 
-                        Button(action: {
-                            if hasIncompleteMetadata {
-                                // Show blank fields warning
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showBlankFieldsWarning = true
-                                }
-                            } else {
-                                savePhotoWithMetadata()
-                            }
-                        }) {
-                            Text("Use Photo")
-                                .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
+                // Right: Unified Options Button (Expanding Downward)
+                if cameraService.capturedImage == nil {
+                    VStack(alignment: .trailing, spacing: 10) {
+                        Button(action: { withAnimation { isOptionsExpanded.toggle() } }) {
+                            Image(systemName: isOptionsExpanded ? "chevron.up.circle.fill" : "slider.horizontal.3")
+                                .font(.title2)
+                                .rotationEffect(orientationManager.iconRotationAngle)
+                                .padding(10)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(Circle())
+                                .foregroundColor(.white)
                         }
-                        .buttonStyle(CustomPrimaryButtonStyle())
+
+                        if isOptionsExpanded {
+                            // Flash Toggle
+                            Button(action: {
+                                switch cameraService.flashMode {
+                                case .off: cameraService.flashMode = .on
+                                case .on: cameraService.flashMode = .auto
+                                default: cameraService.flashMode = .off
+                                }
+                            }) {
+                                Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
+                                    .font(.title2)
+                                    .rotationEffect(orientationManager.iconRotationAngle)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(cameraService.flashMode == .off ? .white : .yellow)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+
+                            // Grid Toggle
+                            Button(action: { showGrid.toggle() }) {
+                                Image(systemName: showGrid ? "square" : "grid")
+                                    .font(.title2)
+                                    .rotationEffect(orientationManager.iconRotationAngle)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.6)).clipShape(Circle()).foregroundColor(showGrid ? .yellow : .white)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+
+                            // Ghost Toggle
+                            Button(action: {
+                                if ghostImage != nil { ghostImage = nil }
+                                else { isGhostPickerPresented = true }
+                            }) {
+                                Text("👻")
+                                    .font(.title2)
+                                    .rotationEffect(orientationManager.iconRotationAngle)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.yellow, lineWidth: ghostImage != nil ? 2 : 0)
+                                    )
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.bottom, 100)
+                    .position(
+                        x: geometry.size.width - 40,
+                        y: 100
+                    )
+                }
+
+                // BOTTOM BAR - Review Mode buttons
+                if cameraService.capturedImage != nil {
+                    // REVIEW MODE - Retake/Use Photo buttons
+                    VStack(spacing: isLandscape ? 20 : 0) {
+                        if isLandscape {
+                            // Vertical layout for landscape
+                            Button(action: {
+                                if hasIncompleteMetadata {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        showBlankFieldsWarning = true
+                                    }
+                                } else {
+                                    savePhotoWithMetadata()
+                                }
+                            }) {
+                                Text("Use Photo")
+                                    .font(AppFonts.headline)
+                                    .frame(width: 120, height: 50)
+                            }
+                            .buttonStyle(CustomPrimaryButtonStyle())
+                            .rotationEffect(orientationManager.iconRotationAngle)
+
+                            Button(action: {
+                                isPhotoFading = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    cameraService.retake()
+                                    isPhotoFading = false
+                                }
+                            }) {
+                                Text("Retake")
+                                    .font(AppFonts.headline)
+                                    .frame(width: 120, height: 50)
+                            }
+                            .buttonStyle(CustomSecondaryButtonStyle())
+                            .rotationEffect(orientationManager.iconRotationAngle)
+                        } else {
+                            // Horizontal layout for portrait
+                            HStack(alignment: .center, spacing: 50) {
+                                Button(action: {
+                                    isPhotoFading = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                        cameraService.retake()
+                                        isPhotoFading = false
+                                    }
+                                }) {
+                                    Text("Retake")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
+                                }
+                                .buttonStyle(CustomSecondaryButtonStyle())
+
+                                Button(action: {
+                                    if hasIncompleteMetadata {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showBlankFieldsWarning = true
+                                        }
+                                    } else {
+                                        savePhotoWithMetadata()
+                                    }
+                                }) {
+                                    Text("Use Photo")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
+                                }
+                                .buttonStyle(CustomPrimaryButtonStyle())
+                            }
+                        }
+                    }
+                    .position(
+                        x: isLandscapeLeft ? 100 :
+                           isLandscapeRight ? geometry.size.width - 100 :
+                           geometry.size.width / 2,
+                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
+                    )
                 } else {
                     // CAPTURE MODE
                     ZStack {
@@ -2512,6 +2564,7 @@ struct DentalCameraSetupView: View {
                                         .aspectRatio(contentMode: .fill)
                                         .frame(width: 50, height: 50)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .rotationEffect(orientationManager.iconRotationAngle)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 8)
                                                 .stroke(Color.white, lineWidth: showThumbnailGlow ? 3 : 2)
@@ -3786,9 +3839,6 @@ struct GalleryView: View {
                                                         RoundedRectangle(cornerRadius: 8)
                                                             .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
                                                     )
-                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
                                                     .animation(.easeInOut(duration: 0.3), value: isHighlighted)
 
                                                 // Tag info display (show in All Photos view) - fixed height for alignment
@@ -4015,13 +4065,6 @@ struct GalleryView: View {
                         highlightedPhotoId = photoId
                         showPhotoHighlight = true
 
-                        // Auto-expand the angle group containing the highlighted photo
-                        if let metadata = metadataManager.getMetadata(for: photoId),
-                           let stage = metadata.stage,
-                           let angle = metadata.angle {
-                            expandedAngleStack = "\(stage)-\(angle)"
-                        }
-
                         // Remove highlight after 1 second
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             withAnimation(.easeOut(duration: 0.3)) {
@@ -4052,13 +4095,6 @@ struct GalleryView: View {
                     if let photoId = galleryNavState.pendingHighlightPhotoId {
                         highlightedPhotoId = photoId
                         showPhotoHighlight = true
-
-                        // Auto-expand the angle group containing the highlighted photo
-                        if let metadata = metadataManager.getMetadata(for: photoId),
-                           let stage = metadata.stage,
-                           let angle = metadata.angle {
-                            expandedAngleStack = "\(stage)-\(angle)"
-                        }
 
                         // Remove highlight after 1 second
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -5077,9 +5113,6 @@ struct ExpandedAngleView: View {
                                         RoundedRectangle(cornerRadius: 10)
                                             .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
                                     )
-                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
                                     .animation(.easeInOut(duration: 0.3), value: isHighlighted)
                                 }
                             }
@@ -5125,32 +5158,48 @@ struct PhotoTagsLabel: View {
     var body: some View {
         VStack(spacing: 2) {
             if let metadata = metadata {
-                // First row: Procedure and Tooth
-                HStack(spacing: 4) {
+                // First row: Procedure and Tooth (blue and green)
+                HStack(spacing: 3) {
                     if let proc = metadata.procedure {
                         Text(proc)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(AppColors.textSecondary)
+                            .font(AppFonts.geistSemiBold(8))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(AppColors.primary.opacity(0.8))
+                            .cornerRadius(3)
                     }
                     if let tooth = metadata.toothNumber {
                         Text("#\(tooth)")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(AppColors.textSecondary)
+                            .font(AppFonts.geistSemiBold(8))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(AppColors.success.opacity(0.8))
+                            .cornerRadius(3)
                     }
                 }
                 .lineLimit(1)
 
-                // Second row: Stage and Angle
-                HStack(spacing: 4) {
+                // Second row: Stage and Angle (orange and purple)
+                HStack(spacing: 3) {
                     if let stage = metadata.stage {
-                        Text(stage.prefix(4))
-                            .font(.system(size: 8))
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                        Text(String(stage.prefix(4)))
+                            .font(AppFonts.caption2)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(AppColors.warning.opacity(0.8))
+                            .cornerRadius(3)
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(.system(size: 8))
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                            .font(AppFonts.caption2)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Color.purple.opacity(0.8))
+                            .cornerRadius(3)
                     }
                 }
                 .lineLimit(1)
@@ -5174,37 +5223,46 @@ struct PhotoDetailView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Tags/Metadata at the top
+                // Tags/Metadata at the top (matching camera view: blue, green, orange, purple)
                 if let meta = metadata {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            // Procedure badge (blue)
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(AppFonts.geistSemiBold(12))
+                                    .font(AppFonts.geistSemiBold(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(AppColors.primary.opacity(0.85))
+                                    .cornerRadius(4)
+                            }
+                            // Tooth badge (green)
+                            if let tooth = meta.toothNumber {
+                                Text("#\(tooth)")
+                                    .font(AppFonts.geistSemiBold(11))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
                                     .background(AppColors.success.opacity(0.85))
                                     .cornerRadius(4)
                             }
+                            // Stage badge (orange)
                             if let stage = meta.stage {
-                                HStack(spacing: 3) {
-                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                        .font(.system(size: 10))
-                                    Text(stage)
-                                        .font(AppFonts.geistSemiBold(11))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
-                                .cornerRadius(4)
+                                Text(String(stage.prefix(4)))
+                                    .font(AppFonts.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(AppColors.warning.opacity(0.85))
+                                    .cornerRadius(4)
                             }
+                            // Angle badge (purple)
                             if let angle = meta.angle {
                                 Text(angle)
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.caption2)
                                     .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
+                                    .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
                                     .background(Color.purple.opacity(0.85))
                                     .cornerRadius(4)
@@ -5260,7 +5318,9 @@ struct PhotoDetailView: View {
                 .background(AppColors.surface.opacity(0.9))
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 16)
             }
         }
         .toolbar {
@@ -6254,7 +6314,7 @@ struct PortfoliosView: View {
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
-                                    .background(progressColor(for: completionPercentage))
+                                    .background(Color.green)
                                     .cornerRadius(8)
                                 }
                                 .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
@@ -6288,10 +6348,26 @@ struct PortfoliosView: View {
                                             Text(dueDateStr)
                                                 .font(.title2.weight(.semibold))
                                                 .foregroundColor(AppColors.textPrimary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.blue.opacity(0.1))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(Color.blue.opacity(0.3), lineWidth: 1.5)
+                                                )
+                                                .cornerRadius(8)
                                         } else {
                                             Text("Tap to set")
                                                 .font(.title2.weight(.semibold))
                                                 .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.blue.opacity(0.05))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(Color.blue.opacity(0.2), lineWidth: 1.5)
+                                                )
+                                                .cornerRadius(8)
                                         }
                                     }
 
@@ -7128,6 +7204,19 @@ struct PieProgressView: View {
     let progress: Double  // 0.0 to 1.0
     let isFulfilled: Bool
 
+    var progressColor: Color {
+        let percentage = progress * 100
+        if percentage >= 100 {
+            return .green
+        } else if percentage >= 75 {
+            return .yellow
+        } else if percentage >= 25 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+
     var body: some View {
         ZStack {
             // Background circle
@@ -7138,21 +7227,15 @@ struct PieProgressView: View {
             Circle()
                 .trim(from: 0, to: min(1.0, progress))
                 .stroke(
-                    isFulfilled ? Color.green : Color.blue,
+                    progressColor,
                     style: StrokeStyle(lineWidth: 3, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
 
-            // Center content
-            if isFulfilled {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.green)
-            } else if progress > 0 {
-                Text(String(format: "%.0f", progress * 100))
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.blue)
-            }
+            // Center content - always show percentage
+            Text("\(Int(progress * 100))%")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundColor(progressColor)
         }
     }
 }
