@@ -3857,6 +3857,7 @@ struct GalleryView: View {
                         .padding(.top, 20)
                     }
                 }
+                }
                 .offset(x: isSidebarOpen ? 250 : 0)
 
                 // Edge swipe gesture overlay (left edge for opening, below header)
