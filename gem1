@@ -202,6 +202,10 @@ class NotificationManager: ObservableObject {
         guard notificationsEnabled, permissionGranted else { return }
         guard let dueDate = portfolio.dueDate else { return }
 
+        // Don't schedule notifications for past-due portfolios
+        let now = Date()
+        guard dueDate > now else { return }
+
         // Check if portfolio has outstanding requirements
         let stats = MetadataManager.shared.getPortfolioStats(portfolio)
         guard stats.fulfilled < stats.total else { return }
@@ -210,12 +214,11 @@ class NotificationManager: ObservableObject {
         let calendar = Calendar.current
         guard let notificationDate = calendar.date(byAdding: .day, value: -daysBefore, to: dueDate) else { return }
 
-        // Don't schedule if notification date is in the past
-        let now = Date()
-        if notificationDate < now && dueDate > now {
+        // Schedule based on whether notification date has passed
+        if notificationDate < now {
             // Due date is still in future but notification date passed - schedule for today
             scheduleImmediateNotification(for: portfolio, dueDate: dueDate)
-        } else if notificationDate >= now {
+        } else {
             scheduleTimedNotification(for: portfolio, dueDate: dueDate, notificationDate: notificationDate)
         }
     }
