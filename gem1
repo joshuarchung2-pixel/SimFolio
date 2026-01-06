@@ -3594,6 +3594,9 @@ struct GalleryView: View {
     @State private var dragOffset: CGFloat = 0
     @GestureState private var isDraggingFromEdge = false
 
+    // Header visibility state
+    @State private var showHeaderElements = true
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -5665,7 +5668,7 @@ struct PhotoEditorView: View {
         // Apply rotation first
         var processedImage = img
         if cropRotation != 0 {
-            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: .degrees)) {
+            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
                 processedImage = rotated
             }
         }
@@ -5748,7 +5751,7 @@ struct PhotoEditorView: View {
 
     func rotateImage() {
         guard let img = baseImage else { return }
-        baseImage = img.rotated(by: Measurement(value: -90, unit: .degrees))
+        baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
         applyProcessing()
     }
 
@@ -6457,7 +6460,6 @@ struct PortfoliosView: View {
                 selectedPortfolioId = nil
             }
         }
-    }
     }
 
     // Generate a zip file with portfolio photos organized by requirement/stage/angle
