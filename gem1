@@ -711,7 +711,7 @@ struct CustomBottomNavBar: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10) // 10pt padding between nav bar top edge and highlight area
+        .padding(.top, 4) // Reduced padding to align with thumbnail bottom spacing
         .padding(.bottom, 0) // Minimal bottom padding - safe area handled by background extension
         .background(
             AppColors.surface
@@ -2328,7 +2328,7 @@ struct DentalCameraSetupView: View {
                 let isLandscapeLeft = orientationManager.deviceOrientation == .landscapeLeft
                 let isLandscapeRight = orientationManager.deviceOrientation == .landscapeRight
 
-                // Blank fields warning popup
+                // Blank fields warning popup - positioned just below the photo info pill
                 if showBlankFieldsWarning {
                     VStack(spacing: 12) {
                         Text("All fields required")
@@ -2370,10 +2370,10 @@ struct DentalCameraSetupView: View {
                     ))
                     .zIndex(10)
                     .position(
-                        x: isLandscapeLeft ? geometry.size.width - 80 :
-                           isLandscapeRight ? 80 :
+                        x: isLandscapeLeft ? geometry.size.width - 310 :
+                           isLandscapeRight ? 310 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 80
+                        y: isLandscape ? geometry.size.height / 2 : 120
                     )
                 }
 
@@ -2385,10 +2385,11 @@ struct DentalCameraSetupView: View {
                     )
                     Spacer(minLength: 0)
                 }
-                .frame(height: 500)
+                .frame(height: isLandscape ? 600 : 500, alignment: .top)
+                .rotationEffect(orientationManager.iconRotationAngle)
                 .position(
-                    x: isLandscapeLeft ? geometry.size.width - 180 :
-                       isLandscapeRight ? 180 :
+                    x: isLandscapeLeft ? geometry.size.width - 310 :
+                       isLandscapeRight ? 310 :
                        geometry.size.width / 2,
                     y: isLandscape ? geometry.size.height / 2 : 310
                 )
@@ -2482,6 +2483,7 @@ struct DentalCameraSetupView: View {
                             .rotationEffect(orientationManager.iconRotationAngle)
 
                             Button(action: {
+                                showBlankFieldsWarning = false
                                 isPhotoFading = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                     cameraService.retake()
@@ -2498,6 +2500,7 @@ struct DentalCameraSetupView: View {
                             // Horizontal layout for portrait
                             HStack(alignment: .center, spacing: 50) {
                                 Button(action: {
+                                    showBlankFieldsWarning = false
                                     isPhotoFading = true
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                         cameraService.retake()
@@ -3099,7 +3102,7 @@ struct PhotoInfoPillView: View {
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(dropdownStrokeColor, lineWidth: 2)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .onAppear { updateCurrentStage() }
     }
