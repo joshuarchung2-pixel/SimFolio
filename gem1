@@ -69,55 +69,6 @@ struct AppFonts {
 
 // MARK: - CUSTOM UI COMPONENTS
 // Custom color scheme
-// MARK: - THEME MANAGER
-enum ThemeMode: String, CaseIterable {
-    case light = "Light"
-    case dark = "Dark"
-    case system = "System"
-}
-
-class ThemeManager: ObservableObject {
-    static let shared = ThemeManager()
-
-    private let themeModeKey = "DentalPortfolio_ThemeMode"
-
-    @Published var themeMode: ThemeMode {
-        didSet {
-            UserDefaults.standard.set(themeMode.rawValue, forKey: themeModeKey)
-        }
-    }
-
-    init() {
-        if let savedMode = UserDefaults.standard.string(forKey: themeModeKey),
-           let mode = ThemeMode(rawValue: savedMode) {
-            self.themeMode = mode
-        } else {
-            self.themeMode = .light // Default to light mode
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch themeMode {
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        case .system:
-            return nil
-        }
-    }
-
-    var isDarkMode: Bool {
-        switch themeMode {
-        case .light:
-            return false
-        case .dark:
-            return true
-        case .system:
-            return UITraitCollection.current.userInterfaceStyle == .dark
-        }
-    }
-}
 
 // MARK: - ORIENTATION MANAGER
 class OrientationManager: ObservableObject {
@@ -414,40 +365,26 @@ class NotificationManager: ObservableObject {
     }
 }
 
-// Dynamic color helper for theme-aware colors
+// Static color helper for light mode colors
 struct AppColors {
     static var primary: Color { Color.blue }
     static var secondary: Color { Color.gray }
     static var accent: Color { Color.blue }
 
-    // Theme-aware colors
-    static var background: Color {
-        ThemeManager.shared.isDarkMode ? Color.black : Color(white: 0.96)
-    }
-    static var surface: Color {
-        ThemeManager.shared.isDarkMode ? Color(white: 0.12) : Color.white
-    }
-    static var surfaceElevated: Color {
-        ThemeManager.shared.isDarkMode ? Color(white: 0.18) : Color(white: 0.98)
-    }
-    static var textPrimary: Color {
-        ThemeManager.shared.isDarkMode ? Color.white : Color.black
-    }
-    static var textSecondary: Color {
-        ThemeManager.shared.isDarkMode ? Color.gray : Color(white: 0.4)
-    }
+    // Light mode colors
+    static var background: Color { Color(white: 0.96) }
+    static var surface: Color { Color.white }
+    static var surfaceElevated: Color { Color(white: 0.98) }
+    static var textPrimary: Color { Color.black }
+    static var textSecondary: Color { Color(white: 0.4) }
 
     static var success: Color { Color.green }
     static var warning: Color { Color.orange }
     static var error: Color { Color.red }
 
     // Nav bar specific colors
-    static var navBarBackground: Color {
-        ThemeManager.shared.isDarkMode ? Color(white: 0.12) : Color(white: 0.98)
-    }
-    static var navBarBorder: Color {
-        ThemeManager.shared.isDarkMode ? Color.gray.opacity(0.2) : Color.gray.opacity(0.3)
-    }
+    static var navBarBackground: Color { Color(white: 0.98) }
+    static var navBarBorder: Color { Color.gray.opacity(0.3) }
 }
 
 // MARK: - CALENDAR DATE PICKER
@@ -732,7 +669,6 @@ struct CustomIconButtonStyle: ButtonStyle {
 // MARK: - CUSTOM BOTTOM NAVIGATION BAR
 struct CustomBottomNavBar: View {
     @Binding var selectedTab: Int
-    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -847,19 +783,7 @@ struct CameraLoadingView: View {
 
 // MARK: - SETTINGS VIEW
 struct SettingsView: View {
-    @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var notificationManager = NotificationManager.shared
-
-    var themeIcon: String {
-        switch themeManager.themeMode {
-        case .light:
-            return "sun.max.fill"
-        case .dark:
-            return "moon.fill"
-        case .system:
-            return "gear"
-        }
-    }
 
     private let daysBeforeOptions = [1, 2, 3, 5, 7, 14, 30]
 
@@ -871,57 +795,6 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Appearance Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Appearance")
-                                .font(AppFonts.headline)
-                                .foregroundColor(AppColors.textPrimary)
-                                .padding(.horizontal, 4)
-
-                            HStack {
-                                Image(systemName: themeIcon)
-                                    .font(.system(size: 20))
-                                    .foregroundColor(AppColors.primary)
-                                    .frame(width: 28)
-
-                                Text("Theme")
-                                    .font(AppFonts.body)
-                                    .foregroundColor(AppColors.textPrimary)
-
-                                Spacer()
-
-                                Menu {
-                                    ForEach(ThemeMode.allCases, id: \.self) { mode in
-                                        Button(action: {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                themeManager.themeMode = mode
-                                            }
-                                        }) {
-                                            HStack {
-                                                Text(mode.rawValue)
-                                                if themeManager.themeMode == mode {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(themeManager.themeMode.rawValue)
-                                            .font(AppFonts.body)
-                                            .foregroundColor(AppColors.textSecondary)
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(AppColors.textSecondary)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .background(AppColors.surface)
-                            .cornerRadius(12)
-                        }
-
                         // Notifications Section
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Notifications")
@@ -1089,7 +962,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(themeManager.colorScheme ?? .light, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
@@ -1101,7 +974,6 @@ struct ContentView: View {
     @StateObject private var sharedCameraService = CameraService()
     @State private var showCameraLoading = false
     @State private var cameraHasLoaded = false
-    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -1146,7 +1018,7 @@ struct ContentView: View {
             CustomBottomNavBar(selectedTab: $selectedTab)
                 .zIndex(3)
         }
-        .preferredColorScheme(themeManager.colorScheme)
+        .preferredColorScheme(.light)
         .ignoresSafeArea(.keyboard)
         .onAppear {
             PhotoLibraryManager.shared.createAlbumIfNeeded()
@@ -5464,6 +5336,7 @@ struct PhotoEditorView: View {
             Spacer()
             controlsSection
         }
+        .background(Color.white)
     }
 
     @ViewBuilder
