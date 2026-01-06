@@ -3627,6 +3627,9 @@ struct GalleryView: View {
     // Header visibility state
     @State private var showHeaderElements = true
 
+    // Scroll offset for header gradient
+    @State private var scrollOffset: CGFloat = 0
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3805,6 +3808,15 @@ struct GalleryView: View {
     private var scrollContentView: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Invisible view for scroll offset tracking
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: -geometry.frame(in: .named("galleryScrollView")).origin.y
+                    )
+                }
+                .frame(height: 0)
+
                 if selectedTooth != nil {
                     ForEach(["Preparation", "Restoration"], id: \.self) { stage in
                         let angleGroups = assetsByAngle(for: stage)
@@ -3856,6 +3868,34 @@ struct GalleryView: View {
             }
             .padding(.top, 20)
         }
+        .coordinateSpace(name: "galleryScrollView")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            scrollOffset = value
+        }
+    }
+
+    // Gradient opacity based on scroll (fades in as user scrolls down)
+    private var headerGradientOpacity: Double {
+        let threshold: CGFloat = 50
+        return min(1, max(0, Double(scrollOffset / threshold)))
+    }
+
+    private var headerGradientOverlay: some View {
+        VStack {
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white, location: 0.0),
+                    .init(color: Color.white, location: 0.5),
+                    .init(color: Color.white.opacity(0), location: 1.0)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 120)
+            .opacity(headerGradientOpacity)
+            Spacer()
+        }
+        .allowsHitTesting(false)
     }
 
     private var sidebarView: some View {
@@ -4039,6 +4079,10 @@ struct GalleryView: View {
                 scrollContentView
             }
             .offset(x: isSidebarOpen ? 250 : 0)
+
+            // White gradient glow behind header (fades in on scroll)
+            headerGradientOverlay
+                .offset(x: isSidebarOpen ? 250 : 0)
 
             if !isSidebarOpen {
                 edgeSwipeOverlay
