@@ -5262,59 +5262,78 @@ struct PhotoDetailView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Spacer()
 
-                // Metadata and rating display
-                VStack(alignment: .leading, spacing: 8) {
-                    // Metadata info (only if metadata exists)
-                    if let meta = metadata {
-                        // Top row: Procedure and Tooth
+            VStack(spacing: 0) {
+                // Tags/Metadata at the top
+                if let meta = metadata {
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             if let proc = meta.procedure {
                                 Text(proc)
                                     .font(AppFonts.geistSemiBold(12))
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(AppColors.success.opacity(0.85))
                                     .cornerRadius(4)
+                            }
+                            if let stage = meta.stage {
+                                HStack(spacing: 3) {
+                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                                        .font(.system(size: 10))
+                                    Text(stage)
+                                        .font(AppFonts.geistSemiBold(11))
                                 }
-                                if let stage = meta.stage {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                            .font(.system(size: 10))
-                                        Text(stage)
-                                            .font(AppFonts.geistSemiBold(11))
-                                    }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
+                                .cornerRadius(4)
+                            }
+                            if let angle = meta.angle {
+                                Text(angle)
+                                    .font(AppFonts.geistSemiBold(11))
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
+                                    .background(Color.purple.opacity(0.85))
                                     .cornerRadius(4)
-                                }
-                                if let angle = meta.angle {
-                                    Text(angle)
-                                        .font(AppFonts.geistSemiBold(11))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.purple.opacity(0.85))
-                                        .cornerRadius(4)
-                                }
-                                if let date = meta.toothDate {
-                                    let formatter = DateFormatter()
-                                    let _ = formatter.dateStyle = .short
-                                    Text(formatter.string(from: date))
-                                        .font(AppFonts.caption2)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.gray.opacity(0.7))
-                                        .cornerRadius(4)
-                                }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            if let date = meta.toothDate {
+                                let formatter = DateFormatter()
+                                let _ = formatter.dateStyle = .short
+                                Text(formatter.string(from: date))
+                                    .font(AppFonts.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.gray.opacity(0.7))
+                                    .cornerRadius(4)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.top, 8)
+                }
 
-                    // Rating row (always visible)
+                Spacer()
+
+                // Photo display in the center
+                if let img = image {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(.horizontal, 16)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                }
+
+                Spacer()
+
+                // Rating at the bottom
+                VStack(spacing: 8) {
                     HStack {
                         Text("Rating:")
                             .font(AppFonts.caption)
@@ -5327,9 +5346,11 @@ struct PhotoDetailView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity)
                 .background(AppColors.surface.opacity(0.9))
                 .cornerRadius(10)
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
         }
         .toolbar {
