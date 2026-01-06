@@ -5253,32 +5253,48 @@ struct PhotoTagsLabel: View {
     var body: some View {
         VStack(spacing: 2) {
             if let metadata = metadata {
-                // First row: Procedure and Tooth
-                HStack(spacing: 4) {
+                // First row: Procedure and Tooth (blue and green)
+                HStack(spacing: 3) {
                     if let proc = metadata.procedure {
                         Text(proc)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(AppColors.textSecondary)
+                            .font(AppFonts.geistSemiBold(8))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(AppColors.primary.opacity(0.8))
+                            .cornerRadius(3)
                     }
                     if let tooth = metadata.toothNumber {
                         Text("#\(tooth)")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(AppColors.textSecondary)
+                            .font(AppFonts.geistSemiBold(8))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(AppColors.success.opacity(0.8))
+                            .cornerRadius(3)
                     }
                 }
                 .lineLimit(1)
 
-                // Second row: Stage and Angle
-                HStack(spacing: 4) {
+                // Second row: Stage and Angle (orange and purple)
+                HStack(spacing: 3) {
                     if let stage = metadata.stage {
-                        Text(stage.prefix(4))
-                            .font(.system(size: 8))
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                        Text(String(stage.prefix(4)))
+                            .font(AppFonts.caption2)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(AppColors.warning.opacity(0.8))
+                            .cornerRadius(3)
                     }
                     if let angle = metadata.angle {
                         Text(angle)
-                            .font(.system(size: 8))
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                            .font(AppFonts.caption2)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Color.purple.opacity(0.8))
+                            .cornerRadius(3)
                     }
                 }
                 .lineLimit(1)
@@ -5302,37 +5318,46 @@ struct PhotoDetailView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Tags/Metadata at the top
+                // Tags/Metadata at the top (matching camera view: blue, green, orange, purple)
                 if let meta = metadata {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            // Procedure badge (blue)
                             if let proc = meta.procedure {
                                 Text(proc)
-                                    .font(AppFonts.geistSemiBold(12))
+                                    .font(AppFonts.geistSemiBold(11))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(AppColors.primary.opacity(0.85))
+                                    .cornerRadius(4)
+                            }
+                            // Tooth badge (green)
+                            if let tooth = meta.toothNumber {
+                                Text("#\(tooth)")
+                                    .font(AppFonts.geistSemiBold(11))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
                                     .background(AppColors.success.opacity(0.85))
                                     .cornerRadius(4)
                             }
+                            // Stage badge (orange)
                             if let stage = meta.stage {
-                                HStack(spacing: 3) {
-                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                        .font(.system(size: 10))
-                                    Text(stage)
-                                        .font(AppFonts.geistSemiBold(11))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
-                                .cornerRadius(4)
+                                Text(String(stage.prefix(4)))
+                                    .font(AppFonts.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(AppColors.warning.opacity(0.85))
+                                    .cornerRadius(4)
                             }
+                            // Angle badge (purple)
                             if let angle = meta.angle {
                                 Text(angle)
-                                    .font(AppFonts.geistSemiBold(11))
+                                    .font(AppFonts.caption2)
                                     .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
+                                    .padding(.horizontal, 6)
                                     .padding(.vertical, 4)
                                     .background(Color.purple.opacity(0.85))
                                     .cornerRadius(4)
