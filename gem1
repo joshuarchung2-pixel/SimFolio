@@ -1348,12 +1348,9 @@ class GalleryNavigationState: ObservableObject {
 class MetadataManager: ObservableObject {
     static let shared = MetadataManager()
 
-    // Special folder for unsorted photos
-    static let unsortedPhotosFolder = "Unsorted Photos"
-
-    // Procedure options (can add, cannot delete base ones or Unsorted Photos)
-    @Published var procedures: [String] = ["Unsorted Photos", "Class 1", "Class 2", "Class 3", "Crown"]
-    private let baseProcedures = ["Unsorted Photos", "Class 1", "Class 2", "Class 3", "Crown"]
+    // Procedure options (can add, cannot delete base ones)
+    @Published var procedures: [String] = ["Class 1", "Class 2", "Class 3", "Crown"]
+    private let baseProcedures = ["Class 1", "Class 2", "Class 3", "Crown"]
 
     // Stage options (fixed)
     let stages: [String] = ["Preparation", "Restoration"]
@@ -1382,7 +1379,6 @@ class MetadataManager: ObservableObject {
 
     // Default folder colors
     private let defaultColors: [String: String] = [
-        "Unsorted Photos": "808080",  // Gray
         "Class 1": "007AFF",          // Blue
         "Class 2": "34C759",          // Green
         "Class 3": "FF9500",          // Orange
@@ -1413,20 +1409,6 @@ class MetadataManager: ObservableObject {
         folderColors.removeValue(forKey: procedure)
         saveProcedures()
         saveFolderColors()
-    }
-
-    // Move all photos from one procedure to "Unsorted Photos"
-    func movePhotosToUnsorted(from procedure: String) {
-        for (assetID, var metadata) in assetMetadata {
-            if metadata.procedure == procedure {
-                metadata.procedure = MetadataManager.unsortedPhotosFolder
-                assetMetadata[assetID] = metadata
-            }
-        }
-        // Remove tooth history for this procedure
-        toothHistory.removeValue(forKey: procedure)
-        saveAssetMetadata()
-        saveToothHistory()
     }
 
     // Move selected photos to a specific procedure folder
@@ -1553,6 +1535,17 @@ class MetadataManager: ObservableObject {
     // Get photo count for a procedure
     func photoCount(for procedure: String) -> Int {
         return assetMetadata.values.filter { $0.procedure == procedure }.count
+    }
+
+    // Get asset IDs with incomplete metadata (missing any required tag)
+    func getIncompleteAssetIds() -> Set<String> {
+        var incompleteIds: Set<String> = []
+        for (assetID, metadata) in assetMetadata {
+            if !metadata.isComplete {
+                incompleteIds.insert(assetID)
+            }
+        }
+        return incompleteIds
     }
 
     // Folder color methods
@@ -2463,49 +2456,29 @@ struct DentalCameraSetupView: View {
                 let isLandscapeLeft = orientationManager.deviceOrientation == .landscapeLeft
                 let isLandscapeRight = orientationManager.deviceOrientation == .landscapeRight
 
-                // Photo Info Pill - moves to side in landscape
-                VStack(spacing: 8) {
-                    PhotoInfoPillView(
-                        metadata: $currentMetadata,
-                        isDropdownOpen: $isInfoPillOpen
-                    )
-                    .rotationEffect(orientationManager.iconRotationAngle)
+                        // Blank fields warning popup
+                        if showBlankFieldsWarning {
+                            VStack(spacing: 12) {
+                                Text("All fields required")
+                                    .font(AppFonts.subheadline)
+                                    .foregroundColor(AppColors.textPrimary)
 
-                    // Blank fields warning popup
-                    if showBlankFieldsWarning {
-                        VStack(spacing: 12) {
-                            Text("Blank fields detected")
-                                .font(AppFonts.subheadline)
-                                .foregroundColor(AppColors.textPrimary)
+                                Text("Please fill in all tags before saving")
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.textSecondary)
 
-                            HStack(spacing: 12) {
                                 Button(action: {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         showBlankFieldsWarning = false
                                         isInfoPillOpen = true
                                     }
                                 }) {
-                                    Text("Add fields")
+                                    Text("Add tags")
                                         .font(AppFonts.caption)
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 8)
                                         .background(AppColors.primary)
-                                        .cornerRadius(8)
-                                }
-
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        showBlankFieldsWarning = false
-                                    }
-                                    savePhotoWithMetadata()
-                                }) {
-                                    Text("Proceed anyways")
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(AppColors.textSecondary)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(AppColors.secondary.opacity(0.3))
                                         .cornerRadius(8)
                                 }
                             }
@@ -3762,10 +3735,6 @@ struct GalleryView: View {
         if let proc = selectedProcedure {
             assets = assets.filter { asset in
                 let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
-                // For "Unsorted Photos" folder, include photos with nil procedure OR explicitly set to "Unsorted Photos"
-                if proc == MetadataManager.unsortedPhotosFolder {
-                    return assetProcedure == nil || assetProcedure == proc
-                }
                 return assetProcedure == proc
             }
         }
@@ -3935,6 +3904,7 @@ struct GalleryView: View {
                                 ForEach(filteredAssets, id: \.localIdentifier) { asset in
                                     let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                                     let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+                                    let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
 
                                     if isSelectMode {
                                         // Selection mode - tap to select/deselect
@@ -3947,50 +3917,66 @@ struct GalleryView: View {
                                                 }
                                             }
                                         }) {
-                                            AssetThumbnail(asset: asset)
-                                                .frame(height: 120)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                                .overlay(
-                                                    // Selection checkbox overlay
-                                                    ZStack {
-                                                        Circle()
-                                                            .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
-                                                            .frame(width: 24, height: 24)
-                                                        if isSelected {
-                                                            Image(systemName: "checkmark")
-                                                                .font(.system(size: 12, weight: .bold))
-                                                                .foregroundColor(.white)
-                                                        } else {
+                                            VStack(alignment: .center, spacing: 4) {
+                                                AssetThumbnail(asset: asset)
+                                                    .frame(height: 120)
+                                                    .clipped()
+                                                    .cornerRadius(8)
+                                                    .overlay(
+                                                        // Selection checkbox overlay
+                                                        ZStack {
                                                             Circle()
-                                                                .stroke(Color.white, lineWidth: 2)
-                                                                .frame(width: 22, height: 22)
+                                                                .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                                                .frame(width: 24, height: 24)
+                                                            if isSelected {
+                                                                Image(systemName: "checkmark")
+                                                                    .font(.system(size: 12, weight: .bold))
+                                                                    .foregroundColor(.white)
+                                                            } else {
+                                                                Circle()
+                                                                    .stroke(Color.white, lineWidth: 2)
+                                                                    .frame(width: 22, height: 22)
+                                                            }
                                                         }
-                                                    }
-                                                    .padding(6),
-                                                    alignment: .topTrailing
-                                                )
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
-                                                )
+                                                        .padding(6),
+                                                        alignment: .topTrailing
+                                                    )
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 8)
+                                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                                                    )
+
+                                                // Tag info display (show in All Photos view) - fixed height for alignment
+                                                if selectedProcedure == nil {
+                                                    PhotoTagsLabel(metadata: metadata)
+                                                        .frame(height: 28)
+                                                }
+                                            }
                                         }
                                         .buttonStyle(PlainButtonStyle())
                                     } else {
                                         // Normal mode - navigate to detail view
                                         NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                            AssetThumbnail(asset: asset)
-                                                .frame(height: 120)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                                )
-                                                .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
-                                                .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
-                                                .scaleEffect(isHighlighted ? 1.05 : 1.0)
-                                                .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                                            VStack(alignment: .center, spacing: 4) {
+                                                AssetThumbnail(asset: asset)
+                                                    .frame(height: 120)
+                                                    .clipped()
+                                                    .cornerRadius(8)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 8)
+                                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                                                    )
+                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.8 : 0), radius: 12)
+                                                    .shadow(color: .blue.opacity(isHighlighted ? 0.5 : 0), radius: 20)
+                                                    .scaleEffect(isHighlighted ? 1.05 : 1.0)
+                                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+
+                                                // Tag info display (show in All Photos view) - fixed height for alignment
+                                                if selectedProcedure == nil {
+                                                    PhotoTagsLabel(metadata: metadata)
+                                                        .frame(height: 28)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -4032,104 +4018,105 @@ struct GalleryView: View {
                     }
                 }
 
-                // Sidebar
+                // Darkening overlay (fades in/out smoothly, independent of sidebar slide)
                 if isSidebarOpen {
-                    HStack(spacing: 0) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // All Photos button
-                            Button(action: {
-                                selectedProcedure = nil
-                                selectedTooth = nil
-                                withAnimation { isSidebarOpen = false }
-                            }) {
-                                HStack {
-                                    Image(systemName: "square.grid.2x2")
-                                    Text("All Photos")
-                                        .font(AppFonts.subheadline)
-                                    Spacer()
-                                }
-                                .padding()
-                                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
-                                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
-                            }
-                            .padding(.top, 50)
-
-                            Divider().background(AppColors.secondary)
-
-                            // Procedure folders with tooth subfolders
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                        ProcedureFolderView(
-                                            procedure: procedure,
-                                            toothEntries: metadataManager.getToothEntries(for: procedure),
-                                            selectedProcedure: $selectedProcedure,
-                                            selectedTooth: $selectedTooth,
-                                            isSidebarOpen: $isSidebarOpen,
-                                            metadataManager: metadataManager,
-                                            assets: library.assets,
-                                            onRename: { folder in
-                                                folderToRename = folder
-                                                renameFolderText = folder
-                                                showRenameSheet = true
-                                            },
-                                            onDelete: { folder in
-                                                folderToDelete = folder
-                                                showDeleteConfirmation = true
-                                            },
-                                            onColorEdit: { folder in
-                                                folderForColorEdit = folder
-                                                showColorPicker = true
-                                            }
-                                        )
-                                    }
-
-                                    // Add Procedure Folder button
-                                    Button(action: {
-                                        newFolderName = ""
-                                        showAddFolderSheet = true
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "folder.badge.plus")
-                                                .foregroundColor(AppColors.success)
-                                            Text("Add Procedure Folder")
-                                                .font(AppFonts.subheadline)
-                                                .foregroundColor(AppColors.textPrimary)
-                                            Spacer()
-                                        }
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 10)
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                .onEnded { value in
+                                    // Close sidebar if swiped left
+                                    if value.translation.width < -20 {
+                                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
                                     }
                                 }
-                            }
+                        )
+                        .zIndex(1)
+                        .transition(.opacity)
+                }
 
-                            Spacer()
+                // Sidebar (slides in/out from left edge)
+                if isSidebarOpen {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // All Photos button
+                        Button(action: {
+                            selectedProcedure = nil
+                            selectedTooth = nil
+                            withAnimation { isSidebarOpen = false }
+                        }) {
+                            HStack {
+                                Image(systemName: "square.grid.2x2")
+                                Text("All Photos")
+                                    .font(AppFonts.subheadline)
+                            }
+                            .padding(.leading, 16)
+                            .padding(.trailing, 8)
+                            .padding(.vertical, 16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
+                            .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                         }
-                        .frame(width: 250)
-                        .background(AppColors.surface.opacity(0.98))
-                        .edgesIgnoringSafeArea(.vertical)
+                        .padding(.top, 50)
 
-                        // Tap or swipe outside to close - cover entire photo grid area
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                            .contentShape(Rectangle())
-                            .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
-                            .highPriorityGesture(
-                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                    .onEnded { value in
-                                        // Close sidebar if swiped left
-                                        if value.translation.width < -20 {
-                                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                        Divider().background(AppColors.secondary)
+
+                        // Procedure folders with tooth subfolders
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                    ProcedureFolderView(
+                                        procedure: procedure,
+                                        toothEntries: metadataManager.getToothEntries(for: procedure),
+                                        selectedProcedure: $selectedProcedure,
+                                        selectedTooth: $selectedTooth,
+                                        isSidebarOpen: $isSidebarOpen,
+                                        metadataManager: metadataManager,
+                                        assets: library.assets,
+                                        onRename: { folder in
+                                            folderToRename = folder
+                                            renameFolderText = folder
+                                            showRenameSheet = true
+                                        },
+                                        onDelete: { folder in
+                                            folderToDelete = folder
+                                            showDeleteConfirmation = true
+                                        },
+                                        onColorEdit: { folder in
+                                            folderForColorEdit = folder
+                                            showColorPicker = true
                                         }
+                                    )
+                                }
+
+                                // Add Procedure Folder button
+                                Button(action: {
+                                    newFolderName = ""
+                                    showAddFolderSheet = true
+                                }) {
+                                    HStack {
+                                        Image(systemName: "folder.badge.plus")
+                                            .foregroundColor(AppColors.success)
+                                        Text("Add Procedure Folder")
+                                            .font(AppFonts.subheadline)
+                                            .foregroundColor(AppColors.textPrimary)
                                     }
-                            )
-                            .transition(.opacity)
+                                    .padding(.leading, 16)
+                                    .padding(.trailing, 8)
+                                    .padding(.vertical, 10)
+                                }
+                            }
+                        }
+
+                        Spacer()
                     }
+                    .frame(minWidth: 250)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .background(AppColors.surface.opacity(0.98))
+                    .edgesIgnoringSafeArea(.vertical)
                     .zIndex(2)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading),
-                        removal: .move(edge: .leading)
-                    ))
+                    .transition(.move(edge: .leading))
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 5, coordinateSpace: .global)
                             .onEnded { value in
@@ -4226,6 +4213,44 @@ struct GalleryView: View {
                     galleryNavState.clearNavigation()
                 }
             }
+            .onChange(of: galleryNavState.navigatedFromCamera) { _, navigated in
+                // Handle navigation from camera when tab is already loaded
+                if navigated {
+                    if let proc = galleryNavState.pendingProcedure {
+                        selectedProcedure = proc
+                        if let toothNum = galleryNavState.pendingToothNumber,
+                           let toothDate = galleryNavState.pendingToothDate {
+                            // Find matching tooth entry
+                            let entries = metadataManager.getToothEntries(for: proc)
+                            selectedTooth = entries.first { entry in
+                                entry.toothNumber == toothNum &&
+                                Calendar.current.isDate(entry.date, inSameDayAs: toothDate)
+                            }
+                        }
+                    }
+                    // Trigger photo highlight animation
+                    if let photoId = galleryNavState.pendingHighlightPhotoId {
+                        highlightedPhotoId = photoId
+                        showPhotoHighlight = true
+
+                        // Auto-expand the angle group containing the highlighted photo
+                        if let metadata = metadataManager.getMetadata(for: photoId),
+                           let stage = metadata.stage,
+                           let angle = metadata.angle {
+                            expandedAngleStack = "\(stage)-\(angle)"
+                        }
+
+                        // Remove highlight after 1 second
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                showPhotoHighlight = false
+                            }
+                        }
+                    }
+                    // Clear navigation state after applying
+                    galleryNavState.clearNavigation()
+                }
+            }
             // Add Folder Sheet
             .sheet(isPresented: $showAddFolderSheet) {
                 NavigationView {
@@ -4285,12 +4310,8 @@ struct GalleryView: View {
             // Delete Confirmation Alert
             .alert("Delete Folder", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    if let folder = folderToDelete {
-                        let photoCount = metadataManager.photoCount(for: folder)
-                        if photoCount > 0 {
-                            metadataManager.movePhotosToUnsorted(from: folder)
-                        }
+                if let folder = folderToDelete, metadataManager.photoCount(for: folder) == 0 {
+                    Button("Delete", role: .destructive) {
                         metadataManager.deleteProcedure(folder)
                         if selectedProcedure == folder {
                             selectedProcedure = nil
@@ -4302,7 +4323,7 @@ struct GalleryView: View {
                 if let folder = folderToDelete {
                     let photoCount = metadataManager.photoCount(for: folder)
                     if photoCount > 0 {
-                        Text("Images in this folder will be moved to \"Unsorted Photos\".")
+                        Text("This folder contains \(photoCount) photo(s). Delete or move them first.")
                     } else {
                         Text("Are you sure you want to delete \"\(folder)\"?")
                     }
@@ -4333,6 +4354,14 @@ struct GalleryView: View {
                         isSelectMode = false
                     }
                 )
+            }
+            .onAppear {
+                // Delete photos with incomplete tags on gallery appear
+                library.deletePhotosWithIncompleteTags { deletedCount in
+                    if deletedCount > 0 {
+                        print("Deleted \(deletedCount) photo(s) with incomplete tags")
+                    }
+                }
             }
         }
     }
@@ -4766,10 +4795,6 @@ struct ProcedureFolderView: View {
     var photoCount: Int {
         assets.filter { asset in
             let assetProcedure = metadataManager.getMetadata(for: asset.localIdentifier)?.procedure
-            // For "Unsorted Photos" folder, count photos with nil procedure OR explicitly set to "Unsorted Photos"
-            if procedure == MetadataManager.unsortedPhotosFolder {
-                return assetProcedure == nil || assetProcedure == procedure
-            }
             return assetProcedure == procedure
         }.count
     }
@@ -4790,13 +4815,12 @@ struct ProcedureFolderView: View {
                     withAnimation { isExpanded.toggle() }
                 }
             }) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "folder.fill" : "folder")
                         .foregroundColor(metadataManager.getFolderColor(for: procedure))
                     Text(procedure)
                         .font(AppFonts.subheadline)
                         .foregroundColor(selectedProcedure == procedure ? AppColors.primary : AppColors.textPrimary)
-                    Spacer()
                     Text("\(photoCount)")
                         .font(AppFonts.caption)
                         .foregroundColor(AppColors.textSecondary)
@@ -4806,8 +4830,10 @@ struct ProcedureFolderView: View {
                             .foregroundColor(AppColors.textSecondary)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
                 .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(selectedProcedure == procedure && selectedTooth == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
             }
             .contextMenu {
@@ -4837,15 +4863,15 @@ struct ProcedureFolderView: View {
                         selectedTooth = nil
                         withAnimation { isSidebarOpen = false }
                     }) {
-                        HStack {
+                        HStack(spacing: 6) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .foregroundColor(AppColors.textSecondary)
                             Text("All \(procedure)")
                                 .font(AppFonts.caption)
                                 .foregroundColor(selectedProcedure == procedure && selectedTooth == nil ? AppColors.primary : AppColors.textPrimary)
-                            Spacer()
                         }
                         .padding(.leading, 40)
+                        .padding(.trailing, 8)
                         .padding(.vertical, 6)
                     }
 
@@ -4898,7 +4924,7 @@ struct ToothSubfolderRow: View {
             selectedTooth = entry
             withAnimation { isSidebarOpen = false }
         }) {
-            HStack {
+            HStack(spacing: 6) {
                 Image(systemName: "tooth")
                     .font(AppFonts.caption)
                     .foregroundColor(AppColors.success)
@@ -4908,13 +4934,14 @@ struct ToothSubfolderRow: View {
                 Text(entry.dateString)
                     .font(AppFonts.caption2)
                     .foregroundColor(AppColors.textSecondary)
-                Spacer()
                 Text("\(photoCount)")
                     .font(AppFonts.caption2)
                     .foregroundColor(AppColors.textSecondary)
             }
             .padding(.leading, 40)
+            .padding(.trailing, 8)
             .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? AppColors.textPrimary.opacity(0.1) : Color.clear)
         }
     }
@@ -5271,6 +5298,47 @@ struct RatingView: View {
     }
 }
 
+// MARK: - Photo Tags Label (compact tag display for gallery)
+struct PhotoTagsLabel: View {
+    let metadata: PhotoMetadata?
+
+    var body: some View {
+        VStack(spacing: 2) {
+            if let metadata = metadata {
+                // First row: Procedure and Tooth
+                HStack(spacing: 4) {
+                    if let proc = metadata.procedure {
+                        Text(proc)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    if let tooth = metadata.toothNumber {
+                        Text("#\(tooth)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                }
+                .lineLimit(1)
+
+                // Second row: Stage and Angle
+                HStack(spacing: 4) {
+                    if let stage = metadata.stage {
+                        Text(stage.prefix(4))
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                    }
+                    if let angle = metadata.angle {
+                        Text(angle)
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                    }
+                }
+                .lineLimit(1)
+            }
+        }
+    }
+}
+
 struct PhotoDetailView: View {
     let asset: PHAsset
     @State private var image: UIImage?
@@ -5284,76 +5352,78 @@ struct PhotoDetailView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack {
-                if let img = image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    ProgressView()
-                }
 
-                // Metadata and rating display (always show rating, even for unsorted photos)
-                VStack(alignment: .leading, spacing: 8) {
-                    // Metadata info (only if metadata exists)
-                    if let meta = metadata {
-                        // Top row: Procedure and Tooth
+            VStack(spacing: 0) {
+                // Tags/Metadata at the top
+                if let meta = metadata {
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             if let proc = meta.procedure {
                                 Text(proc)
                                     .font(AppFonts.geistSemiBold(12))
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(AppColors.primary.opacity(0.8))
+                                    .background(AppColors.success.opacity(0.85))
                                     .cornerRadius(4)
                             }
-                            if let tooth = meta.toothNumber {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "tooth")
-                                        .font(AppFonts.caption2)
-                                    Text("#\(tooth)")
-                                        .font(AppFonts.geistSemiBold(12))
+                            if let stage = meta.stage {
+                                HStack(spacing: 3) {
+                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
+                                        .font(.system(size: 10))
+                                    Text(stage)
+                                        .font(AppFonts.geistSemiBold(11))
                                 }
+                                .foregroundColor(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.success.opacity(0.8))
+                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.85) : AppColors.success.opacity(0.85))
                                 .cornerRadius(4)
+                            }
+                            if let angle = meta.angle {
+                                Text(angle)
+                                    .font(AppFonts.geistSemiBold(11))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.purple.opacity(0.85))
+                                    .cornerRadius(4)
                             }
                             if let date = meta.toothDate {
                                 let formatter = DateFormatter()
                                 let _ = formatter.dateStyle = .short
                                 Text(formatter.string(from: date))
                                     .font(AppFonts.caption2)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                        }
-
-                        // Second row: Stage and Angle
-                        HStack(spacing: 8) {
-                            if let stage = meta.stage {
-                                HStack(spacing: 4) {
-                                    Image(systemName: stage == "Preparation" ? "wrench.and.screwdriver" : "checkmark.seal")
-                                        .font(AppFonts.caption2)
-                                    Text(stage)
-                                        .font(AppFonts.caption)
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(stage == "Preparation" ? AppColors.warning.opacity(0.8) : AppColors.success.opacity(0.8))
-                                .cornerRadius(4)
-                            }
-                            if let angle = meta.angle {
-                                Text(angle)
-                                    .font(AppFonts.caption)
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color.purple.opacity(0.8))
+                                    .background(Color.gray.opacity(0.7))
                                     .cornerRadius(4)
                             }
                         }
+                        .padding(.horizontal, 16)
                     }
+                    .padding(.top, 8)
+                }
 
-                    // Rating row (always visible)
+                Spacer()
+
+                // Photo display in the center
+                if let img = image {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(.horizontal, 16)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                }
+
+                Spacer()
+
+                // Rating at the bottom
+                VStack(spacing: 8) {
                     HStack {
                         Text("Rating:")
                             .font(AppFonts.caption)
@@ -5366,9 +5436,11 @@ struct PhotoDetailView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity)
                 .background(AppColors.surface.opacity(0.9))
                 .cornerRadius(10)
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
         }
         .toolbar {
@@ -6141,6 +6213,23 @@ class PhotoLibraryManager: ObservableObject {
             }
         }
     }
+
+    // Delete photos with incomplete metadata (missing any required tags)
+    func deletePhotosWithIncompleteTags(completion: @escaping (Int) -> Void) {
+        // Get all assets in the album that have incomplete metadata
+        let incompleteIds = MetadataManager.shared.getIncompleteAssetIds()
+        let assetsInLibrary = Set(assets.map { $0.localIdentifier })
+        let idsToDelete = incompleteIds.intersection(assetsInLibrary)
+
+        guard !idsToDelete.isEmpty else {
+            completion(0)
+            return
+        }
+
+        deleteAssets(identifiers: idsToDelete) { success in
+            completion(success ? idsToDelete.count : 0)
+        }
+    }
 }
 
 // MARK: - 6. PORTFOLIOS TAB
@@ -6151,6 +6240,7 @@ struct PortfoliosView: View {
     @State private var showPortfolioPicker = false
     @State private var showAddRequirementSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showEditDueDateSheet = false
     @State private var isGeneratingZip = false
     @State private var zipFileURL: IdentifiableURL? = nil
     @ObservedObject var library = PhotoLibraryManager.shared
@@ -6172,6 +6262,18 @@ struct PortfoliosView: View {
     var completionPercentage: Double {
         guard let portfolio = currentPortfolio else { return 0 }
         return metadataManager.getPortfolioCompletionPercentage(portfolio)
+    }
+
+    func progressColor(for percentage: Double) -> Color {
+        if percentage >= 100 {
+            return .green
+        } else if percentage >= 75 {
+            return .yellow
+        } else if percentage >= 25 {
+            return .orange
+        } else {
+            return .red
+        }
     }
 
     var body: some View {
@@ -6285,7 +6387,7 @@ struct PortfoliosView: View {
                                             .foregroundColor(AppColors.textSecondary)
                                         Text(String(format: "%.0f%%", completionPercentage))
                                             .font(.system(size: 36, weight: .bold))
-                                            .foregroundColor(completionPercentage >= 100 ? .green : .blue)
+                                            .foregroundColor(progressColor(for: completionPercentage))
                                     }
 
                                     Spacer()
@@ -6298,7 +6400,7 @@ struct PortfoliosView: View {
                                         Circle()
                                             .trim(from: 0, to: min(1.0, completionPercentage / 100))
                                             .stroke(
-                                                completionPercentage >= 100 ? Color.green : Color.blue,
+                                                progressColor(for: completionPercentage),
                                                 style: StrokeStyle(lineWidth: 8, lineCap: .round)
                                             )
                                             .frame(width: 70, height: 70)
@@ -6313,20 +6415,6 @@ struct PortfoliosView: View {
                                         }
                                     }
                                 }
-
-                                // Progress bar
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.3))
-                                            .frame(height: 12)
-
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(completionPercentage >= 100 ? Color.green : Color.blue)
-                                            .frame(width: geo.size.width * min(1.0, completionPercentage / 100), height: 12)
-                                    }
-                                }
-                                .frame(height: 12)
 
                                 // Download button
                                 Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
@@ -6345,7 +6433,7 @@ struct PortfoliosView: View {
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
-                                    .background(completionPercentage >= 100 ? Color.green : Color.blue)
+                                    .background(progressColor(for: completionPercentage))
                                     .cornerRadius(8)
                                 }
                                 .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
@@ -6367,6 +6455,61 @@ struct PortfoliosView: View {
                             .sheet(item: $zipFileURL) { identifiableURL in
                                 ShareSheet(activityItems: [identifiableURL.url])
                             }
+
+                            // Due Date bento card
+                            Button(action: { showEditDueDateSheet = true }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Due Date")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        if let dueDateStr = portfolio.dueDateString {
+                                            Text(dueDateStr)
+                                                .font(.title2.weight(.semibold))
+                                                .foregroundColor(AppColors.textPrimary)
+                                        } else {
+                                            Text("Tap to set")
+                                                .font(.title2.weight(.semibold))
+                                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("Status")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.textSecondary)
+                                        if let days = portfolio.daysUntilDue {
+                                            if portfolio.isOverdue {
+                                                Text("Overdue by \(abs(days))d")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.error)
+                                            } else if days == 0 {
+                                                Text("Due Today")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.error)
+                                            } else if days == 1 {
+                                                Text("Due Tomorrow")
+                                                    .font(.headline)
+                                                    .foregroundColor(AppColors.warning)
+                                            } else {
+                                                Text("Due in \(days)d")
+                                                    .font(.headline)
+                                                    .foregroundColor(portfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
+                                            }
+                                        } else {
+                                            Text("No deadline")
+                                                .font(.headline)
+                                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                                        }
+                                    }
+                                }
+                                .padding()
+                                .background(AppColors.surface)
+                                .cornerRadius(12)
+                            }
+                            .buttonStyle(.plain)
 
                             // Requirements section
                             VStack(alignment: .leading, spacing: 12) {
@@ -6447,6 +6590,11 @@ struct PortfoliosView: View {
         .sheet(isPresented: $showAddRequirementSheet) {
             if let portfolio = currentPortfolio {
                 AddRequirementSheet(isPresented: $showAddRequirementSheet, portfolioId: portfolio.id)
+            }
+        }
+        .sheet(isPresented: $showEditDueDateSheet) {
+            if let portfolio = currentPortfolio {
+                EditDueDateSheet(isPresented: $showEditDueDateSheet, portfolio: portfolio)
             }
         }
         .alert("Delete Portfolio", isPresented: $showDeleteConfirmation) {
@@ -7011,6 +7159,7 @@ struct PortfolioDetailView: View {
                         .background(AppColors.surface.opacity(0.5))
                         .cornerRadius(12)
                     }
+                    .buttonStyle(.plain)
 
                     // Requirements section
                     VStack(alignment: .leading, spacing: 12) {
@@ -7581,7 +7730,7 @@ struct PortfolioPhotoDetailView: View {
                         ProgressView()
                     }
 
-                    // Metadata and rating display (always show rating, even for unsorted photos)
+                    // Metadata and rating display
                     VStack(alignment: .leading, spacing: 8) {
                         // Metadata info (only if metadata exists)
                         if let meta = metadata {
@@ -7724,7 +7873,7 @@ struct EditRequirementSheet: View {
                 Section(header: Text("Procedure Type")) {
                     Picker("Procedure", selection: $selectedProcedure) {
                         Text("Select...").tag("")
-                        ForEach(metadataManager.procedures.filter { $0 != "Unsorted Photos" }, id: \.self) { proc in
+                        ForEach(metadataManager.procedures, id: \.self) { proc in
                             Text(proc).tag(proc)
                         }
                     }
@@ -7913,7 +8062,7 @@ struct AddRequirementSheet: View {
                 Section(header: Text("Procedure Type")) {
                     Picker("Procedure", selection: $selectedProcedure) {
                         Text("Select...").tag("")
-                        ForEach(metadataManager.procedures.filter { $0 != "Unsorted Photos" }, id: \.self) { proc in
+                        ForEach(metadataManager.procedures, id: \.self) { proc in
                             Text(proc).tag(proc)
                         }
                     }
@@ -8114,9 +8263,9 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - MAIN APP ENTRY POINT
+/// MARK: - MAIN APP ENTRY POINT
 @main
-struct SimFolioApp: App {
+struct DentalPortfolioApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
