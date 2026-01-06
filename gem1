@@ -3666,384 +3666,389 @@ struct GalleryView: View {
         }.sorted { $0.avgRating > $1.avgRating }
     }
 
-    var body: some View {
-        NavigationView {
-            ZStack(alignment: .leading) {
-                VStack(spacing: 0) {
-                    // Scroll-responsive header elements (sidebar and select buttons)
-                    HStack {
-                        Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                            Image(systemName: "sidebar.left")
-                                .font(.system(size: 22))
-                                .foregroundColor(AppColors.primary)
-                        }
-                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
+    // MARK: - Extracted Sub-Views
 
-                        Spacer()
+    private var headerView: some View {
+        HStack {
+            Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppColors.primary)
+            }
+            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: .clear))
 
-                        // Current section name (centered header)
-                        VStack(spacing: 2) {
-                            if isSelectMode {
-                                Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                                    .font(AppFonts.nexaBold(22))
-                                    .foregroundColor(AppColors.primary)
-                            } else {
-                                Text(currentSectionTitle)
-                                    .font(AppFonts.nexaBold(22))
-                                    .foregroundColor(AppColors.textPrimary)
-                            }
+            Spacer()
 
-                            // Breadcrumb for tooth selection (only show when not in select mode)
-                            if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
-                                HStack(spacing: 4) {
-                                    Text(proc)
-                                        .font(AppFonts.caption2)
-                                        .foregroundColor(AppColors.textSecondary)
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(AppColors.textSecondary)
-                                    Text("Tooth \(selectedTooth!.toothNumber)")
-                                        .font(AppFonts.caption2)
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                            }
-                        }
-
-                        Spacer()
-
-                        // Select mode toggle button
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isSelectMode.toggle()
-                                if !isSelectMode {
-                                    selectedAssetIds.removeAll()
-                                }
-                            }
-                        }) {
-                            Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                                .font(.system(size: 22))
-                                .foregroundColor(isSelectMode ? AppColors.primary : AppColors.primary)
-                        }
-                        .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                    .opacity(showHeaderElements ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
-
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            if selectedTooth != nil {
-                                // Show grouped by stage and angle - always show both sections
-                                ForEach(["Preparation", "Restoration"], id: \.self) { stage in
-                                    let angleGroups = assetsByAngle(for: stage)
-                                    StageSection(
-                                        stage: stage,
-                                        angleGroups: angleGroups,
-                                        expandedAngle: $expandedAngleStack,
-                                        metadataManager: metadataManager,
-                                        isCollapsed: collapsedStages.contains(stage),
-                                        onToggleCollapse: {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                if collapsedStages.contains(stage) {
-                                                    collapsedStages.remove(stage)
-                                                } else {
-                                                    collapsedStages.insert(stage)
-                                                }
-                                            }
-                                        },
-                                        highlightedPhotoId: highlightedPhotoId,
-                                        showPhotoHighlight: showPhotoHighlight,
-                                        isSelectMode: isSelectMode,
-                                        selectedAssetIds: $selectedAssetIds
-                                    )
-                                }
-                        } else if filteredAssets.isEmpty {
-                            VStack(spacing: 20) {
-                                Image(systemName: "folder")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(AppColors.textSecondary)
-                                Text("Select a procedure")
-                                    .font(AppFonts.subheadline)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 100)
-                        } else {
-                            // Show flat grid for procedure-level view
-                            LazyVGrid(columns: columns, spacing: 15) {
-                                ForEach(filteredAssets, id: \.localIdentifier) { asset in
-                                    let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
-                                    let isSelected = selectedAssetIds.contains(asset.localIdentifier)
-                                    let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
-
-                                    if isSelectMode {
-                                        // Selection mode - tap to select/deselect
-                                        Button(action: {
-                                            withAnimation(.easeInOut(duration: 0.15)) {
-                                                if selectedAssetIds.contains(asset.localIdentifier) {
-                                                    selectedAssetIds.remove(asset.localIdentifier)
-                                                } else {
-                                                    selectedAssetIds.insert(asset.localIdentifier)
-                                                }
-                                            }
-                                        }) {
-                                            VStack(alignment: .center, spacing: 4) {
-                                                AssetThumbnail(asset: asset)
-                                                    .frame(height: 120)
-                                                    .clipped()
-                                                    .cornerRadius(8)
-                                                    .overlay(
-                                                        // Selection checkbox overlay
-                                                        ZStack {
-                                                            Circle()
-                                                                .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
-                                                                .frame(width: 24, height: 24)
-                                                            if isSelected {
-                                                                Image(systemName: "checkmark")
-                                                                    .font(.system(size: 12, weight: .bold))
-                                                                    .foregroundColor(.white)
-                                                            } else {
-                                                                Circle()
-                                                                    .stroke(Color.white, lineWidth: 2)
-                                                                    .frame(width: 22, height: 22)
-                                                            }
-                                                        }
-                                                        .padding(6),
-                                                        alignment: .topTrailing
-                                                    )
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
-                                                    )
-
-                                                // Tag info display (show in All Photos view) - fixed height for alignment
-                                                if selectedProcedure == nil {
-                                                    PhotoTagsLabel(metadata: metadata)
-                                                        .frame(height: 28)
-                                                }
-                                            }
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    } else {
-                                        // Normal mode - navigate to detail view
-                                        NavigationLink(destination: PhotoDetailView(asset: asset)) {
-                                            VStack(alignment: .center, spacing: 4) {
-                                                AssetThumbnail(asset: asset)
-                                                    .frame(height: 120)
-                                                    .clipped()
-                                                    .cornerRadius(8)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                                                    )
-                                                    .animation(.easeInOut(duration: 0.3), value: isHighlighted)
-
-                                                // Tag info display (show in All Photos view) - fixed height for alignment
-                                                if selectedProcedure == nil {
-                                                    PhotoTagsLabel(metadata: metadata)
-                                                        .frame(height: 28)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 120)
-                        }
-                        .padding(.top, 20)
-                    }
-                }
-                }
-                .offset(x: isSidebarOpen ? 250 : 0)
-
-                // Edge swipe gesture overlay (left edge for opening, below header)
-                if !isSidebarOpen {
-                    VStack(spacing: 0) {
-                        // Spacer for navigation bar large title (~96pt)
-                        Color.clear.frame(height: 100)
-                            .allowsHitTesting(false)
-
-                        HStack {
-                            Color.clear
-                                .frame(width: 60)
-                                .contentShape(Rectangle())
-                                .highPriorityGesture(
-                                    DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                        .onChanged { value in
-                                            dragOffset = value.translation.width
-                                        }
-                                        .onEnded { value in
-                                            // Open sidebar if swiped right with enough distance
-                                            if value.translation.width > 20 {
-                                                withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
-                                            }
-                                            dragOffset = 0
-                                        }
-                                )
-                            Spacer()
-                                .allowsHitTesting(false)
-                        }
-                    }
+            VStack(spacing: 2) {
+                if isSelectMode {
+                    Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
+                        .font(AppFonts.nexaBold(22))
+                        .foregroundColor(AppColors.primary)
+                } else {
+                    Text(currentSectionTitle)
+                        .font(AppFonts.nexaBold(22))
+                        .foregroundColor(AppColors.textPrimary)
                 }
 
-                // Darkening overlay (fades in/out smoothly, independent of sidebar slide)
-                if isSidebarOpen {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                                .onEnded { value in
-                                    // Close sidebar if swiped left
-                                    if value.translation.width < -20 {
-                                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
-                                    }
-                                }
-                        )
-                        .zIndex(1)
-                        .transition(.opacity)
-                }
-
-                // Sidebar (slides in/out from left edge)
-                if isSidebarOpen {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // All Photos button
-                        Button(action: {
-                            selectedProcedure = nil
-                            selectedTooth = nil
-                            withAnimation { isSidebarOpen = false }
-                        }) {
-                            HStack {
-                                Image(systemName: "square.grid.2x2")
-                                Text("All Photos")
-                                    .font(AppFonts.subheadline)
-                            }
-                            .padding(.leading, 16)
-                            .padding(.trailing, 8)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
-                            .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
-                        }
-                        .padding(.top, 50)
-
-                        Divider().background(AppColors.secondary)
-
-                        // Procedure folders with tooth subfolders
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                    ProcedureFolderView(
-                                        procedure: procedure,
-                                        toothEntries: metadataManager.getToothEntries(for: procedure),
-                                        selectedProcedure: $selectedProcedure,
-                                        selectedTooth: $selectedTooth,
-                                        isSidebarOpen: $isSidebarOpen,
-                                        metadataManager: metadataManager,
-                                        assets: library.assets,
-                                        onRename: { folder in
-                                            folderToRename = folder
-                                            renameFolderText = folder
-                                            showRenameSheet = true
-                                        },
-                                        onDelete: { folder in
-                                            folderToDelete = folder
-                                            showDeleteConfirmation = true
-                                        },
-                                        onColorEdit: { folder in
-                                            folderForColorEdit = folder
-                                            showColorPicker = true
-                                        }
-                                    )
-                                }
-
-                                // Add Procedure Folder button
-                                Button(action: {
-                                    newFolderName = ""
-                                    showAddFolderSheet = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "folder.badge.plus")
-                                            .foregroundColor(AppColors.success)
-                                        Text("Add Procedure Folder")
-                                            .font(AppFonts.subheadline)
-                                            .foregroundColor(AppColors.textPrimary)
-                                    }
-                                    .padding(.leading, 16)
-                                    .padding(.trailing, 8)
-                                    .padding(.vertical, 10)
-                                }
-                            }
-                        }
-
-                        Spacer()
+                if !isSelectMode && selectedTooth != nil, let proc = selectedProcedure {
+                    HStack(spacing: 4) {
+                        Text(proc)
+                            .font(AppFonts.caption2)
+                            .foregroundColor(AppColors.textSecondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Tooth \(selectedTooth!.toothNumber)")
+                            .font(AppFonts.caption2)
+                            .foregroundColor(AppColors.textSecondary)
                     }
-                    .frame(minWidth: 250)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .background(AppColors.surface.opacity(0.98))
-                    .edgesIgnoringSafeArea(.vertical)
-                    .zIndex(2)
-                    .transition(.move(edge: .leading))
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 5, coordinateSpace: .global)
-                            .onEnded { value in
-                                // Close sidebar if swiped left anywhere
-                                if value.translation.width < -20 {
-                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
-                                }
-                            }
-                    )
-                }
-
-                // Bottom action bar for multi-select mode
-                if isSelectMode && !selectedAssetIds.isEmpty {
-                    VStack {
-                        Spacer()
-                            .allowsHitTesting(false)
-                        HStack(spacing: 0) {
-                            // Delete button
-                            Button(action: {
-                                showDeleteAlert = true
-                            }) {
-                                VStack(spacing: 4) {
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 22))
-                                    Text("Delete")
-                                        .font(AppFonts.caption2)
-                                }
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity)
-                            }
-
-                            // Move button
-                            Button(action: {
-                                showMoveSheet = true
-                            }) {
-                                VStack(spacing: 4) {
-                                    Image(systemName: "arrow.right.doc.on.clipboard")
-                                        .font(.system(size: 22))
-                                    Text("Move")
-                                        .font(AppFonts.caption2)
-                                }
-                                .foregroundColor(AppColors.primary)
-                                .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.bottom, 50)
-                        .background(
-                            AppColors.background
-                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
-                        )
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+
+            Spacer()
+
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSelectMode.toggle()
+                    if !isSelectMode {
+                        selectedAssetIds.removeAll()
+                    }
+                }
+            }) {
+                Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppColors.primary)
+            }
+            .buttonStyle(CustomIconButtonStyle(size: 40, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .opacity(showHeaderElements ? 1 : 0)
+        .animation(.easeInOut(duration: 0.2), value: showHeaderElements)
+    }
+
+    @ViewBuilder
+    private func photoGridItem(asset: PHAsset, isHighlighted: Bool, isSelected: Bool, metadata: PhotoMetadata?) -> some View {
+        if isSelectMode {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    if selectedAssetIds.contains(asset.localIdentifier) {
+                        selectedAssetIds.remove(asset.localIdentifier)
+                    } else {
+                        selectedAssetIds.insert(asset.localIdentifier)
+                    }
+                }
+            }) {
+                VStack(alignment: .center, spacing: 4) {
+                    AssetThumbnail(asset: asset)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(8)
+                        .overlay(
+                            ZStack {
+                                Circle()
+                                    .fill(isSelected ? AppColors.primary : Color.black.opacity(0.3))
+                                    .frame(width: 24, height: 24)
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                } else {
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                        .frame(width: 22, height: 22)
+                                }
+                            }
+                            .padding(6),
+                            alignment: .topTrailing
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
+                        )
+
+                    if selectedProcedure == nil {
+                        PhotoTagsLabel(metadata: metadata)
+                            .frame(height: 28)
+                    }
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                VStack(alignment: .center, spacing: 4) {
+                    AssetThumbnail(asset: asset)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                        )
+                        .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+
+                    if selectedProcedure == nil {
+                        PhotoTagsLabel(metadata: metadata)
+                            .frame(height: 28)
+                    }
+                }
+            }
+        }
+    }
+
+    private var scrollContentView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if selectedTooth != nil {
+                    ForEach(["Preparation", "Restoration"], id: \.self) { stage in
+                        let angleGroups = assetsByAngle(for: stage)
+                        StageSection(
+                            stage: stage,
+                            angleGroups: angleGroups,
+                            expandedAngle: $expandedAngleStack,
+                            metadataManager: metadataManager,
+                            isCollapsed: collapsedStages.contains(stage),
+                            onToggleCollapse: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    if collapsedStages.contains(stage) {
+                                        collapsedStages.remove(stage)
+                                    } else {
+                                        collapsedStages.insert(stage)
+                                    }
+                                }
+                            },
+                            highlightedPhotoId: highlightedPhotoId,
+                            showPhotoHighlight: showPhotoHighlight,
+                            isSelectMode: isSelectMode,
+                            selectedAssetIds: $selectedAssetIds
+                        )
+                    }
+                } else if filteredAssets.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 50))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Select a procedure")
+                            .font(AppFonts.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 100)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 15) {
+                        ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                            let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
+                            let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+                            let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
+                            photoGridItem(asset: asset, isHighlighted: isHighlighted, isSelected: isSelected, metadata: metadata)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 120)
+                }
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    private var sidebarView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: {
+                selectedProcedure = nil
+                selectedTooth = nil
+                withAnimation { isSidebarOpen = false }
+            }) {
+                HStack {
+                    Image(systemName: "square.grid.2x2")
+                    Text("All Photos")
+                        .font(AppFonts.subheadline)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
+                .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
+            }
+            .padding(.top, 50)
+
+            Divider().background(AppColors.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                        ProcedureFolderView(
+                            procedure: procedure,
+                            toothEntries: metadataManager.getToothEntries(for: procedure),
+                            selectedProcedure: $selectedProcedure,
+                            selectedTooth: $selectedTooth,
+                            isSidebarOpen: $isSidebarOpen,
+                            metadataManager: metadataManager,
+                            assets: library.assets,
+                            onRename: { folder in
+                                folderToRename = folder
+                                renameFolderText = folder
+                                showRenameSheet = true
+                            },
+                            onDelete: { folder in
+                                folderToDelete = folder
+                                showDeleteConfirmation = true
+                            },
+                            onColorEdit: { folder in
+                                folderForColorEdit = folder
+                                showColorPicker = true
+                            }
+                        )
+                    }
+
+                    Button(action: {
+                        newFolderName = ""
+                        showAddFolderSheet = true
+                    }) {
+                        HStack {
+                            Image(systemName: "folder.badge.plus")
+                                .foregroundColor(AppColors.success)
+                            Text("Add Procedure Folder")
+                                .font(AppFonts.subheadline)
+                                .foregroundColor(AppColors.textPrimary)
+                        }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 8)
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .frame(minWidth: 250)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(AppColors.surface.opacity(0.98))
+        .edgesIgnoringSafeArea(.vertical)
+        .zIndex(2)
+        .transition(.move(edge: .leading))
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                .onEnded { value in
+                    if value.translation.width < -20 {
+                        withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                    }
+                }
+        )
+    }
+
+    private var bottomActionBar: some View {
+        VStack {
+            Spacer()
+                .allowsHitTesting(false)
+            HStack(spacing: 0) {
+                Button(action: {
+                    showDeleteAlert = true
+                }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 22))
+                        Text("Delete")
+                            .font(AppFonts.caption2)
+                    }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                }
+
+                Button(action: {
+                    showMoveSheet = true
+                }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.right.doc.on.clipboard")
+                            .font(.system(size: 22))
+                        Text("Move")
+                            .font(AppFonts.caption2)
+                    }
+                    .foregroundColor(AppColors.primary)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.vertical, 12)
+            .padding(.bottom, 50)
+            .background(
+                AppColors.background
+                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -4)
+            )
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var edgeSwipeOverlay: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 100)
+                .allowsHitTesting(false)
+            HStack {
+                Color.clear
+                    .frame(width: 60)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                            .onChanged { value in
+                                dragOffset = value.translation.width
+                            }
+                            .onEnded { value in
+                                if value.translation.width > 20 {
+                                    withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = true }
+                                }
+                                dragOffset = 0
+                            }
+                    )
+                Spacer()
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var darkeningOverlay: some View {
+        Color.black.opacity(0.3)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false } }
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                    .onEnded { value in
+                        if value.translation.width < -20 {
+                            withAnimation(.easeOut(duration: 0.25)) { isSidebarOpen = false }
+                        }
+                    }
+            )
+            .zIndex(1)
+            .transition(.opacity)
+    }
+
+    private var mainZStackContent: some View {
+        ZStack(alignment: .leading) {
+            VStack(spacing: 0) {
+                headerView
+                scrollContentView
+            }
+            .offset(x: isSidebarOpen ? 250 : 0)
+
+            if !isSidebarOpen {
+                edgeSwipeOverlay
+            }
+
+            if isSidebarOpen {
+                darkeningOverlay
+                sidebarView
+            }
+
+            if isSelectMode && !selectedAssetIds.isEmpty {
+                bottomActionBar
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            mainZStackContent
             .navigationTitle(isSelectMode ? (selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected") : currentSectionTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
