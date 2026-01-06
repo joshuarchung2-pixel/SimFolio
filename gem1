@@ -3013,8 +3013,8 @@ struct PhotoInfoPillView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main pill button
-            Button(action: { withAnimation { isDropdownOpen.toggle() } }) {
+            // Main pill button - stays fixed at top
+            Button(action: { withAnimation(.easeInOut(duration: 0.25)) { isDropdownOpen.toggle() } }) {
                 HStack(spacing: 6) {
                     // Show current selections with visual hierarchy
                     if metadata.procedure == nil {
@@ -3064,25 +3064,27 @@ struct PhotoInfoPillView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.blue.opacity(0.15))
+                .background(Color.white.opacity(0.9))
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                        .stroke(pillStrokeColor, lineWidth: pillStrokeWidth)
                 )
             }
             .foregroundColor(.primary)
+            .zIndex(1) // Keep pill above dropdown
 
-            // Dropdown content
+            // Dropdown content - drops down from pill
             if isDropdownOpen {
                 dropdownContent
                     .padding(.top, 8)
                     .transition(.asymmetric(
-                        insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
-                        removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
                     ))
             }
         }
+        .clipped()
     }
 
     var dropdownContent: some View {
@@ -3098,7 +3100,7 @@ struct PhotoInfoPillView: View {
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(dropdownStrokeColor, lineWidth: pillStrokeWidth)
         )
         .onAppear { updateCurrentStage() }
     }
