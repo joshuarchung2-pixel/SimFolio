@@ -6568,6 +6568,7 @@ struct PortfoliosView: View {
             }
         }
     }
+    }
 
     // Generate a zip file with portfolio photos organized by requirement/stage/angle
     func generatePortfolioZip(portfolio: Portfolio) {
