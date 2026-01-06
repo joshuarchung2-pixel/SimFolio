@@ -2367,24 +2367,22 @@ struct DentalCameraSetupView: View {
                     )
                 }
 
-                // TOP CENTER: Photo Info Pill (tag selector dropdown)
-                if cameraService.capturedImage == nil {
-                    VStack {
-                        PhotoInfoPillView(
-                            metadata: $currentMetadata,
-                            isDropdownOpen: $isInfoPillOpen
-                        )
-                        Spacer(minLength: 0)
-                    }
-                    .frame(height: 500)
-                    .position(
-                        x: isLandscapeLeft ? geometry.size.width - 180 :
-                           isLandscapeRight ? 180 :
-                           geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 310
+                // TOP CENTER: Photo Info Pill (tag selector dropdown) - always visible
+                VStack {
+                    PhotoInfoPillView(
+                        metadata: $currentMetadata,
+                        isDropdownOpen: $isInfoPillOpen
                     )
-                    .zIndex(5)
+                    Spacer(minLength: 0)
                 }
+                .frame(height: 500)
+                .position(
+                    x: isLandscapeLeft ? geometry.size.width - 180 :
+                       isLandscapeRight ? 180 :
+                       geometry.size.width / 2,
+                    y: isLandscape ? geometry.size.height / 2 : 310
+                )
+                .zIndex(5)
 
                 // Right: Unified Options Button (Expanding Downward)
                 if cameraService.capturedImage == nil {
@@ -2401,15 +2399,11 @@ struct DentalCameraSetupView: View {
                             }
 
                             if isOptionsExpanded {
-                                // Flash Toggle
+                                // Flash Toggle (on/off only)
                                 Button(action: {
-                                    switch cameraService.flashMode {
-                                    case .off: cameraService.flashMode = .on
-                                    case .on: cameraService.flashMode = .auto
-                                    default: cameraService.flashMode = .off
-                                    }
+                                    cameraService.flashMode = cameraService.flashMode == .off ? .on : .off
                                 }) {
-                                    Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : (cameraService.flashMode == .on ? "bolt.fill" : "bolt.badge.a.fill"))
+                                    Image(systemName: cameraService.flashMode == .off ? "bolt.slash.fill" : "bolt.fill")
                                         .font(.title2)
                                         .rotationEffect(orientationManager.iconRotationAngle)
                                         .padding(10)
@@ -2603,11 +2597,14 @@ struct DentalCameraSetupView: View {
 
                             // Shutter Button (Center) - bottom aligned with thumbnail and flip camera
                             Button(action: {
-                                withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation { showShutterEffect = false }
-                                }
                                 cameraService.takePhoto()
+                                // Flash effect after photo capture starts
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    withAnimation(.easeInOut(duration: 0.1)) { showShutterEffect = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        withAnimation { showShutterEffect = false }
+                                    }
+                                }
                             }) {
                                 ZStack {
                                     Circle().stroke(Color.white, lineWidth: 4).frame(width: 72, height: 72)
@@ -2936,6 +2933,14 @@ struct PhotoInfoPillView: View {
         metadata.angle == nil
     }
 
+    // Check if all fields are empty
+    var hasAllFieldsEmpty: Bool {
+        metadata.procedure == nil &&
+        metadata.toothNumber == nil &&
+        metadata.stage == nil &&
+        metadata.angle == nil
+    }
+
     // Check if all fields are complete
     var hasAllFieldsComplete: Bool {
         metadata.procedure != nil &&
@@ -2944,41 +2949,33 @@ struct PhotoInfoPillView: View {
         metadata.angle != nil
     }
 
-    // Check if some fields are filled (procedure set but not all complete)
+    // Check if some fields are filled (at least one set but not all complete)
     var hasSomeFieldsFilled: Bool {
-        metadata.procedure != nil && !hasAllFieldsComplete
+        !hasAllFieldsEmpty && !hasAllFieldsComplete
     }
 
     // Computed properties for pill styling (helps Swift type-checker)
     var pillStrokeColor: Color {
         if hasAllFieldsComplete {
-            return Color.green.opacity(0.8)
+            return Color.green
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.8)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.8)
+            return Color.orange
         } else {
-            return Color.white.opacity(0.3)
+            return Color.red
         }
     }
 
     var pillStrokeWidth: CGFloat {
-        if hasAllFieldsComplete || hasSomeFieldsFilled || metadata.procedure == nil {
-            return 1.5
-        } else {
-            return 1
-        }
+        return 2
     }
 
     var pillGlowColor: Color {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.4)
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.4)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.4)
+            return Color.orange.opacity(0.4)
         } else {
-            return Color.clear
+            return Color.red.opacity(0.4)
         }
     }
 
@@ -2986,11 +2983,20 @@ struct PhotoInfoPillView: View {
         if hasAllFieldsComplete {
             return Color.green.opacity(0.2)
         } else if hasSomeFieldsFilled {
-            return Color.yellow.opacity(0.2)
-        } else if metadata.procedure == nil {
-            return Color.red.opacity(0.2)
+            return Color.orange.opacity(0.2)
         } else {
-            return Color.clear
+            return Color.red.opacity(0.2)
+        }
+    }
+
+    // Dropdown outline color follows same schema
+    var dropdownStrokeColor: Color {
+        if hasAllFieldsComplete {
+            return Color.green
+        } else if hasSomeFieldsFilled {
+            return Color.orange
+        } else {
+            return Color.red
         }
     }
 
@@ -3077,11 +3083,11 @@ struct PhotoInfoPillView: View {
             bottomButtonsView
         }
         .frame(width: 340)
-        .background(AppColors.surface.opacity(0.98))
+        .background(Color.white.opacity(0.9))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(AppColors.secondary.opacity(0.3), lineWidth: 1)
+                .stroke(dropdownStrokeColor, lineWidth: 2)
         )
         .onAppear { updateCurrentStage() }
     }
