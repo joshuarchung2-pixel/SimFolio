@@ -6408,33 +6408,38 @@ struct PortfoliosView: View {
                     }
                 }
             }
-            .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !metadataManager.portfolios.isEmpty {
+                ToolbarItem(placement: .principal) {
+                    if !metadataManager.portfolios.isEmpty, let portfolio = currentPortfolio {
                         Menu {
-                            ForEach(metadataManager.portfolios) { portfolio in
+                            ForEach(metadataManager.portfolios) { p in
                                 Button(action: {
-                                    selectedPortfolioId = portfolio.id
+                                    selectedPortfolioId = p.id
                                 }) {
                                     HStack {
-                                        Text(portfolio.name)
-                                        if portfolio.id == currentPortfolio?.id {
+                                        Text(p.name)
+                                        if p.id == portfolio.id {
                                             Image(systemName: "checkmark")
                                         }
                                     }
                                 }
                             }
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "folder")
+                            HStack(spacing: 6) {
+                                Text(portfolio.name)
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.textPrimary)
                                 Image(systemName: "chevron.down")
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(AppColors.textSecondary)
                             }
-                            .foregroundColor(AppColors.primary)
                         }
+                    } else {
+                        Text("Portfolios")
+                            .font(.headline)
+                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -7274,7 +7279,13 @@ struct RequirementStatusView: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
                     // Stage and angle breakdown with thumbnails
-                    ForEach(requirement.stages, id: \.self) { stage in
+                    // Sort stages so Preparation always comes before Restoration
+                    let sortedStages = requirement.stages.sorted { s1, s2 in
+                        if s1 == "Preparation" { return true }
+                        if s2 == "Preparation" { return false }
+                        return s1 < s2
+                    }
+                    ForEach(sortedStages, id: \.self) { stage in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: stage == "Preparation" ? "wrench.fill" : "checkmark.seal.fill")
@@ -7282,6 +7293,7 @@ struct RequirementStatusView: View {
                                     .font(AppFonts.caption)
                                 Text(stage)
                                     .font(AppFonts.nexaRegular(12))
+                                    .fontWeight(.bold)
                                     .foregroundColor(AppColors.textPrimary)
                             }
 
