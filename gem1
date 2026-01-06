@@ -3061,16 +3061,21 @@ struct PhotoInfoPillView: View {
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
                         .font(AppFonts.caption2)
                         .foregroundColor(Color.black.opacity(0.6))
+                        .animation(nil, value: isDropdownOpen)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.9))
-                .cornerRadius(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.9))
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(pillStrokeColor, lineWidth: pillStrokeWidth)
+                        .strokeBorder(pillStrokeColor, lineWidth: pillStrokeWidth)
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 20))
             }
+            .buttonStyle(.plain)
             .foregroundColor(.primary)
             .zIndex(1) // Keep pill above dropdown
 
@@ -3096,11 +3101,13 @@ struct PhotoInfoPillView: View {
             bottomButtonsView
         }
         .frame(width: 340)
-        .background(Color.white.opacity(0.9))
-        .cornerRadius(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.9))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(dropdownStrokeColor, lineWidth: pillStrokeWidth)
+                .strokeBorder(dropdownStrokeColor, lineWidth: pillStrokeWidth)
         )
         .onAppear { updateCurrentStage() }
     }
