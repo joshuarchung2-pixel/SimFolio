@@ -3865,9 +3865,11 @@ struct GalleryView: View {
                                 Image(systemName: "square.grid.2x2")
                                 Text("All Photos")
                                     .font(AppFonts.subheadline)
-                                Spacer()
                             }
-                            .padding()
+                            .padding(.leading, 16)
+                            .padding(.trailing, 8)
+                            .padding(.vertical, 16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .foregroundColor(selectedProcedure == nil ? AppColors.primary : AppColors.textPrimary)
                             .background(selectedProcedure == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
                         }
@@ -3914,9 +3916,9 @@ struct GalleryView: View {
                                         Text("Add Procedure Folder")
                                             .font(AppFonts.subheadline)
                                             .foregroundColor(AppColors.textPrimary)
-                                        Spacer()
                                     }
-                                    .padding(.horizontal)
+                                    .padding(.leading, 16)
+                                    .padding(.trailing, 8)
                                     .padding(.vertical, 10)
                                 }
                             }
@@ -3924,7 +3926,8 @@ struct GalleryView: View {
 
                         Spacer()
                     }
-                    .frame(width: 250)
+                    .frame(minWidth: 250)
+                    .fixedSize(horizontal: true, vertical: false)
                     .background(AppColors.surface.opacity(0.98))
                     .edgesIgnoringSafeArea(.vertical)
                     .zIndex(2)
@@ -4589,13 +4592,12 @@ struct ProcedureFolderView: View {
                     withAnimation { isExpanded.toggle() }
                 }
             }) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "folder.fill" : "folder")
                         .foregroundColor(metadataManager.getFolderColor(for: procedure))
                     Text(procedure)
                         .font(AppFonts.subheadline)
                         .foregroundColor(selectedProcedure == procedure ? AppColors.primary : AppColors.textPrimary)
-                    Spacer()
                     Text("\(photoCount)")
                         .font(AppFonts.caption)
                         .foregroundColor(AppColors.textSecondary)
@@ -4605,8 +4607,10 @@ struct ProcedureFolderView: View {
                             .foregroundColor(AppColors.textSecondary)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
                 .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(selectedProcedure == procedure && selectedTooth == nil ? AppColors.textPrimary.opacity(0.1) : Color.clear)
             }
             .contextMenu {
@@ -4636,15 +4640,15 @@ struct ProcedureFolderView: View {
                         selectedTooth = nil
                         withAnimation { isSidebarOpen = false }
                     }) {
-                        HStack {
+                        HStack(spacing: 6) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .foregroundColor(AppColors.textSecondary)
                             Text("All \(procedure)")
                                 .font(AppFonts.caption)
                                 .foregroundColor(selectedProcedure == procedure && selectedTooth == nil ? AppColors.primary : AppColors.textPrimary)
-                            Spacer()
                         }
                         .padding(.leading, 40)
+                        .padding(.trailing, 8)
                         .padding(.vertical, 6)
                     }
 
@@ -4697,7 +4701,7 @@ struct ToothSubfolderRow: View {
             selectedTooth = entry
             withAnimation { isSidebarOpen = false }
         }) {
-            HStack {
+            HStack(spacing: 6) {
                 Image(systemName: "tooth")
                     .font(AppFonts.caption)
                     .foregroundColor(AppColors.success)
@@ -4707,13 +4711,14 @@ struct ToothSubfolderRow: View {
                 Text(entry.dateString)
                     .font(AppFonts.caption2)
                     .foregroundColor(AppColors.textSecondary)
-                Spacer()
                 Text("\(photoCount)")
                     .font(AppFonts.caption2)
                     .foregroundColor(AppColors.textSecondary)
             }
             .padding(.leading, 40)
+            .padding(.trailing, 8)
             .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? AppColors.textPrimary.opacity(0.1) : Color.clear)
         }
     }
