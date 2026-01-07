@@ -5345,6 +5345,7 @@ struct PhotoDetailView: View {
                             metadataManager: metadataManager
                         )
                         .padding(.top, 12)
+                        .padding(.bottom, 16)  // Equal padding below tag pill
                         .zIndex(10)
                         .transition(.opacity)
                     }
@@ -5375,7 +5376,8 @@ struct PhotoDetailView: View {
                                 .fill(AppColors.primary.opacity(0.15))
                                 .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
                         )
-                        .padding(.bottom, 60)
+                        .padding(.top, 16)  // Equal padding above rating pill
+                        .padding(.bottom, 50)
                         .transition(.opacity)
                     }
                 }
@@ -5415,20 +5417,28 @@ struct PhotoDetailView: View {
 
     @ViewBuilder
     private func photoContentView(geometry: GeometryProxy) -> some View {
-        // Normal mode: larger photo area (orange bounds)
-        // The photo container stays the same size, but clipping changes based on mode
-        let normalPhotoHeight = geometry.size.height * 0.65
-        // Immersive/zoomed mode: allow expansion to full content area (green bounds)
+        // Normal mode: photo area takes 75% of screen height
+        let normalPhotoHeight = geometry.size.height * 0.75
+        // Immersive/zoomed mode: allow expansion to full content area
         let maxPhotoHeight = geometry.size.height * 0.85
+        // Container width for calculating horizontal bounds
+        let containerWidth = geometry.size.width
 
         TabView(selection: $currentIndex) {
             ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
                 ZStack {
                     if let img = loadedImages[asset.localIdentifier] {
+                        // Calculate the displayed image width for bounds clamping
+                        let imageAspect = img.size.width / img.size.height
+                        let displayedWidth = min(containerWidth - 32, normalPhotoHeight * imageAspect)
+                        let scaledWidth = displayedWidth * zoomScale
+                        // Maximum horizontal offset to prevent showing black edges
+                        let maxHorizontalOffset = max(0, (scaledWidth - containerWidth) / 2)
+
                         Image(uiImage: img)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: geometry.size.width - 32, maxHeight: normalPhotoHeight)
+                            .frame(maxWidth: containerWidth - 32, maxHeight: normalPhotoHeight)
                             .rotationEffect(.degrees(imageRotation))
                             .scaleEffect(zoomScale)
                             .offset(zoomOffset)
@@ -5485,10 +5495,11 @@ struct PhotoDetailView: View {
                                 DragGesture()
                                     .onChanged { value in
                                         if zoomScale > 1.0 {
-                                            zoomOffset = CGSize(
-                                                width: lastZoomOffset.width + value.translation.width,
-                                                height: lastZoomOffset.height + value.translation.height
-                                            )
+                                            let newWidth = lastZoomOffset.width + value.translation.width
+                                            let newHeight = lastZoomOffset.height + value.translation.height
+                                            // Clamp horizontal offset to prevent black edges on sides
+                                            let clampedWidth = min(maxHorizontalOffset, max(-maxHorizontalOffset, newWidth))
+                                            zoomOffset = CGSize(width: clampedWidth, height: newHeight)
                                         } else if value.translation.height > 0 && !isImmersiveMode {
                                             // Swipe down to dismiss (only when not zoomed)
                                             dragOffset = value.translation
@@ -5496,6 +5507,9 @@ struct PhotoDetailView: View {
                                     }
                                     .onEnded { value in
                                         if zoomScale > 1.0 {
+                                            // Also clamp the final offset
+                                            let clampedWidth = min(maxHorizontalOffset, max(-maxHorizontalOffset, zoomOffset.width))
+                                            zoomOffset = CGSize(width: clampedWidth, height: zoomOffset.height)
                                             lastZoomOffset = zoomOffset
                                         } else if value.translation.height > 100 && !isImmersiveMode {
                                             dismiss()
@@ -6022,7 +6036,12 @@ struct PhotoEditorView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             guard let img = baseImage else { return }
             baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
-            rotationAngle = 0  // Reset visual rotation since image data is now rotated
+            // Reset visual rotation WITHOUT animation since image data is now rotated
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                rotationAngle = 0
+            }
             applyProcessing()
         }
     }
