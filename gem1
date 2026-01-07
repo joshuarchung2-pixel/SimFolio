@@ -232,48 +232,132 @@ class NotificationManager: ObservableObject {
     }
 
     private func scheduleImmediateNotification(for portfolio: Portfolio, dueDate: Date) {
-        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        let startOfDueDate = calendar.startOfDay(for: dueDate)
+
+        // Calculate number of days from today to due date
+        guard let dayCount = calendar.dateComponents([.day], from: startOfToday, to: startOfDueDate).day, dayCount >= 0 else { return }
 
         // Schedule based on frequency
         switch frequency {
         case .once:
+            // Schedule single notification for today (fires in 60 seconds)
+            let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: now)
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
             let request = UNNotificationRequest(identifier: "\(portfolio.id)_once", content: content, trigger: trigger)
             UNUserNotificationCenter.current().add(request)
 
         case .daily:
-            // Schedule for 9 AM daily
-            var dateComponents = DateComponents()
-            dateComponents.hour = 9
-            dateComponents.minute = 0
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
-            UNUserNotificationCenter.current().add(request)
+            // Schedule individual notifications for each day from today to dueDate
+            for dayOffset in 0...dayCount {
+                guard let fireDate = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
+                let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: fireDate)
+
+                if dayOffset == 0 {
+                    // Today: schedule for 9 AM or in 60 seconds if past 9 AM
+                    var todayComponents = calendar.dateComponents([.year, .month, .day, .hour], from: now)
+                    if let hour = todayComponents.hour, hour >= 9 {
+                        // Past 9 AM, schedule for 60 seconds from now
+                        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
+                        let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily_0", content: content, trigger: trigger)
+                        UNUserNotificationCenter.current().add(request)
+                    } else {
+                        // Before 9 AM, schedule for 9 AM today
+                        var dateComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                        dateComponents.hour = 9
+                        dateComponents.minute = 0
+                        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+                        let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily_0", content: content, trigger: trigger)
+                        UNUserNotificationCenter.current().add(request)
+                    }
+                } else {
+                    // Future days: schedule for 9 AM
+                    var dateComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                    dateComponents.hour = 9
+                    dateComponents.minute = 0
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+                    let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily_\(dayOffset)", content: content, trigger: trigger)
+                    UNUserNotificationCenter.current().add(request)
+                }
+            }
 
         case .twiceDaily:
-            // Schedule for 9 AM and 6 PM
-            var morningComponents = DateComponents()
-            morningComponents.hour = 9
-            morningComponents.minute = 0
-            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
-            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
-            UNUserNotificationCenter.current().add(morningRequest)
+            // Schedule individual morning and evening notifications for each day
+            for dayOffset in 0...dayCount {
+                guard let fireDate = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
+                let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: fireDate)
 
-            var eveningComponents = DateComponents()
-            eveningComponents.hour = 18
-            eveningComponents.minute = 0
-            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
-            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
-            UNUserNotificationCenter.current().add(eveningRequest)
+                if dayOffset == 0 {
+                    // Today: check current time to decide what to schedule
+                    let currentHour = calendar.component(.hour, from: now)
+
+                    if currentHour < 9 {
+                        // Before 9 AM: schedule both morning and evening
+                        var morningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                        morningComponents.hour = 9
+                        morningComponents.minute = 0
+                        let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: false)
+                        let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning_0", content: content, trigger: morningTrigger)
+                        UNUserNotificationCenter.current().add(morningRequest)
+
+                        var eveningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                        eveningComponents.hour = 18
+                        eveningComponents.minute = 0
+                        let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: false)
+                        let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening_0", content: content, trigger: eveningTrigger)
+                        UNUserNotificationCenter.current().add(eveningRequest)
+                    } else if currentHour < 18 {
+                        // Between 9 AM and 6 PM: schedule immediate and evening
+                        let immediateTrigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
+                        let immediateRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning_0", content: content, trigger: immediateTrigger)
+                        UNUserNotificationCenter.current().add(immediateRequest)
+
+                        var eveningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                        eveningComponents.hour = 18
+                        eveningComponents.minute = 0
+                        let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: false)
+                        let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening_0", content: content, trigger: eveningTrigger)
+                        UNUserNotificationCenter.current().add(eveningRequest)
+                    } else {
+                        // After 6 PM: schedule immediate only
+                        let immediateTrigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: false)
+                        let immediateRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening_0", content: content, trigger: immediateTrigger)
+                        UNUserNotificationCenter.current().add(immediateRequest)
+                    }
+                } else {
+                    // Future days: schedule both morning and evening
+                    var morningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                    morningComponents.hour = 9
+                    morningComponents.minute = 0
+                    let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: false)
+                    let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning_\(dayOffset)", content: content, trigger: morningTrigger)
+                    UNUserNotificationCenter.current().add(morningRequest)
+
+                    var eveningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                    eveningComponents.hour = 18
+                    eveningComponents.minute = 0
+                    let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: false)
+                    let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening_\(dayOffset)", content: content, trigger: eveningTrigger)
+                    UNUserNotificationCenter.current().add(eveningRequest)
+                }
+            }
         }
     }
 
     private func scheduleTimedNotification(for portfolio: Portfolio, dueDate: Date, notificationDate: Date) {
-        let content = createNotificationContent(for: portfolio, dueDate: dueDate)
         let calendar = Calendar.current
+        let startOfNotificationDate = calendar.startOfDay(for: notificationDate)
+        let startOfDueDate = calendar.startOfDay(for: dueDate)
+
+        // Calculate number of days from notification date to due date
+        guard let dayCount = calendar.dateComponents([.day], from: startOfNotificationDate, to: startOfDueDate).day, dayCount >= 0 else { return }
 
         switch frequency {
         case .once:
+            // Schedule single notification on the notification date
+            let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: notificationDate)
             var dateComponents = calendar.dateComponents([.year, .month, .day], from: notificationDate)
             dateComponents.hour = 9
             dateComponents.minute = 0
@@ -282,31 +366,44 @@ class NotificationManager: ObservableObject {
             UNUserNotificationCenter.current().add(request)
 
         case .daily:
-            var dateComponents = DateComponents()
-            dateComponents.hour = 9
-            dateComponents.minute = 0
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-            let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily", content: content, trigger: trigger)
-            UNUserNotificationCenter.current().add(request)
+            // Schedule individual notifications for each day from notificationDate to dueDate
+            for dayOffset in 0...dayCount {
+                guard let fireDate = calendar.date(byAdding: .day, value: dayOffset, to: startOfNotificationDate) else { continue }
+                let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: fireDate)
+                var dateComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                dateComponents.hour = 9
+                dateComponents.minute = 0
+                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+                let request = UNNotificationRequest(identifier: "\(portfolio.id)_daily_\(dayOffset)", content: content, trigger: trigger)
+                UNUserNotificationCenter.current().add(request)
+            }
 
         case .twiceDaily:
-            var morningComponents = DateComponents()
-            morningComponents.hour = 9
-            morningComponents.minute = 0
-            let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
-            let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning", content: content, trigger: morningTrigger)
-            UNUserNotificationCenter.current().add(morningRequest)
+            // Schedule individual morning and evening notifications for each day
+            for dayOffset in 0...dayCount {
+                guard let fireDate = calendar.date(byAdding: .day, value: dayOffset, to: startOfNotificationDate) else { continue }
+                let content = createNotificationContent(for: portfolio, dueDate: dueDate, notificationFireDate: fireDate)
 
-            var eveningComponents = DateComponents()
-            eveningComponents.hour = 18
-            eveningComponents.minute = 0
-            let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: true)
-            let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening", content: content, trigger: eveningTrigger)
-            UNUserNotificationCenter.current().add(eveningRequest)
+                // Morning notification at 9 AM
+                var morningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                morningComponents.hour = 9
+                morningComponents.minute = 0
+                let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: false)
+                let morningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_morning_\(dayOffset)", content: content, trigger: morningTrigger)
+                UNUserNotificationCenter.current().add(morningRequest)
+
+                // Evening notification at 6 PM
+                var eveningComponents = calendar.dateComponents([.year, .month, .day], from: fireDate)
+                eveningComponents.hour = 18
+                eveningComponents.minute = 0
+                let eveningTrigger = UNCalendarNotificationTrigger(dateMatching: eveningComponents, repeats: false)
+                let eveningRequest = UNNotificationRequest(identifier: "\(portfolio.id)_evening_\(dayOffset)", content: content, trigger: eveningTrigger)
+                UNUserNotificationCenter.current().add(eveningRequest)
+            }
         }
     }
 
-    private func createNotificationContent(for portfolio: Portfolio, dueDate: Date) -> UNMutableNotificationContent {
+    private func createNotificationContent(for portfolio: Portfolio, dueDate: Date, notificationFireDate: Date? = nil) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         let stats = MetadataManager.shared.getPortfolioStats(portfolio)
         let remaining = stats.total - stats.fulfilled
@@ -314,20 +411,25 @@ class NotificationManager: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
 
-        if let days = portfolio.daysUntilDue {
-            if days == 0 {
-                content.title = "Portfolio Due Today!"
-                content.body = "\"\(portfolio.name)\" is due today. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
-            } else if days == 1 {
-                content.title = "Portfolio Due Tomorrow"
-                content.body = "\"\(portfolio.name)\" is due tomorrow. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
-            } else if days < 0 {
-                content.title = "Portfolio Overdue!"
-                content.body = "\"\(portfolio.name)\" was due \(abs(days)) day\(abs(days) == 1 ? "" : "s") ago. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
-            } else {
-                content.title = "Portfolio Due in \(days) Days"
-                content.body = "\"\(portfolio.name)\" is due \(formatter.string(from: dueDate)). You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
-            }
+        // Calculate days from notification fire date (or today if not specified) to due date
+        let calendar = Calendar.current
+        let referenceDate = notificationFireDate ?? Date()
+        let startOfReference = calendar.startOfDay(for: referenceDate)
+        let startOfDueDate = calendar.startOfDay(for: dueDate)
+        let days = calendar.dateComponents([.day], from: startOfReference, to: startOfDueDate).day ?? 0
+
+        if days == 0 {
+            content.title = "Portfolio Due Today!"
+            content.body = "\"\(portfolio.name)\" is due today. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+        } else if days == 1 {
+            content.title = "Portfolio Due Tomorrow"
+            content.body = "\"\(portfolio.name)\" is due tomorrow. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+        } else if days < 0 {
+            content.title = "Portfolio Overdue!"
+            content.body = "\"\(portfolio.name)\" was due \(abs(days)) day\(abs(days) == 1 ? "" : "s") ago. You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
+        } else {
+            content.title = "Portfolio Due in \(days) Days"
+            content.body = "\"\(portfolio.name)\" is due \(formatter.string(from: dueDate)). You have \(remaining) photo\(remaining == 1 ? "" : "s") remaining."
         }
 
         content.sound = .default
@@ -335,13 +437,13 @@ class NotificationManager: ObservableObject {
     }
 
     func cancelNotifications(for portfolioId: String) {
-        let identifiers = [
-            "\(portfolioId)_once",
-            "\(portfolioId)_daily",
-            "\(portfolioId)_morning",
-            "\(portfolioId)_evening"
-        ]
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+        // Get all pending notifications and remove ones matching this portfolio
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let identifiersToRemove = requests
+                .map { $0.identifier }
+                .filter { $0.hasPrefix("\(portfolioId)_") }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
+        }
     }
 
     func cancelAllNotifications() {
