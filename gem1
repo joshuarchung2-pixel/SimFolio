@@ -2447,7 +2447,14 @@ struct DentalCameraSetupView: View {
                 if cameraService.capturedImage != nil {
                     // REVIEW MODE - Retake/Use Photo buttons
                     // Side-by-side layout that rotates with device
-                    HStack(alignment: .center, spacing: isLandscape ? 20 : 50) {
+                    // Button size: 78x33 (35% smaller than 120x50), equal padding between buttons and to edge
+                    let buttonPadding: CGFloat = 25
+                    let buttonWidth: CGFloat = 78
+                    let buttonHeight: CGFloat = 33
+                    // HStack total width: buttonWidth + padding + buttonWidth = 181
+                    let hstackWidth: CGFloat = buttonWidth * 2 + buttonPadding
+
+                    HStack(alignment: .center, spacing: buttonPadding) {
                         Button(action: {
                             showBlankFieldsWarning = false
                             isPhotoFading = true
@@ -2458,7 +2465,7 @@ struct DentalCameraSetupView: View {
                         }) {
                             Text("Retake")
                                 .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
+                                .frame(width: buttonWidth, height: buttonHeight)
                         }
                         .buttonStyle(CustomSecondaryButtonStyle())
 
@@ -2473,17 +2480,17 @@ struct DentalCameraSetupView: View {
                         }) {
                             Text("Use Photo")
                                 .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
+                                .frame(width: buttonWidth, height: buttonHeight)
                         }
                         .buttonStyle(CustomPrimaryButtonStyle())
                     }
                     .rotationEffect(orientationManager.iconRotationAngle)
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                     .position(
-                        x: isLandscapeLeft ? 140 :
-                           isLandscapeRight ? geometry.size.width - 140 :
+                        x: isLandscapeLeft ? buttonPadding + hstackWidth / 2 :
+                           isLandscapeRight ? geometry.size.width - buttonPadding - hstackWidth / 2 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
+                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - buttonPadding - buttonHeight / 2
                     )
                 } else {
                     // CAPTURE MODE - Bottom controls
