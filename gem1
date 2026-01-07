@@ -3027,6 +3027,10 @@ struct PhotoInfoPillView: View {
                         .foregroundColor(Color.black.opacity(0.6))
                         .animation(nil, value: isDropdownOpen)
                 }
+                .animation(.easeInOut(duration: 0.2), value: metadata.procedure)
+                .animation(.easeInOut(duration: 0.2), value: metadata.toothNumber)
+                .animation(.easeInOut(duration: 0.2), value: metadata.stage)
+                .animation(.easeInOut(duration: 0.2), value: metadata.angle)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
                 .background(
