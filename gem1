@@ -5461,12 +5461,17 @@ struct PhotoEditorView: View {
     let inputImage: UIImage
     @State private var displayedImage: UIImage?
     @State private var baseImage: UIImage?
+    @State private var originalImage: UIImage?  // Preserved original for revert and crop
     @Environment(\.presentationMode) var presentationMode
     @State private var selectedTab = 0
     @State private var brightness = 0.0
     @State private var contrast = 1.0
     @State private var saturation = 1.0
     @State private var sharpness = 0.0
+
+    // Rotation animation state
+    @State private var rotationAngle: Double = 0
+    @State private var isRotating = false
 
     // Crop mode state
     @State private var isCropping = false
@@ -5493,6 +5498,7 @@ struct PhotoEditorView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { editorToolbarContent }
                 .onAppear {
+                    originalImage = inputImage  // Store original for revert
                     baseImage = inputImage
                     displayedImage = inputImage
                     applyProcessing()
@@ -5531,6 +5537,8 @@ struct PhotoEditorView: View {
             Image(uiImage: img)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
+                .rotationEffect(.degrees(rotationAngle))
+                .animation(.easeInOut(duration: 0.3), value: rotationAngle)
                 .padding()
         } else {
             ProgressView()
@@ -5545,7 +5553,8 @@ struct PhotoEditorView: View {
 
     @ViewBuilder
     private func cropModeContent(geo: GeometryProxy) -> some View {
-        if let img = displayedImage {
+        // Use original image for crop to preserve full image data
+        if let img = originalImage {
             let dimensions = calculateDisplayDimensions(for: img, in: geo)
             cropModeZStack(img: img, geo: geo, dimensions: dimensions)
                 .onAppear {
@@ -5572,8 +5581,11 @@ struct PhotoEditorView: View {
 
     private func cropModeZStack(img: UIImage, geo: GeometryProxy, dimensions: (width: CGFloat, height: CGFloat)) -> some View {
         ZStack {
-            Color.black.opacity(0.7)
+            // Clean background without grey borders
+            Color.black
+
             croppableImage(img: img)
+
             CropOverlayView(
                 containerSize: geo.size,
                 displayedImageWidth: dimensions.width,
@@ -5591,6 +5603,7 @@ struct PhotoEditorView: View {
             .rotationEffect(.degrees(cropRotation))
             .scaleEffect(cropScale)
             .offset(cropOffset)
+            .animation(.easeInOut(duration: 0.3), value: cropRotation)
             .gesture(magnificationGesture)
             .simultaneousGesture(dragGesture)
     }
@@ -5676,13 +5689,15 @@ struct PhotoEditorView: View {
     }
 
     private func resetCropSettings() {
-        cropScale = 1.0
-        cropOffset = .zero
-        cropRotation = 0
-        lastCropScale = 1.0
-        lastCropOffset = .zero
-        cropFrameWidth = 0
-        cropFrameHeight = 0
+        withAnimation(.easeInOut(duration: 0.3)) {
+            cropScale = 1.0
+            cropOffset = .zero
+            cropRotation = 0
+            lastCropScale = 1.0
+            lastCropOffset = .zero
+            cropFrameWidth = 0
+            cropFrameHeight = 0
+        }
     }
 
     private var rotationSlider: some View {
@@ -5720,6 +5735,13 @@ struct PhotoEditorView: View {
                         Text("Crop").font(AppFonts.caption)
                     }
                 }
+                Button(action: { revertToOriginal() }) {
+                    VStack {
+                        Image(systemName: "arrow.uturn.backward").font(.system(size: 22))
+                        Text("Revert").font(AppFonts.caption)
+                    }
+                }
+                .foregroundColor(AppColors.error)
             }
             .foregroundColor(AppColors.textPrimary)
         }
@@ -5799,7 +5821,7 @@ struct PhotoEditorView: View {
     }
 
     func applyCrop() {
-        guard let img = baseImage else { return }
+        guard let img = originalImage else { return }
 
         // Apply rotation first
         var processedImage = img
@@ -5886,8 +5908,28 @@ struct PhotoEditorView: View {
     }
 
     func rotateImage() {
-        guard let img = baseImage else { return }
-        baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
+        // Animate the rotation visually
+        withAnimation(.easeInOut(duration: 0.3)) {
+            rotationAngle -= 90
+        }
+
+        // After animation completes, apply the actual rotation to the image
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard let img = baseImage else { return }
+            baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
+            rotationAngle = 0  // Reset visual rotation since image data is now rotated
+            applyProcessing()
+        }
+    }
+
+    func revertToOriginal() {
+        guard let original = originalImage else { return }
+        baseImage = original
+        brightness = 0.0
+        contrast = 1.0
+        saturation = 1.0
+        sharpness = 0.0
+        rotationAngle = 0
         applyProcessing()
     }
 
