@@ -4076,21 +4076,6 @@ struct GalleryView: View {
                 bottomActionBar
             }
         }
-        .overlay(alignment: .top) {
-            // White gradient glow behind header (fades in on scroll)
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.red.opacity(0.5), location: 0.0),
-                    .init(color: Color.red.opacity(0.3), location: 0.5),
-                    .init(color: Color.red.opacity(0), location: 1.0)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 120)
-            .allowsHitTesting(false)
-            .offset(x: isSidebarOpen ? 250 : 0)
-        }
     }
 
     // Dynamic navigation title based on mode
@@ -4105,6 +4090,20 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             mainZStackContent
+            .overlay(alignment: .top) {
+                // Gradient glow behind header (fades in on scroll)
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: Color.red.opacity(0.5), location: 0.0),
+                        .init(color: Color.red.opacity(0.3), location: 0.5),
+                        .init(color: Color.red.opacity(0), location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .allowsHitTesting(false)
+            }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
