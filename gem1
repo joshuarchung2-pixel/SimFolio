@@ -4089,8 +4089,9 @@ struct GalleryView: View {
 
     var body: some View {
         NavigationView {
-            mainZStackContent
-            .overlay(alignment: .top) {
+            ZStack(alignment: .top) {
+                mainZStackContent
+
                 // Gradient glow behind header (fades in on scroll)
                 LinearGradient(
                     gradient: Gradient(stops: [
@@ -4102,10 +4103,11 @@ struct GalleryView: View {
                     endPoint: .bottom
                 )
                 .frame(height: 200)
-                .ignoresSafeArea(edges: .top)
+                .frame(maxWidth: .infinity)
                 .opacity(headerGradientOpacity)
                 .allowsHitTesting(false)
             }
+            .ignoresSafeArea(edges: .top)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
