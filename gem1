@@ -6302,26 +6302,43 @@ struct PortfoliosView: View {
     private func downloadButtonView(portfolio: Portfolio) -> some View {
         Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
             HStack(spacing: 8) {
-                if isGeneratingZip {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 14, weight: .medium))
-                        .offset(y: -2)
+                // Fixed-width container for icon/spinner to prevent layout shift
+                ZStack {
+                    if isGeneratingZip {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .offset(y: -2)
+                    }
                 }
-                Text(isGeneratingZip ? "Generating..." : "Download \(portfolio.name).zip")
-                    .font(.subheadline.weight(.medium))
+                .frame(width: 20)
+
+                if isGeneratingZip {
+                    Text("Generating...")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.white)
+                } else {
+                    HStack(spacing: 0) {
+                        Text("Download ")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.white)
+                        Text("\(portfolio.name).zip")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.black)
+                    }
+                }
             }
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
-            .background(Color.green)
+            .background(Color.green.opacity(isGeneratingZip ? 0.7 : 1.0))
             .cornerRadius(12)
         }
         .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
-        .opacity((isGeneratingZip || portfolio.requirements.isEmpty) ? 0.6 : 1.0)
+        .opacity(portfolio.requirements.isEmpty ? 0.6 : 1.0)
         .sheet(item: $zipFileURL) { identifiableURL in
             ShareSheet(activityItems: [identifiableURL.url])
         }
@@ -6426,7 +6443,7 @@ struct PortfoliosView: View {
             }
 
             // Requirements content (animated)
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 if portfolio.requirements.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "doc.text")
@@ -6451,6 +6468,8 @@ struct PortfoliosView: View {
                     }
                 }
             }
+            .padding(.horizontal, 4) // Allow shadow to be visible
+            .padding(.vertical, 4)
             .id("requirements-\(portfolio.id)")
             .transition(.opacity)
             .opacity(contentOpacity)
@@ -6471,7 +6490,6 @@ struct PortfoliosView: View {
             .background(AppColors.surface)
             .cornerRadius(10)
         }
-        .padding(.top, 20)
         .id("delete-\(portfolio.id)")
         .transition(.opacity)
     }
