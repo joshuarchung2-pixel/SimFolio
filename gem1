@@ -5254,9 +5254,9 @@ struct PhotoDetailView: View {
                     // Rating pill at the bottom (hidden in immersive mode)
                     if !isImmersiveMode {
                         VStack(spacing: 6) {
-                            Text("Rating")
+                            Text("Rating:")
                                 .font(AppFonts.caption)
-                                .foregroundColor(AppColors.primary)
+                                .foregroundColor(.black)
                             RatingView(
                                 rating: metadata?.rating ?? 0,
                                 assetID: currentAsset.localIdentifier,
