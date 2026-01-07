@@ -502,8 +502,14 @@ struct CalendarDatePicker: View {
 
                         Button(action: {
                             if !disabled {
-                                selectedDate = date
-                                onDateSelected?(date)
+                                if selected {
+                                    // Clicking selected date clears it
+                                    selectedDate = nil
+                                    onDateSelected?(nil)
+                                } else {
+                                    selectedDate = date
+                                    onDateSelected?(date)
+                                }
                             }
                         }) {
                             Text("\(calendar.component(.day, from: date))")
@@ -529,23 +535,7 @@ struct CalendarDatePicker: View {
                     }
                 }
             }
-
-            // Clear date button
-            if selectedDate != nil {
-                Button(action: {
-                    selectedDate = nil
-                    onDateSelected?(nil)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                        Text("Clear Due Date")
-                            .font(AppFonts.caption)
-                    }
-                    .foregroundColor(AppColors.error)
-                    .padding(.top, 8)
-                }
-            }
+            .id(displayedMonth) // Force grid recreation when month changes
         }
         .padding(16)
         .background(AppColors.surface)
@@ -6241,44 +6231,37 @@ struct PortfoliosView: View {
                     }
                 }
             }
-
-            // Download button
-            Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
-                HStack(spacing: 8) {
-                    if isGeneratingZip {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    Text(isGeneratingZip ? "Generating..." : "Download")
-                        .font(.subheadline.weight(.medium))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
-                .background(Color.green)
-                .cornerRadius(8)
-            }
-            .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
-            .opacity((isGeneratingZip || portfolio.requirements.isEmpty) ? 0.6 : 1.0)
-
-            // Date created
-            HStack {
-                Text("Created \(portfolio.dateString)")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-                    .opacity(contentOpacity)
-                Spacer()
-            }
         }
         .padding()
         .background(AppColors.surface)
         .cornerRadius(12)
         .id("stats-\(portfolio.id)")
         .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func downloadButtonView(portfolio: Portfolio) -> some View {
+        Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
+            HStack(spacing: 8) {
+                if isGeneratingZip {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                Text(isGeneratingZip ? "Generating..." : "Download")
+                    .font(.subheadline.weight(.medium))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(Color.green)
+            .cornerRadius(12)
+        }
+        .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
+        .opacity((isGeneratingZip || portfolio.requirements.isEmpty) ? 0.6 : 1.0)
         .sheet(item: $zipFileURL) { identifiableURL in
             ShareSheet(activityItems: [identifiableURL.url])
         }
@@ -6437,6 +6420,7 @@ struct PortfoliosView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 statsCardView(portfolio: portfolio)
+                downloadButtonView(portfolio: portfolio)
                 dueDateCardView(portfolio: portfolio)
                 requirementsSectionView(portfolio: portfolio)
                 deleteButtonView(portfolio: portfolio)
@@ -6814,12 +6798,6 @@ struct AddPortfolioSheet: View {
                                 .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                             }
                         }
-
-                        Section {
-                            Text("After naming your portfolio, you'll be prompted to add photo requirements.")
-                                .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
-                        }
                     }
                     .listStyle(.insetGrouped)
                 }
@@ -6872,27 +6850,9 @@ struct AddRequirementsStepView: View {
             AppColors.background.ignoresSafeArea()
 
             VStack(spacing: 20) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(.green)
-                    Text("Portfolio Created!")
-                        .font(.title2).bold()
-                        .foregroundColor(AppColors.textPrimary)
-                    Text("\"\(portfolioName)\"")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.textSecondary)
-                }
-                .padding(.top, 30)
-
+                Spacer().frame(height: 10)
                 // Requirements section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Add Requirements")
-                        .font(.headline)
-                        .foregroundColor(AppColors.textPrimary)
-                        .padding(.horizontal)
-
                     if let portfolio = currentPortfolio, !portfolio.requirements.isEmpty {
                         // Show added requirements
                         ForEach(portfolio.requirements) { req in
@@ -7787,6 +7747,8 @@ struct EditRequirementSheet: View {
     @State private var selectedAngles: Set<String>
     @State private var angleCounts: [String: Int]
     @State private var showDeleteConfirmation = false
+    @State private var showOtherProcedureAlert = false
+    @State private var otherProcedureName = ""
 
     init(isPresented: Binding<Bool>, portfolioId: String, requirement: PortfolioRequirement) {
         self._isPresented = isPresented
@@ -7798,8 +7760,14 @@ struct EditRequirementSheet: View {
         self._angleCounts = State(initialValue: requirement.angleCounts)
     }
 
+    // Get procedure types already used in the current portfolio (excluding current requirement)
+    var usedProcedureTypes: Set<String> {
+        guard let portfolio = metadataManager.getPortfolio(by: portfolioId) else { return [] }
+        return Set(portfolio.requirements.filter { $0.id != requirement.id }.map { $0.procedure })
+    }
+
     var canSave: Bool {
-        !selectedProcedure.isEmpty && !selectedStages.isEmpty && !selectedAngles.isEmpty
+        !selectedProcedure.isEmpty && selectedProcedure != "__other__" && !selectedStages.isEmpty && !selectedAngles.isEmpty
     }
 
     var totalPhotos: Int {
@@ -7816,13 +7784,44 @@ struct EditRequirementSheet: View {
             Form {
                 // Procedure selection
                 Section(header: Text("Procedure Type")) {
-                    Picker("Procedure", selection: $selectedProcedure) {
-                        Text("Select...").tag("")
+                    Menu {
                         ForEach(metadataManager.procedures, id: \.self) { proc in
-                            Text(proc).tag(proc)
+                            let isUsed = usedProcedureTypes.contains(proc)
+                            Button(action: {
+                                if !isUsed {
+                                    selectedProcedure = proc
+                                }
+                            }) {
+                                HStack {
+                                    Text(proc)
+                                    if isUsed {
+                                        Spacer()
+                                        Image(systemName: "checkmark.circle.fill")
+                                    }
+                                }
+                            }
+                            .disabled(isUsed)
+                        }
+                        Divider()
+                        Button(action: {
+                            showOtherProcedureAlert = true
+                        }) {
+                            HStack {
+                                Text("Other...")
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedProcedure.isEmpty ? "Select..." : selectedProcedure)
+                                .foregroundColor(selectedProcedure.isEmpty ? AppColors.textSecondary : AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
                         }
                     }
-                    .pickerStyle(.menu)
                 }
 
                 // Stage selection
@@ -7960,6 +7959,22 @@ struct EditRequirementSheet: View {
             } message: {
                 Text("Are you sure you want to delete this requirement?")
             }
+            .alert("New Procedure Type", isPresented: $showOtherProcedureAlert) {
+                TextField("Procedure name", text: $otherProcedureName)
+                Button("Cancel", role: .cancel) {
+                    otherProcedureName = ""
+                }
+                Button("Add") {
+                    let trimmedName = otherProcedureName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmedName.isEmpty {
+                        metadataManager.addProcedure(trimmedName)
+                        selectedProcedure = trimmedName
+                    }
+                    otherProcedureName = ""
+                }
+            } message: {
+                Text("Enter a name for the new procedure type")
+            }
         }
     }
 
@@ -7986,9 +8001,17 @@ struct AddRequirementSheet: View {
     @State private var selectedStages: Set<String> = []
     @State private var selectedAngles: Set<String> = []
     @State private var angleCounts: [String: Int] = [:]  // Per-angle photo counts
+    @State private var showOtherProcedureAlert = false
+    @State private var otherProcedureName = ""
+
+    // Get procedure types already used in the current portfolio
+    var usedProcedureTypes: Set<String> {
+        guard let portfolio = metadataManager.getPortfolio(by: portfolioId) else { return [] }
+        return Set(portfolio.requirements.map { $0.procedure })
+    }
 
     var canAdd: Bool {
-        !selectedProcedure.isEmpty && !selectedStages.isEmpty && !selectedAngles.isEmpty
+        !selectedProcedure.isEmpty && selectedProcedure != "__other__" && !selectedStages.isEmpty && !selectedAngles.isEmpty
     }
 
     var totalPhotos: Int {
@@ -8005,13 +8028,44 @@ struct AddRequirementSheet: View {
             Form {
                 // Procedure selection
                 Section(header: Text("Procedure Type")) {
-                    Picker("Procedure", selection: $selectedProcedure) {
-                        Text("Select...").tag("")
+                    Menu {
                         ForEach(metadataManager.procedures, id: \.self) { proc in
-                            Text(proc).tag(proc)
+                            let isUsed = usedProcedureTypes.contains(proc)
+                            Button(action: {
+                                if !isUsed {
+                                    selectedProcedure = proc
+                                }
+                            }) {
+                                HStack {
+                                    Text(proc)
+                                    if isUsed {
+                                        Spacer()
+                                        Image(systemName: "checkmark.circle.fill")
+                                    }
+                                }
+                            }
+                            .disabled(isUsed)
+                        }
+                        Divider()
+                        Button(action: {
+                            showOtherProcedureAlert = true
+                        }) {
+                            HStack {
+                                Text("Other...")
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedProcedure.isEmpty ? "Select..." : selectedProcedure)
+                                .foregroundColor(selectedProcedure.isEmpty ? AppColors.textSecondary : AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
                         }
                     }
-                    .pickerStyle(.menu)
                 }
 
                 // Stage selection
@@ -8036,18 +8090,6 @@ struct AddRequirementSheet: View {
                                 }
                             }
                         }
-                    }
-
-                    Button(action: {
-                        if selectedStages.count == metadataManager.stages.count {
-                            selectedStages.removeAll()
-                        } else {
-                            selectedStages = Set(metadataManager.stages)
-                        }
-                    }) {
-                        Text(selectedStages.count == metadataManager.stages.count ? "Deselect All" : "Select All")
-                            .font(.caption)
-                            .foregroundColor(.blue)
                     }
                 }
 
@@ -8111,24 +8153,6 @@ struct AddRequirementSheet: View {
                             }
                         }
                     }
-
-                    Button(action: {
-                        if selectedAngles.count == metadataManager.angles.count {
-                            selectedAngles.removeAll()
-                            angleCounts.removeAll()
-                        } else {
-                            selectedAngles = Set(metadataManager.angles)
-                            for angle in metadataManager.angles {
-                                if angleCounts[angle] == nil {
-                                    angleCounts[angle] = 1
-                                }
-                            }
-                        }
-                    }) {
-                        Text(selectedAngles.count == metadataManager.angles.count ? "Deselect All" : "Select All")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
                 }
 
                 // Summary
@@ -8169,6 +8193,22 @@ struct AddRequirementSheet: View {
                     }
                     .disabled(!canAdd)
                 }
+            }
+            .alert("New Procedure Type", isPresented: $showOtherProcedureAlert) {
+                TextField("Procedure name", text: $otherProcedureName)
+                Button("Cancel", role: .cancel) {
+                    otherProcedureName = ""
+                }
+                Button("Add") {
+                    let trimmedName = otherProcedureName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmedName.isEmpty {
+                        metadataManager.addProcedure(trimmedName)
+                        selectedProcedure = trimmedName
+                    }
+                    otherProcedureName = ""
+                }
+            } message: {
+                Text("Enter a name for the new procedure type")
             }
         }
     }
