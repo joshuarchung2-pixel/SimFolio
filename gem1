@@ -2444,9 +2444,7 @@ struct DentalCameraSetupView: View {
                     let buttonSpacing: CGFloat = 20
                     let buttonWidth: CGFloat = 88
                     let buttonHeight: CGFloat = 33
-                    let navBarHeight: CGFloat = 70 // Height of bottom nav bar
-                    // HStack total width: buttonWidth + spacing + buttonWidth
-                    let hstackWidth: CGFloat = buttonWidth * 2 + buttonSpacing
+                    let navBarHeight: CGFloat = 90 // Height of bottom nav bar including safe area
 
                     HStack(alignment: .center, spacing: buttonSpacing) {
                         Button(action: {
@@ -2481,8 +2479,9 @@ struct DentalCameraSetupView: View {
                     .rotationEffect(orientationManager.iconRotationAngle)
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                     .position(
-                        x: isLandscapeLeft ? buttonSpacing + hstackWidth / 2 :
-                           isLandscapeRight ? geometry.size.width - buttonSpacing - hstackWidth / 2 :
+                        // Landscape: buttonHeight is horizontal extent when rotated 90°
+                        x: isLandscapeLeft ? buttonSpacing + buttonHeight / 2 :
+                           isLandscapeRight ? geometry.size.width - buttonSpacing - buttonHeight / 2 :
                            geometry.size.width / 2,
                         y: isLandscape ? geometry.size.height / 2 : geometry.size.height - navBarHeight - buttonSpacing - buttonHeight / 2
                     )
