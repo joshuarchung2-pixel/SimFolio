@@ -2442,38 +2442,74 @@ struct DentalCameraSetupView: View {
                 // BOTTOM BAR - Review Mode buttons
                 if cameraService.capturedImage != nil {
                     // REVIEW MODE - Retake/Use Photo buttons
-                    // Use HStack that rotates as a unit to maintain left-right relationship
-                    HStack(alignment: .center, spacing: isLandscape ? 20 : 50) {
-                        Button(action: {
-                            showBlankFieldsWarning = false
-                            isPhotoFading = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                cameraService.retake()
-                                isPhotoFading = false
-                            }
-                        }) {
-                            Text("Retake")
-                                .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
-                        }
-                        .buttonStyle(CustomSecondaryButtonStyle())
-
-                        Button(action: {
-                            if hasIncompleteMetadata {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showBlankFieldsWarning = true
+                    Group {
+                        if isLandscape {
+                            // Stacked layout for landscape: Retake on top, Use Photo below
+                            VStack(spacing: 12) {
+                                Button(action: {
+                                    showBlankFieldsWarning = false
+                                    isPhotoFading = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                        cameraService.retake()
+                                        isPhotoFading = false
+                                    }
+                                }) {
+                                    Text("Retake")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
                                 }
-                            } else {
-                                savePhotoWithMetadata()
+                                .buttonStyle(CustomSecondaryButtonStyle())
+
+                                Button(action: {
+                                    if hasIncompleteMetadata {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showBlankFieldsWarning = true
+                                        }
+                                    } else {
+                                        savePhotoWithMetadata()
+                                    }
+                                }) {
+                                    Text("Use Photo")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
+                                }
+                                .buttonStyle(CustomPrimaryButtonStyle())
                             }
-                        }) {
-                            Text("Use Photo")
-                                .font(AppFonts.headline)
-                                .frame(width: 120, height: 50)
+                            .rotationEffect(orientationManager.iconRotationAngle)
+                        } else {
+                            // Horizontal layout for portrait: Retake left, Use Photo right
+                            HStack(alignment: .center, spacing: 50) {
+                                Button(action: {
+                                    showBlankFieldsWarning = false
+                                    isPhotoFading = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                        cameraService.retake()
+                                        isPhotoFading = false
+                                    }
+                                }) {
+                                    Text("Retake")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
+                                }
+                                .buttonStyle(CustomSecondaryButtonStyle())
+
+                                Button(action: {
+                                    if hasIncompleteMetadata {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showBlankFieldsWarning = true
+                                        }
+                                    } else {
+                                        savePhotoWithMetadata()
+                                    }
+                                }) {
+                                    Text("Use Photo")
+                                        .font(AppFonts.headline)
+                                        .frame(width: 120, height: 50)
+                                }
+                                .buttonStyle(CustomPrimaryButtonStyle())
+                            }
                         }
-                        .buttonStyle(CustomPrimaryButtonStyle())
                     }
-                    .rotationEffect(orientationManager.iconRotationAngle)
                     .position(
                         x: geometry.size.width / 2,
                         y: geometry.size.height - 140
