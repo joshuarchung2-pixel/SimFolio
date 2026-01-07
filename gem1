@@ -5359,9 +5359,9 @@ struct PhotoDetailView: View {
                     // Rating pill at the bottom (hidden in immersive mode)
                     if !isImmersiveMode {
                         VStack(spacing: 6) {
-                            Text("Rating")
+                            Text("Rating:")
                                 .font(AppFonts.caption)
-                                .foregroundColor(AppColors.primary)
+                                .foregroundColor(.black)
                             RatingView(
                                 rating: metadata?.rating ?? 0,
                                 assetID: currentAsset.localIdentifier,
@@ -5415,7 +5415,11 @@ struct PhotoDetailView: View {
 
     @ViewBuilder
     private func photoContentView(geometry: GeometryProxy) -> some View {
-        let photoHeight = isImmersiveMode ? geometry.size.height * 0.8 : geometry.size.height * 0.5
+        // Normal mode: larger photo area (orange bounds)
+        // The photo container stays the same size, but clipping changes based on mode
+        let normalPhotoHeight = geometry.size.height * 0.65
+        // Immersive/zoomed mode: allow expansion to full content area (green bounds)
+        let maxPhotoHeight = geometry.size.height * 0.85
 
         TabView(selection: $currentIndex) {
             ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
@@ -5424,6 +5428,7 @@ struct PhotoDetailView: View {
                         Image(uiImage: img)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: geometry.size.width - 32, maxHeight: normalPhotoHeight)
                             .rotationEffect(.degrees(imageRotation))
                             .scaleEffect(zoomScale)
                             .offset(zoomOffset)
@@ -5507,14 +5512,15 @@ struct PhotoDetailView: View {
                             .scaleEffect(1.5)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: photoHeight)
+                // Container size: expands when in immersive mode for zooming
+                .frame(maxWidth: .infinity, maxHeight: isImmersiveMode ? maxPhotoHeight : normalPhotoHeight)
+                .clipped()
                 .tag(index)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .frame(maxWidth: .infinity, maxHeight: photoHeight)
+        .frame(maxWidth: .infinity, maxHeight: isImmersiveMode ? maxPhotoHeight : normalPhotoHeight)
         .offset(y: dragOffset.height)
-        .animation(.easeInOut(duration: 0.2), value: isImmersiveMode)
     }
 
     private func loadImagesForVisibleAssets() {
