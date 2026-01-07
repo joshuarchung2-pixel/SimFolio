@@ -2159,7 +2159,8 @@ struct DentalCameraSetupView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
                     }
                 },
-                touchPoint: $focusLocation
+                touchPoint: $focusLocation,
+                deviceOrientation: orientationManager.deviceOrientation
             )
             .ignoresSafeArea()
             
@@ -2198,32 +2199,35 @@ struct DentalCameraSetupView: View {
                         let topLineHeight = max(0, 70 + sunY - 12) // From top (-70) to just above sun
                         let bottomLineHeight = max(0, 70 - sunY - 12) // From just below sun to bottom (+70)
 
-                        // Top line segment (above sun)
-                        if topLineHeight > 0 {
-                            Rectangle()
-                                .fill(Color.yellow)
-                                .frame(width: 1, height: topLineHeight)
-                                .offset(x: 65, y: -70 + topLineHeight / 2)
-                                .shadow(radius: 1)
-                                .opacity(0.8)
-                        }
+                        // Wrap entire exposure slider in a group that rotates with device
+                        Group {
+                            // Top line segment (above sun)
+                            if topLineHeight > 0 {
+                                Rectangle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 1, height: topLineHeight)
+                                    .offset(x: 65, y: -70 + topLineHeight / 2)
+                                    .shadow(radius: 1)
+                                    .opacity(0.8)
+                            }
 
-                        // Bottom line segment (below sun)
-                        if bottomLineHeight > 0 {
-                            Rectangle()
-                                .fill(Color.yellow)
-                                .frame(width: 1, height: bottomLineHeight)
-                                .offset(x: 65, y: 70 - bottomLineHeight / 2)
-                                .shadow(radius: 1)
-                                .opacity(0.8)
-                        }
+                            // Bottom line segment (below sun)
+                            if bottomLineHeight > 0 {
+                                Rectangle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 1, height: bottomLineHeight)
+                                    .offset(x: 65, y: 70 - bottomLineHeight / 2)
+                                    .shadow(radius: 1)
+                                    .opacity(0.8)
+                            }
 
-                        Image(systemName: "sun.max.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.yellow)
-                            .rotationEffect(orientationManager.iconRotationAngle)
-                            .shadow(radius: 2)
-                            .offset(x: 65, y: sunY)
+                            Image(systemName: "sun.max.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.yellow)
+                                .shadow(radius: 2)
+                                .offset(x: 65, y: sunY)
+                        }
+                        .rotationEffect(orientationManager.iconRotationAngle)
                     }
                 }
                 .position(loc)
@@ -2510,6 +2514,7 @@ struct DentalCameraSetupView: View {
                             }
                         }
                     }
+                    .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                     .position(
                         x: geometry.size.width / 2,
                         y: geometry.size.height - 140
@@ -2663,6 +2668,7 @@ struct CameraPreview: UIViewRepresentable {
     var onPan: (CGFloat) -> Void
     var onPinch: (CGFloat) -> Void
     @Binding var touchPoint: CGPoint?
+    var deviceOrientation: UIDeviceOrientation = .portrait
     
     class VideoPreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -2725,8 +2731,20 @@ struct CameraPreview: UIViewRepresentable {
 
         @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
             let translation = gesture.translation(in: gesture.view)
-            // Vertical movement controls exposure
-            parent.onPan(-translation.y)
+            // Adjust movement axis based on device orientation
+            let delta: CGFloat
+            switch parent.deviceOrientation {
+            case .landscapeLeft:
+                // In landscape-left, swipe right = increase exposure (like swipe up)
+                delta = translation.x
+            case .landscapeRight:
+                // In landscape-right, swipe left = increase exposure (like swipe up)
+                delta = -translation.x
+            default:
+                // Portrait: vertical movement controls exposure
+                delta = -translation.y
+            }
+            parent.onPan(delta)
             gesture.setTranslation(.zero, in: gesture.view)
         }
 
