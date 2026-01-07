@@ -6231,21 +6231,7 @@ struct PortfoliosView: View {
     private func statsCardView(portfolio: Portfolio) -> some View {
         VStack(spacing: 16) {
             HStack {
-                // Left: Progress percentage
-                VStack(alignment: .leading) {
-                    Text("Progress")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.textSecondary)
-                    Text(String(format: "%.0f%%", displayedPercentage))
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(progressColor(for: displayedPercentage))
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
-                }
-
-                Spacer()
-
-                // Middle: Circular progress indicator
+                // Left: Circular progress indicator
                 ZStack {
                     Circle()
                         .stroke(Color.gray.opacity(0.3), lineWidth: 8)
@@ -6271,6 +6257,20 @@ struct PortfoliosView: View {
                             .contentTransition(.numericText())
                             .animation(.easeInOut(duration: 0.4), value: displayedTotal)
                     }
+                }
+
+                Spacer()
+
+                // Middle: Progress percentage
+                VStack {
+                    Text("Progress")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    Text(String(format: "%.0f%%", displayedPercentage))
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundColor(progressColor(for: displayedPercentage))
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
                 }
 
                 Spacer()
