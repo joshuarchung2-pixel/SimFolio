@@ -3051,7 +3051,7 @@ struct PhotoInfoPillView: View {
             if isDropdownOpen {
                 dropdownContent
                     .padding(.top, 8)
-                    .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                    .transition(.opacity.animation(.easeInOut(duration: 0.25)))
             }
         }
         .frame(width: 340) // Fixed width to prevent horizontal shift when dropdown appears
