@@ -2447,14 +2447,14 @@ struct DentalCameraSetupView: View {
                 if cameraService.capturedImage != nil {
                     // REVIEW MODE - Retake/Use Photo buttons
                     // Side-by-side layout that rotates with device
-                    // Button size: 78x33 (35% smaller than 120x50), equal padding between buttons and to edge
-                    let buttonPadding: CGFloat = 25
-                    let buttonWidth: CGFloat = 78
+                    let buttonSpacing: CGFloat = 20
+                    let buttonWidth: CGFloat = 88
                     let buttonHeight: CGFloat = 33
-                    // HStack total width: buttonWidth + padding + buttonWidth = 181
-                    let hstackWidth: CGFloat = buttonWidth * 2 + buttonPadding
+                    let navBarHeight: CGFloat = 70 // Height of bottom nav bar
+                    // HStack total width: buttonWidth + spacing + buttonWidth
+                    let hstackWidth: CGFloat = buttonWidth * 2 + buttonSpacing
 
-                    HStack(alignment: .center, spacing: buttonPadding) {
+                    HStack(alignment: .center, spacing: buttonSpacing) {
                         Button(action: {
                             showBlankFieldsWarning = false
                             isPhotoFading = true
@@ -2487,10 +2487,10 @@ struct DentalCameraSetupView: View {
                     .rotationEffect(orientationManager.iconRotationAngle)
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                     .position(
-                        x: isLandscapeLeft ? buttonPadding + hstackWidth / 2 :
-                           isLandscapeRight ? geometry.size.width - buttonPadding - hstackWidth / 2 :
+                        x: isLandscapeLeft ? buttonSpacing + hstackWidth / 2 :
+                           isLandscapeRight ? geometry.size.width - buttonSpacing - hstackWidth / 2 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - buttonPadding - buttonHeight / 2
+                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - navBarHeight - buttonSpacing - buttonHeight / 2
                     )
                 } else {
                     // CAPTURE MODE - Bottom controls
