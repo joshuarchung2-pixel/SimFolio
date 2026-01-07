@@ -4099,14 +4099,16 @@ struct GalleryView: View {
                 // Gradient glow behind header (fades in on scroll)
                 LinearGradient(
                     gradient: Gradient(stops: [
-                        .init(color: Color.red.opacity(0.5), location: 0.0),
-                        .init(color: Color.red.opacity(0.3), location: 0.5),
-                        .init(color: Color.red.opacity(0), location: 1.0)
+                        .init(color: Color.white, location: 0.0),
+                        .init(color: Color.white, location: 0.6),
+                        .init(color: Color.white.opacity(0), location: 1.0)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 120)
+                .frame(height: 200)
+                .ignoresSafeArea(edges: .top)
+                .opacity(headerGradientOpacity)
                 .allowsHitTesting(false)
             }
             .navigationTitle(navigationTitle)
