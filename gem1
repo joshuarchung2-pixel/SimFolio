@@ -805,7 +805,6 @@ struct SettingsView: View {
                             Text("Notifications")
                                 .font(AppFonts.headline)
                                 .foregroundColor(AppColors.textPrimary)
-                                .padding(.horizontal, 4)
 
                             VStack(spacing: 0) {
                                 // Enable notifications toggle
@@ -960,7 +959,7 @@ struct SettingsView: View {
 
                         Spacer()
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.top, 20)
                     .padding(.bottom, 120)
                 }
@@ -3830,7 +3829,7 @@ struct GalleryView: View {
                             photoGridItem(asset: asset, isHighlighted: isHighlighted, isSelected: isSelected, metadata: metadata)
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.bottom, 120)
                 }
             }
@@ -6444,7 +6443,7 @@ struct PortfoliosView: View {
                 deleteButtonView(portfolio: portfolio)
                 Spacer(minLength: 120)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.top, 20)
             .padding(.bottom, 120)
         }
