@@ -6277,6 +6277,44 @@ struct PortfoliosView: View {
         return metadataManager.getPortfolioCompletionPercentage(portfolio)
     }
 
+    // Calculate average rating of selected photos in portfolio
+    func averageRating(for portfolio: Portfolio) -> Double? {
+        var totalRating = 0
+        var ratedPhotoCount = 0
+
+        for requirement in portfolio.requirements {
+            for stage in requirement.stages {
+                for angle in requirement.angles {
+                    let assetIDs = metadataManager.getMatchingAssetIDs(
+                        procedure: requirement.procedure,
+                        stage: stage,
+                        angle: angle
+                    )
+
+                    // Sort by rating (highest first) and take needed count
+                    let sortedIDs = assetIDs.sorted { id1, id2 in
+                        let rating1 = metadataManager.getRating(for: id1) ?? 0
+                        let rating2 = metadataManager.getRating(for: id2) ?? 0
+                        return rating1 > rating2
+                    }
+
+                    let needed = requirement.angleCounts[angle] ?? 1
+                    let selectedIDs = Array(sortedIDs.prefix(needed))
+
+                    for assetID in selectedIDs {
+                        if let rating = metadataManager.getRating(for: assetID) {
+                            totalRating += rating
+                            ratedPhotoCount += 1
+                        }
+                    }
+                }
+            }
+        }
+
+        guard ratedPhotoCount > 0 else { return nil }
+        return Double(totalRating) / Double(ratedPhotoCount)
+    }
+
     // Animate transition when switching portfolios
     private func animatePortfolioChange() {
         // Fade out
@@ -6346,6 +6384,7 @@ struct PortfoliosView: View {
     private func statsCardView(portfolio: Portfolio) -> some View {
         VStack(spacing: 16) {
             HStack {
+                // Left: Progress percentage
                 VStack(alignment: .leading) {
                     Text("Progress")
                         .font(.subheadline)
@@ -6359,7 +6398,7 @@ struct PortfoliosView: View {
 
                 Spacer()
 
-                // Circular progress indicator
+                // Middle: Circular progress indicator
                 ZStack {
                     Circle()
                         .stroke(Color.gray.opacity(0.3), lineWidth: 8)
@@ -6386,6 +6425,29 @@ struct PortfoliosView: View {
                             .animation(.easeInOut(duration: 0.4), value: displayedTotal)
                     }
                 }
+
+                Spacer()
+
+                // Right: Average rating
+                VStack(alignment: .trailing) {
+                    Text("Avg Rating")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    if let avgRating = averageRating(for: portfolio) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.yellow)
+                            Text(String(format: "%.1f", avgRating))
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(AppColors.textPrimary)
+                        }
+                    } else {
+                        Text("—")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.5))
+                    }
+                }
             }
         }
         .padding()
@@ -6409,27 +6471,15 @@ struct PortfoliosView: View {
                     } else {
                         Image(systemName: "square.and.arrow.down")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
                             .offset(y: -2)
                     }
                 }
                 .frame(width: 20)
 
-                if isGeneratingZip {
-                    Text("Generating...")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.white)
-                } else {
-                    HStack(spacing: 0) {
-                        Text("Download ")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(.white)
-                        Text("\(portfolio.name).zip")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(.black)
-                    }
-                }
+                Text(isGeneratingZip ? "Generating..." : "Download Portfolio Zip")
+                    .font(.subheadline)
             }
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
             .background(Color.green.opacity(isGeneratingZip ? 0.7 : 1.0))
