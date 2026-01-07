@@ -5678,130 +5678,11 @@ class PhotoEditorController: ObservableObject {
         guard let image = baseImage else { return }
         isProcessing = true
 
+        let state = currentState
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             guard let self = self else { return }
 
-            var ciImage = CIImage(image: image)
-
-            // Apply exposure (brightness)
-            if self.currentState.brightness != 0 {
-                let filter = CIFilter.exposureAdjust()
-                filter.inputImage = ciImage
-                filter.ev = Float(self.currentState.brightness)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply color controls (contrast, saturation)
-            if self.currentState.contrast != 1.0 || self.currentState.saturation != 1.0 {
-                let filter = CIFilter.colorControls()
-                filter.inputImage = ciImage
-                filter.contrast = Float(self.currentState.contrast)
-                filter.saturation = Float(self.currentState.saturation)
-                filter.brightness = 0
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply sharpness
-            if self.currentState.sharpness != 0 {
-                let filter = CIFilter.sharpenLuminance()
-                filter.inputImage = ciImage
-                filter.sharpness = Float(self.currentState.sharpness)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply temperature
-            if self.currentState.temperature != 0 {
-                let filter = CIFilter.temperatureAndTint()
-                filter.inputImage = ciImage
-                let temp = 6500 + Float(self.currentState.temperature) * 3000
-                filter.neutral = CIVector(x: CGFloat(temp), y: 0)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply highlights
-            if self.currentState.highlights != 0 {
-                let filter = CIFilter.highlightShadowAdjust()
-                filter.inputImage = ciImage
-                filter.highlightAmount = Float(1.0 + self.currentState.highlights)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply shadows
-            if self.currentState.shadows != 0 {
-                let filter = CIFilter.highlightShadowAdjust()
-                filter.inputImage = ciImage
-                filter.shadowAmount = Float(self.currentState.shadows)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply vignette
-            if self.currentState.vignette != 0 {
-                let filter = CIFilter.vignette()
-                filter.inputImage = ciImage
-                filter.intensity = Float(self.currentState.vignette)
-                filter.radius = Float(max(image.size.width, image.size.height) * 0.5)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply fade (gamma adjustment for matte look)
-            if self.currentState.fade != 0 {
-                let filter = CIFilter.gammaAdjust()
-                filter.inputImage = ciImage
-                filter.power = Float(1.0 - self.currentState.fade * 0.3)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply clarity (unsharp mask)
-            if self.currentState.clarity != 0 {
-                let filter = CIFilter.unsharpMask()
-                filter.inputImage = ciImage
-                filter.radius = Float(abs(self.currentState.clarity) * 2)
-                filter.intensity = Float(abs(self.currentState.clarity) * 0.5)
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Apply LUT color matrix
-            if let lutName = self.currentState.selectedLUT,
-               let preset = LUTPreset.presets.first(where: { $0.name == lutName }),
-               preset.name != "Original" {
-                let intensity = self.currentState.lutIntensity
-                let matrix = preset.colorMatrix
-
-                // Create color matrix filter
-                let filter = CIFilter.colorMatrix()
-                filter.inputImage = ciImage
-
-                // Blend between identity matrix and LUT matrix based on intensity
-                let r = CIVector(x: CGFloat(1 + (matrix[0] - 1) * intensity),
-                               y: CGFloat(matrix[1] * intensity),
-                               z: CGFloat(matrix[2] * intensity),
-                               w: 0)
-                let g = CIVector(x: CGFloat(matrix[3] * intensity),
-                               y: CGFloat(1 + (matrix[4] - 1) * intensity),
-                               z: CGFloat(matrix[5] * intensity),
-                               w: 0)
-                let b = CIVector(x: CGFloat(matrix[6] * intensity),
-                               y: CGFloat(matrix[7] * intensity),
-                               z: CGFloat(1 + (matrix[8] - 1) * intensity),
-                               w: 0)
-
-                filter.rVector = r
-                filter.gVector = g
-                filter.bVector = b
-                filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-                filter.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-
-                ciImage = filter.outputImage ?? ciImage
-            }
-
-            // Render final image
-            guard let ciImage = ciImage,
-                  let cgImage = self.context.createCGImage(ciImage, from: ciImage.extent) else {
-                DispatchQueue.main.async { self.isProcessing = false }
-                return
-            }
-
-            let processed = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+            let processed = self.processImage(image, with: state)
 
             DispatchQueue.main.async {
                 self.previewImage = processed
@@ -5810,117 +5691,149 @@ class PhotoEditorController: ObservableObject {
         }
     }
 
+    private func processImage(_ image: UIImage, with state: PhotoEditState) -> UIImage? {
+        guard var ciImage = CIImage(image: image) else { return image }
+
+        ciImage = applyBasicFilters(to: ciImage, with: state)
+        ciImage = applyAdvancedFilters(to: ciImage, with: state, imageSize: image.size)
+        ciImage = applyLUTFilter(to: ciImage, with: state)
+
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+            return image
+        }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    private func applyBasicFilters(to ciImage: CIImage, with state: PhotoEditState) -> CIImage {
+        var result = ciImage
+
+        // Apply exposure (brightness)
+        if state.brightness != 0 {
+            let filter = CIFilter.exposureAdjust()
+            filter.inputImage = result
+            filter.ev = Float(state.brightness)
+            result = filter.outputImage ?? result
+        }
+
+        // Apply color controls (contrast, saturation)
+        if state.contrast != 1.0 || state.saturation != 1.0 {
+            let filter = CIFilter.colorControls()
+            filter.inputImage = result
+            filter.contrast = Float(state.contrast)
+            filter.saturation = Float(state.saturation)
+            filter.brightness = 0
+            result = filter.outputImage ?? result
+        }
+
+        // Apply sharpness
+        if state.sharpness != 0 {
+            let filter = CIFilter.sharpenLuminance()
+            filter.inputImage = result
+            filter.sharpness = Float(state.sharpness)
+            result = filter.outputImage ?? result
+        }
+
+        // Apply temperature
+        if state.temperature != 0 {
+            let filter = CIFilter.temperatureAndTint()
+            filter.inputImage = result
+            let temp: CGFloat = CGFloat(6500 + Float(state.temperature) * 3000)
+            filter.neutral = CIVector(x: temp, y: 0)
+            result = filter.outputImage ?? result
+        }
+
+        return result
+    }
+
+    private func applyAdvancedFilters(to ciImage: CIImage, with state: PhotoEditState, imageSize: CGSize) -> CIImage {
+        var result = ciImage
+
+        // Apply highlights
+        if state.highlights != 0 {
+            let filter = CIFilter.highlightShadowAdjust()
+            filter.inputImage = result
+            filter.highlightAmount = Float(1.0 + state.highlights)
+            result = filter.outputImage ?? result
+        }
+
+        // Apply shadows
+        if state.shadows != 0 {
+            let filter = CIFilter.highlightShadowAdjust()
+            filter.inputImage = result
+            filter.shadowAmount = Float(state.shadows)
+            result = filter.outputImage ?? result
+        }
+
+        // Apply vignette
+        if state.vignette != 0 {
+            let filter = CIFilter.vignette()
+            filter.inputImage = result
+            filter.intensity = Float(state.vignette)
+            let radiusValue = Float(max(imageSize.width, imageSize.height) * 0.5)
+            filter.radius = radiusValue
+            result = filter.outputImage ?? result
+        }
+
+        // Apply fade (gamma adjustment for matte look)
+        if state.fade != 0 {
+            let filter = CIFilter.gammaAdjust()
+            filter.inputImage = result
+            filter.power = Float(1.0 - state.fade * 0.3)
+            result = filter.outputImage ?? result
+        }
+
+        // Apply clarity (unsharp mask)
+        if state.clarity != 0 {
+            let filter = CIFilter.unsharpMask()
+            filter.inputImage = result
+            filter.radius = Float(abs(state.clarity) * 2)
+            filter.intensity = Float(abs(state.clarity) * 0.5)
+            result = filter.outputImage ?? result
+        }
+
+        return result
+    }
+
+    private func applyLUTFilter(to ciImage: CIImage, with state: PhotoEditState) -> CIImage {
+        guard let lutName = state.selectedLUT,
+              let preset = LUTPreset.presets.first(where: { $0.name == lutName }),
+              preset.name != "Original" else {
+            return ciImage
+        }
+
+        let matrix = preset.colorMatrix
+        let intensityFloat = Float(state.lutIntensity)
+
+        let filter = CIFilter.colorMatrix()
+        filter.inputImage = ciImage
+
+        let rx: CGFloat = CGFloat(1.0 + (matrix[0] - 1.0) * intensityFloat)
+        let ry: CGFloat = CGFloat(matrix[1] * intensityFloat)
+        let rz: CGFloat = CGFloat(matrix[2] * intensityFloat)
+        let r = CIVector(x: rx, y: ry, z: rz, w: 0)
+
+        let gx: CGFloat = CGFloat(matrix[3] * intensityFloat)
+        let gy: CGFloat = CGFloat(1.0 + (matrix[4] - 1.0) * intensityFloat)
+        let gz: CGFloat = CGFloat(matrix[5] * intensityFloat)
+        let g = CIVector(x: gx, y: gy, z: gz, w: 0)
+
+        let bx: CGFloat = CGFloat(matrix[6] * intensityFloat)
+        let by: CGFloat = CGFloat(matrix[7] * intensityFloat)
+        let bz: CGFloat = CGFloat(1.0 + (matrix[8] - 1.0) * intensityFloat)
+        let b = CIVector(x: bx, y: by, z: bz, w: 0)
+
+        filter.rVector = r
+        filter.gVector = g
+        filter.bVector = b
+        filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        filter.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+
+        return filter.outputImage ?? ciImage
+    }
+
     func getProcessedImage() -> UIImage? {
         guard let image = baseImage else { return nil }
-
-        var ciImage = CIImage(image: image)
-
-        // Apply all filters synchronously for final output
-        if currentState.brightness != 0 {
-            let filter = CIFilter.exposureAdjust()
-            filter.inputImage = ciImage
-            filter.ev = Float(currentState.brightness)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.contrast != 1.0 || currentState.saturation != 1.0 {
-            let filter = CIFilter.colorControls()
-            filter.inputImage = ciImage
-            filter.contrast = Float(currentState.contrast)
-            filter.saturation = Float(currentState.saturation)
-            filter.brightness = 0
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.sharpness != 0 {
-            let filter = CIFilter.sharpenLuminance()
-            filter.inputImage = ciImage
-            filter.sharpness = Float(currentState.sharpness)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.temperature != 0 {
-            let filter = CIFilter.temperatureAndTint()
-            filter.inputImage = ciImage
-            let temp = 6500 + Float(currentState.temperature) * 3000
-            filter.neutral = CIVector(x: CGFloat(temp), y: 0)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.highlights != 0 {
-            let filter = CIFilter.highlightShadowAdjust()
-            filter.inputImage = ciImage
-            filter.highlightAmount = Float(1.0 + currentState.highlights)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.shadows != 0 {
-            let filter = CIFilter.highlightShadowAdjust()
-            filter.inputImage = ciImage
-            filter.shadowAmount = Float(currentState.shadows)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.vignette != 0 {
-            let filter = CIFilter.vignette()
-            filter.inputImage = ciImage
-            filter.intensity = Float(currentState.vignette)
-            filter.radius = Float(max(image.size.width, image.size.height) * 0.5)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.fade != 0 {
-            let filter = CIFilter.gammaAdjust()
-            filter.inputImage = ciImage
-            filter.power = Float(1.0 - currentState.fade * 0.3)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if currentState.clarity != 0 {
-            let filter = CIFilter.unsharpMask()
-            filter.inputImage = ciImage
-            filter.radius = Float(abs(currentState.clarity) * 2)
-            filter.intensity = Float(abs(currentState.clarity) * 0.5)
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        if let lutName = currentState.selectedLUT,
-           let preset = LUTPreset.presets.first(where: { $0.name == lutName }),
-           preset.name != "Original" {
-            let intensity = currentState.lutIntensity
-            let matrix = preset.colorMatrix
-
-            let filter = CIFilter.colorMatrix()
-            filter.inputImage = ciImage
-
-            let r = CIVector(x: CGFloat(1 + (matrix[0] - 1) * intensity),
-                           y: CGFloat(matrix[1] * intensity),
-                           z: CGFloat(matrix[2] * intensity),
-                           w: 0)
-            let g = CIVector(x: CGFloat(matrix[3] * intensity),
-                           y: CGFloat(1 + (matrix[4] - 1) * intensity),
-                           z: CGFloat(matrix[5] * intensity),
-                           w: 0)
-            let b = CIVector(x: CGFloat(matrix[6] * intensity),
-                           y: CGFloat(matrix[7] * intensity),
-                           z: CGFloat(1 + (matrix[8] - 1) * intensity),
-                           w: 0)
-
-            filter.rVector = r
-            filter.gVector = g
-            filter.bVector = b
-            filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-            filter.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-
-            ciImage = filter.outputImage ?? ciImage
-        }
-
-        guard let ciImage = ciImage,
-              let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
-            return nil
-        }
-
-        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        return processImage(image, with: currentState)
     }
 }
 
