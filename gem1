@@ -3732,9 +3732,18 @@ struct GalleryView: View {
                                 .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 3)
                         )
 
-                    if selectedProcedure == nil {
+                    // Show tags and rating when viewing All Photos or procedure-level
+                    if selectedTooth == nil {
                         PhotoTagsLabel(metadata: metadata)
                             .frame(height: 28)
+                        HStack(spacing: 2) {
+                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                            ForEach(1...5, id: \.self) { star in
+                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(star <= currentRating ? .yellow : .gray.opacity(0.4))
+                            }
+                        }
                     }
                 }
             }
@@ -3752,9 +3761,18 @@ struct GalleryView: View {
                         )
                         .animation(.easeInOut(duration: 0.3), value: isHighlighted)
 
-                    if selectedProcedure == nil {
+                    // Show tags and rating when viewing All Photos or procedure-level
+                    if selectedTooth == nil {
                         PhotoTagsLabel(metadata: metadata)
                             .frame(height: 28)
+                        HStack(spacing: 2) {
+                            let currentRating = metadataManager.getRating(for: asset.localIdentifier) ?? 0
+                            ForEach(1...5, id: \.self) { star in
+                                Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(star <= currentRating ? .yellow : .gray.opacity(0.4))
+                            }
+                        }
                     }
                 }
             }
