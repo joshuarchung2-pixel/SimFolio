@@ -2446,78 +2446,44 @@ struct DentalCameraSetupView: View {
                 // BOTTOM BAR - Review Mode buttons
                 if cameraService.capturedImage != nil {
                     // REVIEW MODE - Retake/Use Photo buttons
-                    Group {
-                        if isLandscape {
-                            // Stacked layout for landscape: Retake on top, Use Photo below
-                            VStack(spacing: 12) {
-                                Button(action: {
-                                    showBlankFieldsWarning = false
-                                    isPhotoFading = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                        cameraService.retake()
-                                        isPhotoFading = false
-                                    }
-                                }) {
-                                    Text("Retake")
-                                        .font(AppFonts.headline)
-                                        .frame(width: 120, height: 50)
-                                }
-                                .buttonStyle(CustomSecondaryButtonStyle())
-
-                                Button(action: {
-                                    if hasIncompleteMetadata {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showBlankFieldsWarning = true
-                                        }
-                                    } else {
-                                        savePhotoWithMetadata()
-                                    }
-                                }) {
-                                    Text("Use Photo")
-                                        .font(AppFonts.headline)
-                                        .frame(width: 120, height: 50)
-                                }
-                                .buttonStyle(CustomPrimaryButtonStyle())
+                    // Side-by-side layout that rotates with device
+                    HStack(alignment: .center, spacing: isLandscape ? 20 : 50) {
+                        Button(action: {
+                            showBlankFieldsWarning = false
+                            isPhotoFading = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                cameraService.retake()
+                                isPhotoFading = false
                             }
-                            .rotationEffect(orientationManager.iconRotationAngle)
-                        } else {
-                            // Horizontal layout for portrait: Retake left, Use Photo right
-                            HStack(alignment: .center, spacing: 50) {
-                                Button(action: {
-                                    showBlankFieldsWarning = false
-                                    isPhotoFading = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                        cameraService.retake()
-                                        isPhotoFading = false
-                                    }
-                                }) {
-                                    Text("Retake")
-                                        .font(AppFonts.headline)
-                                        .frame(width: 120, height: 50)
-                                }
-                                .buttonStyle(CustomSecondaryButtonStyle())
-
-                                Button(action: {
-                                    if hasIncompleteMetadata {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showBlankFieldsWarning = true
-                                        }
-                                    } else {
-                                        savePhotoWithMetadata()
-                                    }
-                                }) {
-                                    Text("Use Photo")
-                                        .font(AppFonts.headline)
-                                        .frame(width: 120, height: 50)
-                                }
-                                .buttonStyle(CustomPrimaryButtonStyle())
-                            }
+                        }) {
+                            Text("Retake")
+                                .font(AppFonts.headline)
+                                .frame(width: 120, height: 50)
                         }
+                        .buttonStyle(CustomSecondaryButtonStyle())
+
+                        Button(action: {
+                            if hasIncompleteMetadata {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showBlankFieldsWarning = true
+                                }
+                            } else {
+                                savePhotoWithMetadata()
+                            }
+                        }) {
+                            Text("Use Photo")
+                                .font(AppFonts.headline)
+                                .frame(width: 120, height: 50)
+                        }
+                        .buttonStyle(CustomPrimaryButtonStyle())
                     }
+                    .rotationEffect(orientationManager.iconRotationAngle)
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                     .position(
-                        x: geometry.size.width / 2,
-                        y: geometry.size.height - 140
+                        x: isLandscapeLeft ? 140 :
+                           isLandscapeRight ? geometry.size.width - 140 :
+                           geometry.size.width / 2,
+                        y: isLandscape ? geometry.size.height / 2 : geometry.size.height - 140
                     )
                 } else {
                     // CAPTURE MODE - Bottom controls
