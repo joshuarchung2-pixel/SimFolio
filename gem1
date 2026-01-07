@@ -3668,17 +3668,24 @@ struct GalleryView: View {
 
     // MARK: - Extracted Sub-Views
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
+    // Custom header that moves with content when sidebar is open
+    private var customHeader: some View {
+        HStack {
             Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppColors.primary)
                     .frame(width: 32, height: 32)
             }
-        }
-        ToolbarItem(placement: .navigationBarTrailing) {
+
+            Spacer()
+
+            Text(navigationTitle)
+                .font(AppFonts.headline)
+                .foregroundColor(AppColors.textPrimary)
+
+            Spacer()
+
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isSelectMode.toggle()
@@ -3693,10 +3700,24 @@ struct GalleryView: View {
                     .frame(width: 32, height: 32)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white, location: 0.0),
+                    .init(color: Color.white, location: 0.7),
+                    .init(color: Color.white.opacity(0.0), location: 1.0)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     @ViewBuilder
-    private func photoGridItem(asset: PHAsset, isHighlighted: Bool, isSelected: Bool, metadata: PhotoMetadata?) -> some View {
+    private func photoGridItem(asset: PHAsset, index: Int, allAssets: [PHAsset], isHighlighted: Bool, isSelected: Bool, metadata: PhotoMetadata?) -> some View {
         if isSelectMode {
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -3743,7 +3764,7 @@ struct GalleryView: View {
             }
             .buttonStyle(PlainButtonStyle())
         } else {
-            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+            NavigationLink(destination: PhotoDetailView(assets: allAssets, initialIndex: index)) {
                 VStack(alignment: .center, spacing: 4) {
                     AssetThumbnail(asset: asset)
                         .frame(height: 120)
@@ -3814,11 +3835,11 @@ struct GalleryView: View {
                     .padding(.top, 100)
                 } else {
                     LazyVGrid(columns: columns, spacing: 15) {
-                        ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                        ForEach(Array(filteredAssets.enumerated()), id: \.element.localIdentifier) { index, asset in
                             let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                             let isSelected = selectedAssetIds.contains(asset.localIdentifier)
                             let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
-                            photoGridItem(asset: asset, isHighlighted: isHighlighted, isSelected: isSelected, metadata: metadata)
+                            photoGridItem(asset: asset, index: index, allAssets: filteredAssets, isHighlighted: isHighlighted, isSelected: isSelected, metadata: metadata)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -3867,7 +3888,7 @@ struct GalleryView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(selectedProcedure == nil ? AppColors.primary.opacity(0.1) : Color.clear)
                     }
-                    .padding(.top, 50)
+                    .padding(.top, 8) // Aligns with custom header's sidebar button
 
                     ForEach(metadataManager.procedures, id: \.self) { procedure in
                         ProcedureFolderView(
@@ -3916,8 +3937,7 @@ struct GalleryView: View {
         }
         .frame(minWidth: 250)
         .fixedSize(horizontal: true, vertical: false)
-        .background(AppColors.surface.opacity(0.98))
-        .edgesIgnoringSafeArea(.vertical)
+        .background(AppColors.surface.opacity(0.98).ignoresSafeArea())
         .zIndex(2)
         .transition(.move(edge: .leading))
         .highPriorityGesture(
@@ -4017,6 +4037,7 @@ struct GalleryView: View {
     private var mainZStackContent: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
+                customHeader
                 scrollContentView
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -4049,25 +4070,7 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             mainZStackContent
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbarBackground(
-                LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: Color.white, location: 0.0),
-                        .init(color: Color.white, location: 0.7),
-                        .init(color: Color.white.opacity(0.8), location: 1.0)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                ).opacity(headerGradientOpacity),
-                for: .navigationBar
-            )
-            .toolbarBackground(scrollOffset > 10 ? .visible : .hidden, for: .navigationBar)
-            .toolbar {
-                toolbarContent
-            }
+            .navigationBarHidden(true)
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
@@ -4979,7 +4982,7 @@ struct ExpandedAngleView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: spacing) {
-                        ForEach(assets, id: \.localIdentifier) { asset in
+                        ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
                             let isHighlighted = showPhotoHighlight && asset.localIdentifier == highlightedPhotoId
                             let isSelected = selectedAssetIds.contains(asset.localIdentifier)
 
@@ -5039,7 +5042,7 @@ struct ExpandedAngleView: View {
                                 .buttonStyle(PlainButtonStyle())
                             } else {
                                 // Normal mode - navigate to detail view
-                                NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                                NavigationLink(destination: PhotoDetailView(assets: assets, initialIndex: index)) {
                                     VStack(spacing: 6) {
                                         AssetThumbnail(asset: asset)
                                             .frame(width: itemWidth, height: itemHeight)
@@ -5158,132 +5161,136 @@ struct PhotoTagsLabel: View {
 }
 
 struct PhotoDetailView: View {
-    let asset: PHAsset
-    @State private var image: UIImage?
+    let assets: [PHAsset]
+    let initialIndex: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentIndex: Int
+    @State private var loadedImages: [String: UIImage] = [:]
     @State private var isEditing = false
     @State private var isImmersiveMode = false
     @State private var isTagDropdownOpen = false
     @State private var editableMetadata = PhotoMetadata()
+    @State private var dragOffset: CGSize = .zero
     @ObservedObject var metadataManager = MetadataManager.shared
 
+    init(assets: [PHAsset], initialIndex: Int) {
+        self.assets = assets
+        self.initialIndex = initialIndex
+        self._currentIndex = State(initialValue: initialIndex)
+    }
+
+    // Convenience initializer for single asset
+    init(asset: PHAsset) {
+        self.assets = [asset]
+        self.initialIndex = 0
+        self._currentIndex = State(initialValue: 0)
+    }
+
+    var currentAsset: PHAsset {
+        assets[currentIndex]
+    }
+
     var metadata: PhotoMetadata? {
-        metadataManager.getMetadata(for: asset.localIdentifier)
+        metadataManager.getMetadata(for: currentAsset.localIdentifier)
     }
 
     var body: some View {
-        ZStack {
-            // Background: white by default, black in immersive mode
-            (isImmersiveMode ? Color.black : Color.white).ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                // Background: white by default, black in immersive mode
+                (isImmersiveMode ? Color.black : Color.white).ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Tags/Metadata at the top (matching camera view: blue, green, orange, purple)
-                if let meta = metadata {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            // Procedure badge (blue)
-                            if let proc = meta.procedure {
-                                Text(proc)
-                                    .font(AppFonts.nexaRegular(11))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.primary.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            // Tooth badge (green)
-                            if let tooth = meta.toothNumber {
-                                Text("#\(tooth)")
-                                    .font(AppFonts.nexaRegular(11))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.success.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            // Stage badge (orange)
-                            if let stage = meta.stage {
-                                Text(stage == "Preparation" ? "Prep" : "Resto")
-                                    .font(AppFonts.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.warning.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            // Angle badge (purple)
-                            if let angle = meta.angle {
-                                Text(angle)
-                                    .font(AppFonts.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
-                                    .background(Color.purple.opacity(0.85))
-                                    .cornerRadius(4)
-                            }
-                            if let date = meta.toothDate {
-                                let formatter = DateFormatter()
-                                let _ = formatter.dateStyle = .short
-                                Text(formatter.string(from: date))
-                                    .font(AppFonts.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.gray.opacity(0.7))
-                                    .cornerRadius(4)
-                            }
-                        }
-                        .padding(.horizontal, 16)
+                VStack(spacing: 0) {
+                    // PhotoInfoPillView at the top (hidden in immersive mode)
+                    if !isImmersiveMode {
+                        PhotoInfoPillView(
+                            metadata: Binding(
+                                get: { editableMetadata },
+                                set: { newValue in
+                                    editableMetadata = newValue
+                                    metadataManager.assignMetadata(newValue, to: currentAsset.localIdentifier)
+                                }
+                            ),
+                            isDropdownOpen: $isTagDropdownOpen,
+                            metadataManager: metadataManager
+                        )
+                        .padding(.top, 12)
+                        .zIndex(10)
                     }
-                    .padding(.top, 12)
-                    .zIndex(10)
-                }
 
-                Spacer()
+                    Spacer()
 
-                // Photo display in the center (tappable to toggle immersive mode)
-                if let img = image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                isImmersiveMode.toggle()
-                            }
+                    // TabView for horizontal photo scrolling
+                    TabView(selection: $currentIndex) {
+                        ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
+                            photoPageView(for: asset, geometry: geometry)
+                                .tag(index)
                         }
-                } else {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: isImmersiveMode ? .white : .gray))
-                        .scaleEffect(1.5)
-                }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
+                    .offset(y: dragOffset.height)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                // Only track downward drags
+                                if value.translation.height > 0 {
+                                    dragOffset = value.translation
+                                }
+                            }
+                            .onEnded { value in
+                                // Dismiss if dragged down enough
+                                if value.translation.height > 100 {
+                                    dismiss()
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        dragOffset = .zero
+                                    }
+                                }
+                            }
+                    )
 
-                Spacer()
+                    Spacer()
 
-                // Rating at the bottom (hidden in immersive mode)
-                if !isImmersiveMode {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("Rating:")
+                    // Rating pill at the bottom (hidden in immersive mode)
+                    if !isImmersiveMode {
+                        VStack(spacing: 6) {
+                            Text("Rating")
                                 .font(AppFonts.caption)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundColor(.white)
                             RatingView(
                                 rating: metadata?.rating ?? 0,
-                                assetID: asset.localIdentifier,
+                                assetID: currentAsset.localIdentifier,
                                 metadataManager: metadataManager
                             )
                         }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(AppColors.primary)
+                                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                        )
+                        .padding(.bottom, 60)
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(AppColors.surface.opacity(0.95))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 60)
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: 16)
+                .opacity(isImmersiveMode ? 0 : 1)
+                .animation(.easeInOut(duration: 0.25), value: isImmersiveMode)
+
+                // Immersive mode photo (full screen, static position)
+                if isImmersiveMode {
+                    if let img = loadedImages[currentAsset.localIdentifier] {
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isImmersiveMode = false
+                                }
+                            }
+                    }
+                }
             }
         }
         .toolbar {
@@ -5293,21 +5300,69 @@ struct PhotoDetailView: View {
                 }
             }
         }
+        .navigationBarHidden(isImmersiveMode)
         .fullScreenCover(isPresented: $isEditing) {
-            if let img = image { PhotoEditorView(inputImage: img) }
+            if let img = loadedImages[currentAsset.localIdentifier] {
+                PhotoEditorView(inputImage: img)
+            }
         }
         .onAppear {
-            PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
-                self.image = loadedImg
-            }
-            // Load existing metadata into editable state
-            if let existingMetadata = metadataManager.getMetadata(for: asset.localIdentifier) {
-                editableMetadata = existingMetadata
+            loadImagesForVisibleAssets()
+            loadMetadataForCurrentAsset()
+        }
+        .onChange(of: currentIndex) { _, _ in
+            loadImagesForVisibleAssets()
+            loadMetadataForCurrentAsset()
+            isTagDropdownOpen = false // Close dropdown when switching photos
+        }
+    }
+
+    @ViewBuilder
+    private func photoPageView(for asset: PHAsset, geometry: GeometryProxy) -> some View {
+        Group {
+            if let img = loadedImages[asset.localIdentifier] {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isImmersiveMode = true
+                        }
+                    }
+            } else {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                    .scaleEffect(1.5)
+                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
             }
         }
-        .onChange(of: editableMetadata) { _, newMetadata in
-            // Sync editable metadata back to MetadataManager
-            metadataManager.assignMetadata(newMetadata, to: asset.localIdentifier)
+    }
+
+    private func loadImagesForVisibleAssets() {
+        // Load current and adjacent images for smooth scrolling
+        let indicesToLoad = [currentIndex - 1, currentIndex, currentIndex + 1]
+            .filter { $0 >= 0 && $0 < assets.count }
+
+        for index in indicesToLoad {
+            let asset = assets[index]
+            if loadedImages[asset.localIdentifier] == nil {
+                PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
+                    if let img = loadedImg {
+                        DispatchQueue.main.async {
+                            loadedImages[asset.localIdentifier] = img
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadMetadataForCurrentAsset() {
+        if let existingMetadata = metadataManager.getMetadata(for: currentAsset.localIdentifier) {
+            editableMetadata = existingMetadata
+        } else {
+            editableMetadata = PhotoMetadata()
         }
     }
 }
