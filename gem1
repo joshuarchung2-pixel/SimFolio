@@ -959,7 +959,7 @@ struct SettingsView: View {
 
                         Spacer()
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.top, 20)
                     .padding(.bottom, 120)
                 }
@@ -6443,7 +6443,7 @@ struct PortfoliosView: View {
                 deleteButtonView(portfolio: portfolio)
                 Spacer(minLength: 120)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.top, 20)
             .padding(.bottom, 120)
         }
