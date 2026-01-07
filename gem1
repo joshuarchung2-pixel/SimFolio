@@ -462,6 +462,7 @@ struct CalendarDatePicker: View {
                         .background(AppColors.surface)
                         .cornerRadius(8)
                 }
+                .buttonStyle(BorderlessButtonStyle())
 
                 Spacer()
 
@@ -479,6 +480,7 @@ struct CalendarDatePicker: View {
                         .background(AppColors.surface)
                         .cornerRadius(8)
                 }
+                .buttonStyle(BorderlessButtonStyle())
             }
             .padding(.horizontal, 4)
 
@@ -528,6 +530,7 @@ struct CalendarDatePicker: View {
                                 )
                                 .cornerRadius(8)
                         }
+                        .buttonStyle(BorderlessButtonStyle())
                         .disabled(disabled)
                     } else {
                         Color.clear
@@ -6277,7 +6280,7 @@ struct PortfoliosView: View {
                         .foregroundColor(AppColors.textSecondary)
                     if let dueDateStr = portfolio.dueDateString {
                         Text(dueDateStr)
-                            .font(.title2.weight(.semibold))
+                            .font(.headline)
                             .foregroundColor(AppColors.textPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -6290,7 +6293,7 @@ struct PortfoliosView: View {
                             .opacity(contentOpacity)
                     } else {
                         Text("Tap to set")
-                            .font(.title2.weight(.semibold))
+                            .font(.headline)
                             .foregroundColor(AppColors.textSecondary.opacity(0.6))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -7228,7 +7231,7 @@ struct PieProgressView: View {
             // Center content - always show percentage
             Text("\(Int(progress * 100))%")
                 .font(.system(size: 7, weight: .bold))
-                .foregroundColor(progressColor)
+                .foregroundColor(AppColors.textPrimary)
         }
     }
 }
