@@ -5917,7 +5917,12 @@ struct PhotoEditorView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             guard let img = baseImage else { return }
             baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
-            rotationAngle = 0  // Reset visual rotation since image data is now rotated
+            // Reset visual rotation WITHOUT animation since image data is now rotated
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                rotationAngle = 0
+            }
             applyProcessing()
         }
     }
