@@ -6238,6 +6238,7 @@ struct PortfoliosView: View {
         .padding()
         .background(AppColors.surface)
         .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         .id("stats-\(portfolio.id)")
         .transition(.opacity)
     }
@@ -6253,8 +6254,9 @@ struct PortfoliosView: View {
                 } else {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 14, weight: .medium))
+                        .offset(y: -2)
                 }
-                Text(isGeneratingZip ? "Generating..." : "Download")
+                Text(isGeneratingZip ? "Generating..." : "Download \(portfolio.name).zip")
                     .font(.subheadline.weight(.medium))
             }
             .foregroundColor(.white)
@@ -6344,6 +6346,7 @@ struct PortfoliosView: View {
             .padding()
             .background(AppColors.surface)
             .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -6423,9 +6426,9 @@ struct PortfoliosView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 statsCardView(portfolio: portfolio)
-                downloadButtonView(portfolio: portfolio)
                 dueDateCardView(portfolio: portfolio)
                 requirementsSectionView(portfolio: portfolio)
+                downloadButtonView(portfolio: portfolio)
                 deleteButtonView(portfolio: portfolio)
                 Spacer(minLength: 120)
             }
@@ -7479,6 +7482,7 @@ struct RequirementStatusView: View {
         }
         .background(AppColors.surface.opacity(0.5))
         .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isFulfilled ? AppColors.success.opacity(0.5) : AppColors.secondary.opacity(0.3), lineWidth: 1)
