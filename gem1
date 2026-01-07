@@ -7,6 +7,14 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UserNotifications
 
+// MARK: - SCROLL OFFSET PREFERENCE KEY
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - APP DELEGATE FOR ORIENTATION LOCK
 class AppDelegate: NSObject, UIApplicationDelegate {
     static var orientationLock = UIInterfaceOrientationMask.portrait
@@ -729,13 +737,12 @@ struct NavBarItem: View {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .rotationEffect(iconRotation)
 
                 Text(label)
                     .font(AppFonts.caption2)
                     .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .rotationEffect(iconRotation)
             }
+            .rotationEffect(iconRotation)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
             .background(
@@ -3005,8 +3012,8 @@ struct PhotoInfoPillView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main pill button
-            Button(action: { withAnimation { isDropdownOpen.toggle() } }) {
+            // Main pill button - stays fixed at top
+            Button(action: { withAnimation(.easeInOut(duration: 0.25)) { isDropdownOpen.toggle() } }) {
                 HStack(spacing: 6) {
                     // Show current selections with visual hierarchy
                     if metadata.procedure == nil {
@@ -3053,28 +3060,32 @@ struct PhotoInfoPillView: View {
                     Image(systemName: isDropdownOpen ? "chevron.up" : "chevron.down")
                         .font(AppFonts.caption2)
                         .foregroundColor(Color.black.opacity(0.6))
+                        .animation(nil, value: isDropdownOpen)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.blue.opacity(0.15))
-                .cornerRadius(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.9))
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                        .strokeBorder(pillStrokeColor, lineWidth: pillStrokeWidth)
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 20))
             }
+            .buttonStyle(.plain)
             .foregroundColor(.primary)
+            .zIndex(1) // Keep pill above dropdown
 
-            // Dropdown content
+            // Dropdown content - fades in below pill
             if isDropdownOpen {
                 dropdownContent
                     .padding(.top, 8)
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
-                        removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
-                    ))
+                    .transition(.opacity.animation(.easeInOut(duration: 0.15)))
             }
         }
+        .frame(width: 340) // Fixed width to prevent horizontal shift when dropdown appears
     }
 
     var dropdownContent: some View {
@@ -3086,11 +3097,13 @@ struct PhotoInfoPillView: View {
             bottomButtonsView
         }
         .frame(width: 340)
-        .background(Color.white.opacity(0.9))
-        .cornerRadius(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.9))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .strokeBorder(dropdownStrokeColor, lineWidth: pillStrokeWidth)
         )
         .onAppear { updateCurrentStage() }
     }
@@ -3619,6 +3632,9 @@ struct GalleryView: View {
     // Header visibility state
     @State private var showHeaderElements = true
 
+    // Scroll offset for header gradient
+    @State private var scrollOffset: CGFloat = 0
+
     let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     // Get unique tooth entries for the selected procedure
@@ -3690,63 +3706,39 @@ struct GalleryView: View {
 
     // MARK: - Extracted Sub-Views
 
-    private var customHeaderView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppColors.primary)
-                }
-                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: .clear))
-
-                Spacer()
-
-                VStack(spacing: 2) {
-                    if isSelectMode {
-                        Text(selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected")
-                            .font(AppFonts.nexaBold(18))
-                            .foregroundColor(AppColors.primary)
-                    } else {
-                        Text(currentSectionTitle)
-                            .font(AppFonts.nexaBold(18))
-                            .foregroundColor(AppColors.textPrimary)
-                    }
-                }
-
-                Spacer()
-
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isSelectMode.toggle()
-                        if !isSelectMode {
-                            selectedAssetIds.removeAll()
-                        }
-                    }
-                }) {
-                    Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppColors.primary)
-                }
-                .buttonStyle(CustomIconButtonStyle(size: 36, backgroundColor: isSelectMode ? AppColors.primary.opacity(0.15) : .clear))
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button(action: { withAnimation { isSidebarOpen.toggle() } }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
         }
-        .background(
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.white, location: 0.0),
-                    .init(color: Color.white, location: 0.6),
-                    .init(color: Color.white.opacity(0), location: 1.0)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .offset(x: isSidebarOpen ? 250 : 0)
-        .animation(.easeInOut(duration: 0.25), value: isSidebarOpen)
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSelectMode.toggle()
+                    if !isSelectMode {
+                        selectedAssetIds.removeAll()
+                    }
+                }
+            }) {
+                Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
+            }
+        }
     }
 
     @ViewBuilder
@@ -3821,6 +3813,15 @@ struct GalleryView: View {
     private var scrollContentView: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Invisible view for scroll offset tracking
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: -geometry.frame(in: .named("galleryScrollView")).origin.y
+                    )
+                }
+                .frame(height: 0)
+
                 if selectedTooth != nil {
                     ForEach(["Preparation", "Restoration"], id: \.self) { stage in
                         let angleGroups = assetsByAngle(for: stage)
@@ -3870,8 +3871,18 @@ struct GalleryView: View {
                     .padding(.bottom, 120)
                 }
             }
-            .padding(.top, 60)
+            .padding(.top, 20)
         }
+        .coordinateSpace(name: "galleryScrollView")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            scrollOffset = value
+        }
+    }
+
+    // Gradient opacity based on scroll (fades in as user scrolls down)
+    private var headerGradientOpacity: Double {
+        let threshold: CGFloat = 50
+        return min(1, max(0, Double(scrollOffset / threshold)))
     }
 
     private var sidebarView: some View {
@@ -4050,17 +4061,12 @@ struct GalleryView: View {
     }
 
     private var mainZStackContent: some View {
-        ZStack(alignment: .leading) {
+        ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 scrollContentView
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .offset(x: isSidebarOpen ? 250 : 0)
-
-            // Custom header overlay with fading background
-            VStack {
-                customHeaderView
-                Spacer()
-            }
 
             if !isSidebarOpen {
                 edgeSwipeOverlay
@@ -4077,10 +4083,38 @@ struct GalleryView: View {
         }
     }
 
+    // Dynamic navigation title based on mode
+    private var navigationTitle: String {
+        if isSelectMode {
+            return selectedAssetIds.isEmpty ? "Select Photos" : "\(selectedAssetIds.count) Selected"
+        } else {
+            return currentSectionTitle
+        }
+    }
+
     var body: some View {
         NavigationView {
             mainZStackContent
-            .navigationBarHidden(true)
+            .overlay(alignment: .top) {
+                // Gradient glow behind header (fades in on scroll)
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: Color.red.opacity(0.5), location: 0.0),
+                        .init(color: Color.red.opacity(0.3), location: 0.5),
+                        .init(color: Color.red.opacity(0), location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .allowsHitTesting(false)
+            }
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                toolbarContent
+            }
             .onAppear {
                 library.fetchAssets()
                 // Apply navigation from camera via shared state
@@ -6176,6 +6210,328 @@ struct PortfoliosView: View {
         }
     }
 
+    // MARK: - Extracted Views (to help compiler type-checking)
+
+    @ViewBuilder
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 60))
+                .foregroundColor(AppColors.textSecondary)
+            Text("No Portfolios Yet")
+                .font(AppFonts.title2)
+                .foregroundColor(AppColors.textSecondary)
+            Text("Create a portfolio to track\nrequired photos for assignments")
+                .font(AppFonts.subheadline)
+                .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                .multilineTextAlignment(.center)
+            Button(action: { showAddPortfolioSheet = true }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Create Portfolio")
+                }
+            }
+            .buttonStyle(CustomPrimaryButtonStyle())
+            .padding(.top, 10)
+        }
+    }
+
+    @ViewBuilder
+    private func statsCardView(portfolio: Portfolio) -> some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Progress")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    Text(String(format: "%.0f%%", displayedPercentage))
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundColor(progressColor(for: displayedPercentage))
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
+                }
+
+                Spacer()
+
+                // Circular progress indicator
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 8)
+                        .frame(width: 70, height: 70)
+                    Circle()
+                        .trim(from: 0, to: min(1.0, displayedPercentage / 100))
+                        .stroke(
+                            progressColor(for: displayedPercentage),
+                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                        )
+                        .frame(width: 70, height: 70)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
+                    VStack(spacing: 0) {
+                        Text("\(displayedFulfilled)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(AppColors.textPrimary)
+                            .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.4), value: displayedFulfilled)
+                        Text("of \(displayedTotal)")
+                            .font(.system(size: 10))
+                            .foregroundColor(AppColors.textSecondary)
+                            .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.4), value: displayedTotal)
+                    }
+                }
+            }
+
+            // Download button
+            Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
+                HStack(spacing: 8) {
+                    if isGeneratingZip {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    Text(isGeneratingZip ? "Generating..." : "Download")
+                        .font(.subheadline.weight(.medium))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+                .background(Color.green)
+                .cornerRadius(8)
+            }
+            .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
+            .opacity((isGeneratingZip || portfolio.requirements.isEmpty) ? 0.6 : 1.0)
+
+            // Date created
+            HStack {
+                Text("Created \(portfolio.dateString)")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
+                    .opacity(contentOpacity)
+                Spacer()
+            }
+        }
+        .padding()
+        .background(AppColors.surface)
+        .cornerRadius(12)
+        .id("stats-\(portfolio.id)")
+        .transition(.opacity)
+        .sheet(item: $zipFileURL) { identifiableURL in
+            ShareSheet(activityItems: [identifiableURL.url])
+        }
+    }
+
+    @ViewBuilder
+    private func dueDateCardView(portfolio: Portfolio) -> some View {
+        Button(action: { showEditDueDateSheet = true }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Due Date")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    if let dueDateStr = portfolio.dueDateString {
+                        Text(dueDateStr)
+                            .font(.title2.weight(.semibold))
+                            .foregroundColor(AppColors.textPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1.5)
+                            )
+                            .cornerRadius(8)
+                            .opacity(contentOpacity)
+                    } else {
+                        Text("Tap to set")
+                            .font(.title2.weight(.semibold))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.05))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.blue.opacity(0.2), lineWidth: 1.5)
+                            )
+                            .cornerRadius(8)
+                            .opacity(contentOpacity)
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Status")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                    Group {
+                        if let days = portfolio.daysUntilDue {
+                            if portfolio.isOverdue {
+                                Text("Overdue by \(abs(days))d")
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.error)
+                            } else if days == 0 {
+                                Text("Due Today")
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.error)
+                            } else if days == 1 {
+                                Text("Due Tomorrow")
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.warning)
+                            } else {
+                                Text("Due in \(days)d")
+                                    .font(.headline)
+                                    .foregroundColor(portfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
+                            }
+                        } else {
+                            Text("No deadline")
+                                .font(.headline)
+                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
+                        }
+                    }
+                    .opacity(contentOpacity)
+                }
+            }
+            .padding()
+            .background(AppColors.surface)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func requirementsSectionView(portfolio: Portfolio) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header (stationary - no transition)
+            HStack {
+                Text("Requirements")
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
+                Spacer()
+                Button(action: { showAddRequirementSheet = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+            }
+
+            // Requirements content (animated)
+            VStack(spacing: 12) {
+                if portfolio.requirements.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 40))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("No requirements yet")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Add requirements to specify what photos you need")
+                            .font(.caption)
+                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                } else {
+                    ForEach(portfolio.requirements) { requirement in
+                        RequirementStatusView(
+                            requirement: requirement,
+                            portfolioId: portfolio.id
+                        )
+                    }
+                }
+            }
+            .id("requirements-\(portfolio.id)")
+            .transition(.opacity)
+            .opacity(contentOpacity)
+        }
+    }
+
+    @ViewBuilder
+    private func deleteButtonView(portfolio: Portfolio) -> some View {
+        Button(action: { showDeleteConfirmation = true }) {
+            HStack {
+                Image(systemName: "trash")
+                Text("Delete Portfolio")
+            }
+            .font(.subheadline)
+            .foregroundColor(.red)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(AppColors.surface)
+            .cornerRadius(10)
+        }
+        .padding(.top, 20)
+        .id("delete-\(portfolio.id)")
+        .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func portfolioContentView(portfolio: Portfolio) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                statsCardView(portfolio: portfolio)
+                dueDateCardView(portfolio: portfolio)
+                requirementsSectionView(portfolio: portfolio)
+                deleteButtonView(portfolio: portfolio)
+                Spacer(minLength: 120)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 120)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Menu {
+                ForEach(metadataManager.portfolios) { p in
+                    Button(action: {
+                        if p.id != currentPortfolio?.id {
+                            selectedPortfolioId = p.id
+                            animatePortfolioChange()
+                        }
+                    }) {
+                        HStack {
+                            Text(p.name)
+                            if p.id == currentPortfolio?.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: { showAddPortfolioSheet = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .stroke(Color(white: 0.85), lineWidth: 1)
+                    )
+            }
+        }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -6183,304 +6539,16 @@ struct PortfoliosView: View {
                     .ignoresSafeArea()
 
                 if metadataManager.portfolios.isEmpty {
-                    // Empty state
-                    VStack(spacing: 20) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("No Portfolios Yet")
-                            .font(AppFonts.title2)
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("Create a portfolio to track\nrequired photos for assignments")
-                            .font(AppFonts.subheadline)
-                            .foregroundColor(AppColors.textSecondary.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                        Button(action: { showAddPortfolioSheet = true }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Create Portfolio")
-                            }
-                        }
-                        .buttonStyle(CustomPrimaryButtonStyle())
-                        .padding(.top, 10)
-                    }
+                    emptyStateView
                 } else if let portfolio = currentPortfolio {
-                    // Portfolio content
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            // Header stats card (animated)
-                            VStack(spacing: 16) {
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text("Progress")
-                                            .font(.subheadline)
-                                            .foregroundColor(AppColors.textSecondary)
-                                        Text(String(format: "%.0f%%", displayedPercentage))
-                                            .font(.system(size: 36, weight: .bold))
-                                            .foregroundColor(progressColor(for: displayedPercentage))
-                                            .contentTransition(.numericText())
-                                            .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
-                                    }
-
-                                    Spacer()
-
-                                    // Circular progress indicator
-                                    ZStack {
-                                        Circle()
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 8)
-                                            .frame(width: 70, height: 70)
-                                        Circle()
-                                            .trim(from: 0, to: min(1.0, displayedPercentage / 100))
-                                            .stroke(
-                                                progressColor(for: displayedPercentage),
-                                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                                            )
-                                            .frame(width: 70, height: 70)
-                                            .rotationEffect(.degrees(-90))
-                                            .animation(.easeInOut(duration: 0.4), value: displayedPercentage)
-                                        VStack(spacing: 0) {
-                                            Text("\(displayedFulfilled)")
-                                                .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(AppColors.textPrimary)
-                                                .contentTransition(.numericText())
-                                                .animation(.easeInOut(duration: 0.4), value: displayedFulfilled)
-                                            Text("of \(displayedTotal)")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(AppColors.textSecondary)
-                                                .contentTransition(.numericText())
-                                                .animation(.easeInOut(duration: 0.4), value: displayedTotal)
-                                        }
-                                    }
-                                }
-
-                                // Download button
-                                Button(action: { generatePortfolioZip(portfolio: portfolio) }) {
-                                    HStack(spacing: 8) {
-                                        if isGeneratingZip {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                                .scaleEffect(0.8)
-                                        } else {
-                                            Image(systemName: "square.and.arrow.down")
-                                                .font(.system(size: 14, weight: .medium))
-                                        }
-                                        Text(isGeneratingZip ? "Generating..." : "Download")
-                                            .font(.subheadline.weight(.medium))
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
-                                    .background(Color.green)
-                                    .cornerRadius(8)
-                                }
-                                .disabled(isGeneratingZip || portfolio.requirements.isEmpty)
-                                .opacity((isGeneratingZip || portfolio.requirements.isEmpty) ? 0.6 : 1.0)
-
-                                // Date created
-                                HStack {
-                                    Text("Created \(portfolio.dateString)")
-                                        .font(.caption)
-                                        .foregroundColor(AppColors.textSecondary)
-                                        .opacity(contentOpacity)
-                                    Spacer()
-                                }
-                            }
-                            .padding()
-                            .background(AppColors.surface)
-                            .cornerRadius(12)
-                            .id("stats-\(portfolio.id)")
-                            .transition(.opacity)
-                            .sheet(item: $zipFileURL) { identifiableURL in
-                                ShareSheet(activityItems: [identifiableURL.url])
-                            }
-
-                            // Due Date bento card
-                            Button(action: { showEditDueDateSheet = true }) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Due Date")
-                                            .font(.subheadline)
-                                            .foregroundColor(AppColors.textSecondary)
-                                        if let dueDateStr = portfolio.dueDateString {
-                                            Text(dueDateStr)
-                                                .font(.title2.weight(.semibold))
-                                                .foregroundColor(AppColors.textPrimary)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(Color.blue.opacity(0.1))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(Color.blue.opacity(0.3), lineWidth: 1.5)
-                                                )
-                                                .cornerRadius(8)
-                                                .opacity(contentOpacity)
-                                        } else {
-                                            Text("Tap to set")
-                                                .font(.title2.weight(.semibold))
-                                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(Color.blue.opacity(0.05))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(Color.blue.opacity(0.2), lineWidth: 1.5)
-                                                )
-                                                .cornerRadius(8)
-                                                .opacity(contentOpacity)
-                                        }
-                                    }
-
-                                    Spacer()
-
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text("Status")
-                                            .font(.subheadline)
-                                            .foregroundColor(AppColors.textSecondary)
-                                        Group {
-                                            if let days = portfolio.daysUntilDue {
-                                                if portfolio.isOverdue {
-                                                    Text("Overdue by \(abs(days))d")
-                                                        .font(.headline)
-                                                        .foregroundColor(AppColors.error)
-                                                } else if days == 0 {
-                                                    Text("Due Today")
-                                                        .font(.headline)
-                                                        .foregroundColor(AppColors.error)
-                                                } else if days == 1 {
-                                                    Text("Due Tomorrow")
-                                                        .font(.headline)
-                                                        .foregroundColor(AppColors.warning)
-                                                } else {
-                                                    Text("Due in \(days)d")
-                                                        .font(.headline)
-                                                        .foregroundColor(portfolio.isDueSoon ? AppColors.warning : AppColors.textPrimary)
-                                                }
-                                            } else {
-                                                Text("No deadline")
-                                                    .font(.headline)
-                                                    .foregroundColor(AppColors.textSecondary.opacity(0.6))
-                                            }
-                                        }
-                                        .opacity(contentOpacity)
-                                    }
-                                }
-                                .padding()
-                                .background(AppColors.surface)
-                                .cornerRadius(12)
-                            }
-                            .buttonStyle(.plain)
-
-                            // Requirements section
-                            VStack(alignment: .leading, spacing: 12) {
-                                // Header (stationary - no transition)
-                                HStack {
-                                    Text("Requirements")
-                                        .font(.headline)
-                                        .foregroundColor(AppColors.textPrimary)
-                                    Spacer()
-                                    Button(action: { showAddRequirementSheet = true }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "plus.circle.fill")
-                                            Text("Add")
-                                        }
-                                        .font(.subheadline)
-                                        .foregroundColor(.blue)
-                                    }
-                                }
-
-                                // Requirements content (animated)
-                                VStack(spacing: 12) {
-                                    if portfolio.requirements.isEmpty {
-                                        VStack(spacing: 12) {
-                                            Image(systemName: "doc.text")
-                                                .font(.system(size: 40))
-                                                .foregroundColor(AppColors.textSecondary)
-                                            Text("No requirements yet")
-                                                .font(.subheadline)
-                                                .foregroundColor(AppColors.textSecondary)
-                                            Text("Add requirements to specify what photos you need")
-                                                .font(.caption)
-                                                .foregroundColor(AppColors.textSecondary.opacity(0.8))
-                                                .multilineTextAlignment(.center)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 30)
-                                    } else {
-                                        ForEach(portfolio.requirements) { requirement in
-                                            RequirementStatusView(
-                                                requirement: requirement,
-                                                portfolioId: portfolio.id
-                                            )
-                                        }
-                                    }
-                                }
-                                .id("requirements-\(portfolio.id)")
-                                .transition(.opacity)
-                                .opacity(contentOpacity)
-                            }
-
-                            // Delete button (animated)
-                            Button(action: { showDeleteConfirmation = true }) {
-                                HStack {
-                                    Image(systemName: "trash")
-                                    Text("Delete Portfolio")
-                                }
-                                .font(.subheadline)
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(AppColors.surface)
-                                .cornerRadius(10)
-                            }
-                            .padding(.top, 20)
-                            .id("delete-\(portfolio.id)")
-                            .transition(.opacity)
-
-                            Spacer(minLength: 120)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 120)
-                    }
+                    portfolioContentView(portfolio: portfolio)
                 }
             }
             .navigationTitle(currentPortfolio?.name ?? "Portfolios")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 12) {
-                        Menu {
-                            ForEach(metadataManager.portfolios) { p in
-                                Button(action: {
-                                    if p.id != currentPortfolio?.id {
-                                        selectedPortfolioId = p.id
-                                        animatePortfolioChange()
-                                    }
-                                }) {
-                                    HStack {
-                                        Text(p.name)
-                                        if p.id == currentPortfolio?.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(AppColors.primary)
-                                .frame(width: 32, height: 32)
-                        }
-                        Button(action: { showAddPortfolioSheet = true }) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(AppColors.primary)
-                                .frame(width: 32, height: 32)
-                        }
-                    }
-                    .id("portfolio-toolbar-\(currentPortfolio?.id.uuidString ?? "none")")
-                }
+                toolbarContent
             }
             .tint(AppColors.primary)
         }
