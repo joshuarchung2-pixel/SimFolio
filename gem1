@@ -3714,10 +3714,6 @@ struct GalleryView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppColors.primary)
                     .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .stroke(Color(white: 0.85), lineWidth: 1)
-                    )
             }
         }
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -3733,10 +3729,6 @@ struct GalleryView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppColors.primary)
                     .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .stroke(Color(white: 0.85), lineWidth: 1)
-                    )
             }
         }
     }
@@ -6512,10 +6504,6 @@ struct PortfoliosView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppColors.primary)
                     .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .stroke(Color(white: 0.85), lineWidth: 1)
-                    )
             }
         }
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -6524,10 +6512,6 @@ struct PortfoliosView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(AppColors.primary)
                     .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .stroke(Color(white: 0.85), lineWidth: 1)
-                    )
             }
         }
     }
