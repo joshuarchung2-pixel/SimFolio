@@ -5182,6 +5182,11 @@ struct PhotoDetailView: View {
     @State private var isTagDropdownOpen = false
     @State private var editableMetadata = PhotoMetadata()
     @State private var dragOffset: CGSize = .zero
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var lastZoomScale: CGFloat = 1.0
+    @State private var zoomOffset: CGSize = .zero
+    @State private var lastZoomOffset: CGSize = .zero
+    @State private var imageRotation: Double = 0
     @ObservedObject var metadataManager = MetadataManager.shared
 
     init(assets: [PHAsset], initialIndex: Int) {
@@ -5205,12 +5210,21 @@ struct PhotoDetailView: View {
         metadataManager.getMetadata(for: currentAsset.localIdentifier)
     }
 
+    // Check if current image is landscape
+    var isLandscapeImage: Bool {
+        guard let img = loadedImages[currentAsset.localIdentifier] else { return false }
+        return img.size.width > img.size.height
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 // Background: white by default, black in immersive mode
-                (isImmersiveMode ? Color.black : Color.white).ignoresSafeArea()
+                (isImmersiveMode ? Color.black : Color.white)
+                    .ignoresSafeArea()
+                    .animation(.easeInOut(duration: 0.25), value: isImmersiveMode)
 
+                // Main photo view - stays in place, only background/UI changes
                 VStack(spacing: 0) {
                     // PhotoInfoPillView at the top (hidden in immersive mode)
                     if !isImmersiveMode {
@@ -5227,39 +5241,13 @@ struct PhotoDetailView: View {
                         )
                         .padding(.top, 12)
                         .zIndex(10)
+                        .transition(.opacity)
                     }
 
                     Spacer()
 
-                    // TabView for horizontal photo scrolling
-                    TabView(selection: $currentIndex) {
-                        ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
-                            photoPageView(for: asset, geometry: geometry)
-                                .tag(index)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
-                    .offset(y: dragOffset.height)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                // Only track downward drags
-                                if value.translation.height > 0 {
-                                    dragOffset = value.translation
-                                }
-                            }
-                            .onEnded { value in
-                                // Dismiss if dragged down enough
-                                if value.translation.height > 100 {
-                                    dismiss()
-                                } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        dragOffset = .zero
-                                    }
-                                }
-                            }
-                    )
+                    // Photo display area - fixed position regardless of mode
+                    photoContentView(geometry: geometry)
 
                     Spacer()
 
@@ -5268,7 +5256,7 @@ struct PhotoDetailView: View {
                         VStack(spacing: 6) {
                             Text("Rating")
                                 .font(AppFonts.caption)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primary)
                             RatingView(
                                 rating: metadata?.rating ?? 0,
                                 assetID: currentAsset.localIdentifier,
@@ -5279,29 +5267,14 @@ struct PhotoDetailView: View {
                         .padding(.horizontal, 24)
                         .background(
                             RoundedRectangle(cornerRadius: 20)
-                                .fill(AppColors.primary)
-                                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                                .fill(AppColors.primary.opacity(0.15))
+                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
                         )
                         .padding(.bottom, 60)
+                        .transition(.opacity)
                     }
                 }
-                .opacity(isImmersiveMode ? 0 : 1)
                 .animation(.easeInOut(duration: 0.25), value: isImmersiveMode)
-
-                // Immersive mode photo (full screen, static position)
-                if isImmersiveMode {
-                    if let img = loadedImages[currentAsset.localIdentifier] {
-                        Image(uiImage: img)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    isImmersiveMode = false
-                                }
-                            }
-                    }
-                }
             }
         }
         .toolbar {
@@ -5324,30 +5297,119 @@ struct PhotoDetailView: View {
         .onChange(of: currentIndex) { _, _ in
             loadImagesForVisibleAssets()
             loadMetadataForCurrentAsset()
-            isTagDropdownOpen = false // Close dropdown when switching photos
+            isTagDropdownOpen = false
+            // Reset zoom when changing photos
+            withAnimation(.easeInOut(duration: 0.2)) {
+                zoomScale = 1.0
+                lastZoomScale = 1.0
+                zoomOffset = .zero
+                lastZoomOffset = .zero
+            }
         }
     }
 
     @ViewBuilder
-    private func photoPageView(for asset: PHAsset, geometry: GeometryProxy) -> some View {
-        Group {
-            if let img = loadedImages[asset.localIdentifier] {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isImmersiveMode = true
-                        }
+    private func photoContentView(geometry: GeometryProxy) -> some View {
+        let photoHeight = isImmersiveMode ? geometry.size.height * 0.8 : geometry.size.height * 0.5
+
+        TabView(selection: $currentIndex) {
+            ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
+                ZStack {
+                    if let img = loadedImages[asset.localIdentifier] {
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .rotationEffect(.degrees(imageRotation))
+                            .scaleEffect(zoomScale)
+                            .offset(zoomOffset)
+                            .animation(.easeInOut(duration: 0.3), value: imageRotation)
+                            .gesture(
+                                SimultaneousGesture(
+                                    // Tap gesture to toggle immersive mode
+                                    TapGesture()
+                                        .onEnded {
+                                            if zoomScale <= 1.0 {
+                                                withAnimation(.easeInOut(duration: 0.25)) {
+                                                    isImmersiveMode.toggle()
+                                                    if !isImmersiveMode {
+                                                        zoomScale = 1.0
+                                                        lastZoomScale = 1.0
+                                                        zoomOffset = .zero
+                                                        lastZoomOffset = .zero
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    // Magnification gesture for pinch-to-zoom
+                                    MagnificationGesture()
+                                        .onChanged { value in
+                                            let newScale = lastZoomScale * value
+                                            // Allow zooming from 0.5x to 5x
+                                            zoomScale = min(max(newScale, 0.5), 5.0)
+
+                                            // Auto-trigger immersive mode when zooming in
+                                            if zoomScale > 1.0 && !isImmersiveMode {
+                                                withAnimation(.easeInOut(duration: 0.25)) {
+                                                    isImmersiveMode = true
+                                                }
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            lastZoomScale = zoomScale
+
+                                            // If zoomed out below 1.0, snap back and exit immersive
+                                            if zoomScale < 1.0 {
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                    zoomScale = 1.0
+                                                    lastZoomScale = 1.0
+                                                    zoomOffset = .zero
+                                                    lastZoomOffset = .zero
+                                                    isImmersiveMode = false
+                                                }
+                                            }
+                                        }
+                                )
+                            )
+                            .simultaneousGesture(
+                                // Pan gesture for moving zoomed image
+                                DragGesture()
+                                    .onChanged { value in
+                                        if zoomScale > 1.0 {
+                                            zoomOffset = CGSize(
+                                                width: lastZoomOffset.width + value.translation.width,
+                                                height: lastZoomOffset.height + value.translation.height
+                                            )
+                                        } else if value.translation.height > 0 && !isImmersiveMode {
+                                            // Swipe down to dismiss (only when not zoomed)
+                                            dragOffset = value.translation
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        if zoomScale > 1.0 {
+                                            lastZoomOffset = zoomOffset
+                                        } else if value.translation.height > 100 && !isImmersiveMode {
+                                            dismiss()
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                dragOffset = .zero
+                                            }
+                                        }
+                                    }
+                            )
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                            .scaleEffect(1.5)
                     }
-            } else {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .gray))
-                    .scaleEffect(1.5)
-                    .frame(maxWidth: .infinity, maxHeight: geometry.size.height * 0.6)
+                }
+                .frame(maxWidth: .infinity, maxHeight: photoHeight)
+                .tag(index)
             }
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(maxWidth: .infinity, maxHeight: photoHeight)
+        .offset(y: dragOffset.height)
+        .animation(.easeInOut(duration: 0.2), value: isImmersiveMode)
     }
 
     private func loadImagesForVisibleAssets() {
@@ -5374,6 +5436,16 @@ struct PhotoDetailView: View {
             editableMetadata = existingMetadata
         } else {
             editableMetadata = PhotoMetadata()
+        }
+    }
+
+    // Function to rotate image by 90 degrees (can be called from toolbar if needed)
+    func rotateImage() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            imageRotation += 90
+            if imageRotation >= 360 {
+                imageRotation = 0
+            }
         }
     }
 }
