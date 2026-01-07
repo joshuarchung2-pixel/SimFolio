@@ -462,6 +462,7 @@ struct CalendarDatePicker: View {
                         .background(AppColors.surface)
                         .cornerRadius(8)
                 }
+                .buttonStyle(BorderlessButtonStyle())
 
                 Spacer()
 
@@ -479,6 +480,7 @@ struct CalendarDatePicker: View {
                         .background(AppColors.surface)
                         .cornerRadius(8)
                 }
+                .buttonStyle(BorderlessButtonStyle())
             }
             .padding(.horizontal, 4)
 
@@ -528,6 +530,7 @@ struct CalendarDatePicker: View {
                                 )
                                 .cornerRadius(8)
                         }
+                        .buttonStyle(BorderlessButtonStyle())
                         .disabled(disabled)
                     } else {
                         Color.clear
@@ -6235,6 +6238,7 @@ struct PortfoliosView: View {
         .padding()
         .background(AppColors.surface)
         .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         .id("stats-\(portfolio.id)")
         .transition(.opacity)
     }
@@ -6250,8 +6254,9 @@ struct PortfoliosView: View {
                 } else {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 14, weight: .medium))
+                        .offset(y: -2)
                 }
-                Text(isGeneratingZip ? "Generating..." : "Download")
+                Text(isGeneratingZip ? "Generating..." : "Download \(portfolio.name).zip")
                     .font(.subheadline.weight(.medium))
             }
             .foregroundColor(.white)
@@ -6277,7 +6282,7 @@ struct PortfoliosView: View {
                         .foregroundColor(AppColors.textSecondary)
                     if let dueDateStr = portfolio.dueDateString {
                         Text(dueDateStr)
-                            .font(.title2.weight(.semibold))
+                            .font(.headline)
                             .foregroundColor(AppColors.textPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -6290,7 +6295,7 @@ struct PortfoliosView: View {
                             .opacity(contentOpacity)
                     } else {
                         Text("Tap to set")
-                            .font(.title2.weight(.semibold))
+                            .font(.headline)
                             .foregroundColor(AppColors.textSecondary.opacity(0.6))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -6341,6 +6346,7 @@ struct PortfoliosView: View {
             .padding()
             .background(AppColors.surface)
             .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -6420,9 +6426,9 @@ struct PortfoliosView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 statsCardView(portfolio: portfolio)
-                downloadButtonView(portfolio: portfolio)
                 dueDateCardView(portfolio: portfolio)
                 requirementsSectionView(portfolio: portfolio)
+                downloadButtonView(portfolio: portfolio)
                 deleteButtonView(portfolio: portfolio)
                 Spacer(minLength: 120)
             }
@@ -7228,7 +7234,7 @@ struct PieProgressView: View {
             // Center content - always show percentage
             Text("\(Int(progress * 100))%")
                 .font(.system(size: 7, weight: .bold))
-                .foregroundColor(progressColor)
+                .foregroundColor(AppColors.textPrimary)
         }
     }
 }
@@ -7476,6 +7482,7 @@ struct RequirementStatusView: View {
         }
         .background(AppColors.surface.opacity(0.5))
         .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isFulfilled ? AppColors.success.opacity(0.5) : AppColors.secondary.opacity(0.3), lineWidth: 1)
