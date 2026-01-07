@@ -4090,25 +4090,22 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             mainZStackContent
-            .overlay(alignment: .top) {
-                // Gradient glow behind header (fades in on scroll)
-                LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: Color.white, location: 0.0),
-                        .init(color: Color.white, location: 0.6),
-                        .init(color: Color.white.opacity(0), location: 1.0)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 200)
-                .ignoresSafeArea(edges: .top)
-                .opacity(headerGradientOpacity)
-                .allowsHitTesting(false)
-            }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarBackground(
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: Color.white, location: 0.0),
+                        .init(color: Color.white, location: 0.7),
+                        .init(color: Color.white.opacity(0.8), location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                ).opacity(headerGradientOpacity),
+                for: .navigationBar
+            )
+            .toolbarBackground(scrollOffset > 10 ? .visible : .hidden, for: .navigationBar)
             .toolbar {
                 toolbarContent
             }
