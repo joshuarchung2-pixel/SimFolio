@@ -228,25 +228,187 @@ struct AddProcedureButton: View {
 
 /// Horizontal scrolling list of active portfolios with progress
 struct ActivePortfoliosSection: View {
+    @EnvironmentObject var router: NavigationRouter
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    /// Only show portfolios that are not 100% complete
+    var activePortfolios: [Portfolio] {
+        metadataManager.portfolios.filter { portfolio in
+            let stats = metadataManager.getPortfolioStats(portfolio)
+            return stats.fulfilled < stats.total || stats.total == 0
+        }.sorted { p1, p2 in
+            // Sort by due date (soonest first), then by name
+            guard let d1 = p1.dueDate else { return false }
+            guard let d2 = p2.dueDate else { return true }
+            return d1 < d2
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             DPSectionHeader(
                 "Active Portfolios",
-                actionTitle: "View All"
+                actionTitle: "See All"
             ) {
-                // Navigate to portfolios
+                router.selectedTab = .profile // Or dedicated portfolios tab
             }
             .padding(.horizontal, AppTheme.Spacing.md)
 
-            // Placeholder content
-            DPCard {
-                Text("Active Portfolios Section")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 100)
+            if activePortfolios.isEmpty {
+                // Empty state card
+                DPCard {
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 32))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+
+                        Text("No active portfolios")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+
+                        DPButton("Create Portfolio", style: .secondary, size: .small) {
+                            // TODO: Show create portfolio sheet
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.md)
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            } else {
+                // Horizontal scroll of portfolio cards
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppTheme.Spacing.md) {
+                        ForEach(activePortfolios) { portfolio in
+                            PortfolioPreviewCard(portfolio: portfolio) {
+                                router.navigateToPortfolio(id: portfolio.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
         }
+    }
+}
+
+// MARK: - Portfolio Preview Card
+
+/// A card showing portfolio summary with progress ring
+struct PortfolioPreviewCard: View {
+    let portfolio: Portfolio
+    let onTap: () -> Void
+
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var isPressed = false
+
+    var stats: (fulfilled: Int, total: Int) {
+        metadataManager.getPortfolioStats(portfolio)
+    }
+
+    var completionPercentage: Double {
+        guard stats.total > 0 else { return 0 }
+        return Double(stats.fulfilled) / Double(stats.total)
+    }
+
+    var dueStatus: (text: String, color: Color) {
+        guard let days = portfolio.daysUntilDue else {
+            return ("No deadline", AppTheme.Colors.textTertiary)
+        }
+
+        if days < 0 {
+            return ("Overdue by \(abs(days))d", AppTheme.Colors.error)
+        } else if days == 0 {
+            return ("Due today", AppTheme.Colors.error)
+        } else if days == 1 {
+            return ("Due tomorrow", AppTheme.Colors.warning)
+        } else if days <= 7 {
+            return ("Due in \(days) days", AppTheme.Colors.warning)
+        } else {
+            return ("Due in \(days) days", AppTheme.Colors.textSecondary)
+        }
+    }
+
+    var progressColor: Color {
+        if completionPercentage >= 1.0 { return AppTheme.Colors.success }
+        if completionPercentage >= 0.75 { return AppTheme.Colors.success }
+        if completionPercentage >= 0.5 { return AppTheme.Colors.warning }
+        if completionPercentage >= 0.25 { return Color(hex: "F97316") } // Orange
+        return AppTheme.Colors.error
+    }
+
+    var body: some View {
+        Button(action: {
+            HapticsManager.shared.lightTap()
+            onTap()
+        }) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                // Header: Name and created date
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    Text(portfolio.name)
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    Text("Created \(portfolio.dateString)")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+
+                // Progress section
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // Progress ring
+                    DPProgressRing(
+                        progress: completionPercentage,
+                        size: 70,
+                        lineWidth: 6,
+                        showLabel: true,
+                        labelStyle: .fraction(current: stats.fulfilled, total: stats.total)
+                    )
+
+                    // Stats
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                        Text(String(format: "%.0f%%", completionPercentage * 100))
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(progressColor)
+
+                        Text("complete")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+
+                Divider()
+
+                // Due date status
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+
+                    Text(dueStatus.text)
+                        .font(AppTheme.Typography.caption)
+                }
+                .foregroundColor(dueStatus.color)
+
+                // Missing count
+                if stats.total - stats.fulfilled > 0 {
+                    Text("\(stats.total - stats.fulfilled) photos needed")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+            .padding(AppTheme.Spacing.md)
+            .frame(width: 260)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.large)
+            .shadowMedium()
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 

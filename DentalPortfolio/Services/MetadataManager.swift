@@ -103,18 +103,63 @@ class MetadataManager: ObservableObject {
         procedures = Self.baseProcedures
     }
 
-    // MARK: - Portfolio Methods (Placeholder)
+    // MARK: - Portfolio Methods
+
+    /// Portfolio statistics tuple
+    typealias PortfolioStats = (fulfilled: Int, total: Int)
+
+    /// Get statistics for a portfolio (fulfilled vs total requirements)
+    /// - Parameter portfolio: The portfolio to get stats for
+    /// - Returns: Tuple of (fulfilled count, total required count)
+    func getPortfolioStats(_ portfolio: Portfolio) -> PortfolioStats {
+        var totalRequired = 0
+        var fulfilledCount = 0
+
+        for requirement in portfolio.requirements {
+            let requiredForThis = requirement.totalRequired
+            totalRequired += requiredForThis
+
+            // Count matching photos for this requirement
+            for stage in requirement.stages {
+                for angle in requirement.angles {
+                    let count = requirement.angleCounts[angle] ?? 1
+                    let matchingPhotos = getMatchingPhotoCount(
+                        procedure: requirement.procedure,
+                        stage: stage,
+                        angle: angle
+                    )
+                    fulfilledCount += min(matchingPhotos, count)
+                }
+            }
+        }
+
+        return (fulfilled: fulfilledCount, total: totalRequired)
+    }
 
     /// Get completion percentage for a portfolio
     func getPortfolioCompletionPercentage(_ portfolio: Portfolio) -> Double {
-        // TODO: Implement actual calculation
-        return 0.0
+        let stats = getPortfolioStats(portfolio)
+        guard stats.total > 0 else { return 0.0 }
+        return Double(stats.fulfilled) / Double(stats.total)
     }
 
     /// Get number of fulfilled requirements for a portfolio
     func getFulfilledCount(for portfolio: Portfolio) -> Int {
-        // TODO: Implement actual count
-        return 0
+        return getPortfolioStats(portfolio).fulfilled
+    }
+
+    /// Count photos matching specific criteria
+    /// - Parameters:
+    ///   - procedure: Procedure type to match
+    ///   - stage: Stage to match
+    ///   - angle: Angle to match
+    /// - Returns: Number of matching photos
+    func getMatchingPhotoCount(procedure: String, stage: String, angle: String) -> Int {
+        return assetMetadata.values.filter { metadata in
+            metadata.procedure == procedure &&
+            metadata.stage == stage &&
+            metadata.angle == angle
+        }.count
     }
 
     // MARK: - Metadata Methods (Placeholder)
