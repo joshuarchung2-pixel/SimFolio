@@ -641,175 +641,329 @@ struct ProceduresListView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
-    var body: some View {
-        let filteredAssets = viewModel.filteredAssets(
-            from: library.assets,
-            metadata: metadataManager,
-            filter: router.libraryFilter
-        )
-        let procedureNames = viewModel.sortedProcedureNames(
-            from: filteredAssets,
-            metadata: metadataManager
-        )
-        let groupedAssets = viewModel.assetsByProcedure(
-            from: filteredAssets,
-            metadata: metadataManager
-        )
+    var procedureStats: [(procedure: String, count: Int, prepCount: Int, restoCount: Int)] {
+        var stats: [(String, Int, Int, Int)] = []
+        let grouped = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)
 
-        if procedureNames.isEmpty {
-            DPEmptyState(
-                icon: "photo.on.rectangle.angled",
-                title: "No Photos Yet",
-                message: "Start capturing your dental work to build your library.",
-                actionTitle: "Take Photo"
-            ) {
-                router.navigateToCapture()
+        for procedure in metadataManager.procedures {
+            let assets = grouped[procedure] ?? []
+            let prepCount = assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Preparation"
+            }.count
+            let restoCount = assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Restoration"
+            }.count
+
+            if assets.count > 0 {
+                stats.append((procedure, assets.count, prepCount, restoCount))
             }
-        } else {
-            ScrollView {
-                LazyVStack(spacing: AppTheme.Spacing.sm) {
-                    // All Photos row
-                    AllPhotosRow(
-                        photoCount: filteredAssets.count,
-                        onTap: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                viewModel.showAllPhotos()
+        }
+
+        // Add untagged if any
+        let untaggedCount = grouped["Untagged"]?.count ?? 0
+        if untaggedCount > 0 {
+            stats.append(("Untagged", untaggedCount, 0, 0))
+        }
+
+        return stats
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Quick access cards
+                quickAccessSection
+
+                // Procedure folders
+                procedureFoldersSection
+
+                Spacer(minLength: 100)
+            }
+            .padding(.top, AppTheme.Spacing.md)
+        }
+    }
+
+    // MARK: - Quick Access Section
+    var quickAccessSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            DPSectionHeader("Quick Access")
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // All Photos
+                    QuickAccessCard(
+                        icon: "photo.on.rectangle",
+                        title: "All Photos",
+                        count: library.assets.count,
+                        color: AppTheme.Colors.primary
+                    ) {
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Starred
+                    QuickAccessCard(
+                        icon: "star.fill",
+                        title: "Starred",
+                        count: starredCount,
+                        color: .yellow
+                    ) {
+                        router.libraryFilter.minimumRating = 4
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Recent (last 7 days)
+                    QuickAccessCard(
+                        icon: "clock.fill",
+                        title: "Recent",
+                        count: recentCount,
+                        color: AppTheme.Colors.success
+                    ) {
+                        router.libraryFilter.dateRange = .lastWeek
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Untagged
+                    if untaggedCount > 0 {
+                        QuickAccessCard(
+                            icon: "tag.slash",
+                            title: "Untagged",
+                            count: untaggedCount,
+                            color: AppTheme.Colors.textSecondary
+                        ) {
+                            viewModel.showProcedure("Untagged")
+                        }
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+        }
+    }
+
+    // MARK: - Procedure Folders Section
+    var procedureFoldersSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            DPSectionHeader(
+                "Procedures",
+                subtitle: "\(procedureStats.count) with photos"
+            )
+            .padding(.horizontal, AppTheme.Spacing.md)
+
+            if procedureStats.isEmpty {
+                DPEmptyState(
+                    icon: "folder",
+                    title: "No Photos Yet",
+                    message: "Captured photos will be organized here by procedure.",
+                    actionTitle: "Start Capturing"
+                ) {
+                    router.selectedTab = .capture
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            } else {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    ForEach(procedureStats, id: \.procedure) { stat in
+                        ProcedureFolderRow(
+                            procedure: stat.procedure,
+                            totalCount: stat.count,
+                            prepCount: stat.prepCount,
+                            restoCount: stat.restoCount,
+                            isSelectionMode: viewModel.isSelectionMode
+                        ) {
+                            if viewModel.isSelectionMode {
+                                // Select all in this procedure
+                                let assets = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)[stat.procedure] ?? []
+                                for asset in assets {
+                                    viewModel.selectedAssetIds.insert(asset.localIdentifier)
+                                }
+                            } else {
+                                viewModel.showProcedure(stat.procedure)
                             }
                         }
-                    )
-                    .padding(.horizontal, AppTheme.Spacing.md)
-
-                    Divider()
-                        .padding(.horizontal, AppTheme.Spacing.md)
-                        .padding(.vertical, AppTheme.Spacing.xs)
-
-                    // Procedure folders
-                    ForEach(procedureNames, id: \.self) { procedure in
-                        let assets = groupedAssets[procedure] ?? []
-                        ProcedureFolderRow(
-                            procedure: procedure,
-                            photoCount: assets.count,
-                            assets: assets,
-                            onTap: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    viewModel.showProcedure(procedure)
-                                }
-                            }
-                        )
-                        .padding(.horizontal, AppTheme.Spacing.md)
                     }
                 }
-                .padding(.vertical, AppTheme.Spacing.md)
+                .padding(.horizontal, AppTheme.Spacing.md)
             }
         }
     }
+
+    // MARK: - Computed Properties
+
+    var starredCount: Int {
+        library.assets.filter { asset in
+            (metadataManager.getRating(for: asset.localIdentifier) ?? 0) >= 4
+        }.count
+    }
+
+    var recentCount: Int {
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return library.assets.filter { $0.creationDate ?? Date() > weekAgo }.count
+    }
+
+    var untaggedCount: Int {
+        library.assets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+        }.count
+    }
 }
 
-// MARK: - AllPhotosRow
+// MARK: - Quick Access Card
 
-/// Row showing "All Photos" option with count
-struct AllPhotosRow: View {
-    let photoCount: Int
-    let onTap: () -> Void
+/// Card for quick access shortcuts (All Photos, Starred, Recent, etc.)
+struct QuickAccessCard: View {
+    let icon: String
+    let title: String
+    let count: Int
+    let color: Color
+    let action: () -> Void
+
+    @State private var isPressed = false
 
     var body: some View {
-        Button(action: onTap) {
-            DPCard(padding: AppTheme.Spacing.md, shadowStyle: .small) {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.15))
-                            .frame(width: 44, height: 44)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 44, height: 44)
 
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
-                    }
-
-                    // Text
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                        Text("All Photos")
-                            .font(AppTheme.Typography.headline)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-
-                        Text("\(photoCount) photos")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    // Chevron
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(color)
                 }
+
+                Text(title)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Text("\(count)")
+                    .font(AppTheme.Typography.title3)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
             }
+            .frame(width: 120)
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
-// MARK: - ProcedureFolderRow
+// MARK: - Procedure Folder Row
 
-/// Row displaying a procedure folder with photo count and preview thumbnails
+/// Row displaying a procedure folder with stage breakdown
 struct ProcedureFolderRow: View {
     let procedure: String
-    let photoCount: Int
-    let assets: [PHAsset]
-    let onTap: () -> Void
+    let totalCount: Int
+    let prepCount: Int
+    let restoCount: Int
+    let isSelectionMode: Bool
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var color: Color {
+        procedure == "Untagged" ? AppTheme.Colors.textSecondary : AppTheme.procedureColor(for: procedure)
+    }
 
     var body: some View {
-        Button(action: onTap) {
-            DPCard(padding: AppTheme.Spacing.md, shadowStyle: .small) {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    // Procedure color indicator
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.procedureColor(for: procedure).opacity(0.15))
-                            .frame(width: 44, height: 44)
+        Button(action: action) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                // Color indicator
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
 
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(AppTheme.procedureColor(for: procedure))
-                    }
+                // Procedure name and count
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                    Text(procedure)
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
 
-                    // Text info
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                        Text(procedure)
-                            .font(AppTheme.Typography.headline)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text("\(totalCount) photo\(totalCount == 1 ? "" : "s")")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
 
-                        Text("\(photoCount) \(photoCount == 1 ? "photo" : "photos")")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
+                Spacer()
 
-                    Spacer()
+                // Stage breakdown (mini progress bar)
+                if procedure != "Untagged" && totalCount > 0 {
+                    StageBreakdownBar(
+                        prepCount: prepCount,
+                        restoCount: restoCount,
+                        totalCount: totalCount
+                    )
+                    .frame(width: 60)
+                }
 
-                    // Preview thumbnails (up to 3)
-                    HStack(spacing: -8) {
-                        ForEach(0..<min(3, assets.count), id: \.self) { index in
-                            ThumbnailView(asset: assets[index])
-                                .frame(width: 32, height: 32)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(AppTheme.Colors.surface, lineWidth: 2)
-                                )
-                                .zIndex(Double(3 - index))
-                        }
-                    }
-
-                    // Chevron
+                // Chevron or selection indicator
+                if isSelectionMode {
+                    Image(systemName: "plus.circle")
+                        .foregroundColor(AppTheme.Colors.primary)
+                } else {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppTheme.Typography.caption)
                         .foregroundColor(AppTheme.Colors.textTertiary)
                 }
             }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+    }
+}
+
+// MARK: - Stage Breakdown Bar
+
+/// Mini progress bar showing prep/resto ratio
+struct StageBreakdownBar: View {
+    let prepCount: Int
+    let restoCount: Int
+    let totalCount: Int
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 1) {
+                // Prep portion
+                if prepCount > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.warning)
+                        .frame(width: geo.size.width * CGFloat(prepCount) / CGFloat(totalCount))
+                }
+
+                // Resto portion
+                if restoCount > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.success)
+                        .frame(width: geo.size.width * CGFloat(restoCount) / CGFloat(totalCount))
+                }
+
+                // Unassigned portion
+                let unassigned = totalCount - prepCount - restoCount
+                if unassigned > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.surfaceSecondary)
+                        .frame(width: geo.size.width * CGFloat(unassigned) / CGFloat(totalCount))
+                }
+            }
+            .cornerRadius(2)
+        }
+        .frame(height: 6)
     }
 }
 
