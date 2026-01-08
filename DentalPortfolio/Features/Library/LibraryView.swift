@@ -1,61 +1,3108 @@
 // LibraryView.swift
 // Photo library with filters and organization
 //
-// Will contain:
-//
-// LibraryView:
-// A cleaner, more modern photo library experience.
-//
-// Layout Options:
-// - Grid view (default): 3-column photo grid
-// - List view: Photos with metadata details
-// - Folder view: Organized by procedure/tooth
-//
-// Header:
-// - Search bar (filter by procedure, tooth, date)
-// - View mode toggle (grid/list/folder)
-// - Sort options (date, procedure, rating)
-// - Select mode button
-//
-// Sidebar (iPad) / Bottom Sheet (iPhone):
-// - Procedure folders with photo counts
-// - Expandable tooth subfolders
-// - Color-coded folder icons
-// - Add/rename/delete folder options
-//
-// Photo Grid:
-// - Async loading thumbnails
-// - Tag badges on thumbnails (optional)
-// - Star rating overlay
-// - Selection checkmarks in select mode
-//
-// Select Mode:
-// - Multi-select with visual feedback
-// - Floating action bar: Move, Delete, Share
-// - Select All / Deselect All
-//
-// Photo Detail:
-// - Full-screen viewer with swipe navigation
-// - Tag editor
-// - Rating widget
-// - Edit button -> PhotoEditorView
-// - Share/Delete actions
-//
-// Supporting Views:
-// - LibrarySidebar: Folder navigation
-// - PhotoGridItem: Individual photo cell
-// - PhotoDetailView: Full-screen viewer
-// - PhotoEditorView: Editing tools
-// - MoveToFolderSheet: Move photo flow
-//
-// Migration notes:
-// - Extract GalleryView from gem1 lines 3660-4370
-// - Extract StageSection, AngleStackView, ExpandedAngleView
-// - Extract PhotoDetailView from lines 5280-5579
-// - Extract PhotoEditorView from lines 5580-6155
-// - Simplify 19 @State properties with ViewModel
+// Phase 4 - Library Redesign
+// A cleaner, filter-based library view that shows:
+// - Top-level procedure folders with photo counts and stats
+// - Filter chips bar for active filters
+// - Procedure detail view with photos grouped by tooth and stage
+// - Improved photo detail view with metadata editing
 
 import SwiftUI
 import Photos
 
-// Placeholder - implementation will be refactored from gem1
+// MARK: - LibraryViewModel
+
+/// View model for LibraryView managing view state, selection, filtering, and sorting
+class LibraryViewModel: ObservableObject {
+
+    // MARK: - View Mode
+
+    /// Current view mode for the library
+    enum ViewMode: Equatable {
+        /// Top-level list of procedure folders
+        case procedures
+        /// Photos for a specific procedure
+        case procedureDetail(String)
+        /// Flat grid of all photos
+        case allPhotos
+    }
+
+    // MARK: - Sort Order
+
+    /// Sort order options for photos
+    enum SortOrder: String, CaseIterable {
+        case dateNewest = "Newest First"
+        case dateOldest = "Oldest First"
+        case procedure = "By Procedure"
+        case rating = "By Rating"
+
+        /// SF Symbol icon for the sort order
+        var icon: String {
+            switch self {
+            case .dateNewest: return "arrow.down"
+            case .dateOldest: return "arrow.up"
+            case .procedure: return "folder"
+            case .rating: return "star"
+            }
+        }
+    }
+
+    // MARK: - Published Properties
+
+    /// Current view mode
+    @Published var viewMode: ViewMode = .procedures
+
+    /// Whether selection mode is active
+    @Published var isSelectionMode: Bool = false
+
+    /// Set of selected asset identifiers
+    @Published var selectedAssetIds: Set<String> = []
+
+    /// Current sort order
+    @Published var sortOrder: SortOrder = .dateNewest
+
+    /// Loading state
+    @Published var isLoading: Bool = false
+
+    /// Search text for filtering
+    @Published var searchText: String = ""
+
+    // MARK: - Filtering Methods
+
+    /// Filter assets based on current LibraryFilter
+    /// - Parameters:
+    ///   - assets: All assets to filter
+    ///   - metadata: MetadataManager instance
+    ///   - filter: Current filter configuration
+    /// - Returns: Filtered array of assets
+    func filteredAssets(
+        from assets: [PHAsset],
+        metadata: MetadataManager,
+        filter: LibraryFilter
+    ) -> [PHAsset] {
+        var result = assets
+
+        // Filter by procedure
+        if !filter.procedures.isEmpty {
+            result = result.filter { asset in
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let procedure = m.procedure else { return false }
+                return filter.procedures.contains(procedure)
+            }
+        }
+
+        // Filter by stage
+        if !filter.stages.isEmpty {
+            result = result.filter { asset in
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let stage = m.stage else { return false }
+                return filter.stages.contains(stage)
+            }
+        }
+
+        // Filter by angle
+        if !filter.angles.isEmpty {
+            result = result.filter { asset in
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let angle = m.angle else { return false }
+                return filter.angles.contains(angle)
+            }
+        }
+
+        // Filter by minimum rating
+        if let minRating = filter.minimumRating {
+            result = result.filter { asset in
+                (metadata.getRating(for: asset.localIdentifier) ?? 0) >= minRating
+            }
+        }
+
+        // Filter by date range
+        if let dateRange = filter.dateRange {
+            let now = Date()
+            let calendar = Calendar.current
+
+            switch dateRange {
+            case .lastWeek:
+                let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= weekAgo }
+
+            case .lastMonth:
+                let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= monthAgo }
+
+            case .last3Months:
+                let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= threeMonthsAgo }
+
+            case .lastYear:
+                let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= yearAgo }
+
+            case .custom(let start, let end):
+                result = result.filter { asset in
+                    guard let date = asset.creationDate else { return false }
+                    return date >= start && date <= end
+                }
+            }
+        }
+
+        // Filter by portfolio (assets matching portfolio requirements)
+        if let portfolioId = filter.portfolioId {
+            if let portfolio = metadata.portfolios.first(where: { $0.id == portfolioId }) {
+                let proceduresInPortfolio = Set(portfolio.requirements.map { $0.procedure })
+                result = result.filter { asset in
+                    guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                          let procedure = m.procedure else { return false }
+                    return proceduresInPortfolio.contains(procedure)
+                }
+            }
+        }
+
+        // Apply search text
+        if !searchText.isEmpty {
+            let searchLower = searchText.lowercased()
+            result = result.filter { asset in
+                guard let meta = metadata.getMetadata(for: asset.localIdentifier) else {
+                    return false
+                }
+                if let procedure = meta.procedure, procedure.lowercased().contains(searchLower) {
+                    return true
+                }
+                if let stage = meta.stage, stage.lowercased().contains(searchLower) {
+                    return true
+                }
+                if let angle = meta.angle, angle.lowercased().contains(searchLower) {
+                    return true
+                }
+                if let toothNumber = meta.toothNumber, "\(toothNumber)".contains(searchLower) {
+                    return true
+                }
+                return false
+            }
+        }
+
+        // Sort
+        switch sortOrder {
+        case .dateNewest:
+            result.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
+        case .dateOldest:
+            result.sort { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+        case .procedure:
+            result.sort { asset1, asset2 in
+                let p1 = metadata.getMetadata(for: asset1.localIdentifier)?.procedure ?? ""
+                let p2 = metadata.getMetadata(for: asset2.localIdentifier)?.procedure ?? ""
+                return p1 < p2
+            }
+        case .rating:
+            result.sort { asset1, asset2 in
+                let r1 = metadata.getRating(for: asset1.localIdentifier) ?? 0
+                let r2 = metadata.getRating(for: asset2.localIdentifier) ?? 0
+                return r1 > r2
+            }
+        }
+
+        return result
+    }
+
+    // MARK: - Grouping Methods
+
+    /// Group assets by procedure type
+    /// - Parameters:
+    ///   - assets: Assets to group
+    ///   - metadata: MetadataManager instance
+    /// - Returns: Dictionary of procedure name to assets
+    func assetsByProcedure(
+        from assets: [PHAsset],
+        metadata: MetadataManager
+    ) -> [String: [PHAsset]] {
+        var grouped: [String: [PHAsset]] = [:]
+
+        for asset in assets {
+            let procedure: String
+            if let meta = metadata.getMetadata(for: asset.localIdentifier),
+               let proc = meta.procedure {
+                procedure = proc
+            } else {
+                procedure = "Untagged"
+            }
+
+            if grouped[procedure] == nil {
+                grouped[procedure] = []
+            }
+            grouped[procedure]?.append(asset)
+        }
+
+        return grouped
+    }
+
+    /// Get sorted list of procedure names for display
+    /// - Parameters:
+    ///   - assets: Assets to analyze
+    ///   - metadata: MetadataManager instance
+    /// - Returns: Sorted array of procedure names
+    func sortedProcedureNames(
+        from assets: [PHAsset],
+        metadata: MetadataManager
+    ) -> [String] {
+        let grouped = assetsByProcedure(from: assets, metadata: metadata)
+        var names = Array(grouped.keys)
+
+        // Sort with base procedures first, then alphabetically, with Untagged last
+        names.sort { name1, name2 in
+            if name1 == "Untagged" { return false }
+            if name2 == "Untagged" { return true }
+
+            let baseProcs = MetadataManager.baseProcedures
+            let isBase1 = baseProcs.contains(name1)
+            let isBase2 = baseProcs.contains(name2)
+
+            if isBase1 && !isBase2 { return true }
+            if !isBase1 && isBase2 { return false }
+
+            return name1 < name2
+        }
+
+        return names
+    }
+
+    // MARK: - Selection Methods
+
+    /// Toggle selection state for an asset
+    /// - Parameter assetId: The asset's local identifier
+    func toggleSelection(for assetId: String) {
+        if selectedAssetIds.contains(assetId) {
+            selectedAssetIds.remove(assetId)
+        } else {
+            selectedAssetIds.insert(assetId)
+        }
+    }
+
+    /// Select all provided assets
+    /// - Parameter assets: Assets to select
+    func selectAll(assets: [PHAsset]) {
+        selectedAssetIds = Set(assets.map { $0.localIdentifier })
+    }
+
+    /// Clear all selections
+    func clearSelection() {
+        selectedAssetIds.removeAll()
+    }
+
+    /// Exit selection mode and clear selections
+    func exitSelectionMode() {
+        isSelectionMode = false
+        selectedAssetIds.removeAll()
+    }
+
+    // MARK: - Navigation Methods
+
+    /// Navigate to procedure detail view
+    /// - Parameter procedure: The procedure name to show
+    func showProcedure(_ procedure: String) {
+        viewMode = .procedureDetail(procedure)
+    }
+
+    /// Navigate to all photos grid view
+    func showAllPhotos() {
+        viewMode = .allPhotos
+    }
+
+    /// Go back to procedures list
+    func goBack() {
+        viewMode = .procedures
+        exitSelectionMode()
+    }
+}
+
+// MARK: - LibraryView
+
+/// Main library view with procedure folders, filters, and photo organization
+struct LibraryView: View {
+    @EnvironmentObject var router: NavigationRouter
+    @StateObject private var viewModel = LibraryViewModel()
+    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var showFilterSheet = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppTheme.Colors.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Filter chips bar (only if filters active)
+                    if !router.libraryFilter.isEmpty {
+                        FilterChipsBar(filter: $router.libraryFilter)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    // Content based on view mode
+                    Group {
+                        switch viewModel.viewMode {
+                        case .procedures:
+                            ProceduresListView(viewModel: viewModel)
+                        case .procedureDetail(let procedure):
+                            ProcedureDetailView(procedure: procedure, viewModel: viewModel)
+                        case .allPhotos:
+                            AllPhotosGridView(viewModel: viewModel)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.viewMode)
+
+                    // Selection action bar (only in selection mode)
+                    if viewModel.isSelectionMode {
+                        SelectionActionBar(
+                            selectedCount: viewModel.selectedAssetIds.count,
+                            onDelete: handleDeleteSelected,
+                            onShare: handleShareSelected,
+                            onAddToPortfolio: handleAddToPortfolio
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+            }
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if viewModel.viewMode != .procedures {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewModel.goBack()
+                            }
+                        }) {
+                            HStack(spacing: AppTheme.Spacing.xs) {
+                                Image(systemName: "chevron.left")
+                                Text("Library")
+                            }
+                            .foregroundColor(AppTheme.Colors.primary)
+                        }
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        // Filter button
+                        Button(action: { showFilterSheet = true }) {
+                            Image(systemName: router.libraryFilter.isEmpty
+                                  ? "line.3.horizontal.decrease.circle"
+                                  : "line.3.horizontal.decrease.circle.fill")
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+
+                        // Sort menu
+                        Menu {
+                            ForEach(LibraryViewModel.SortOrder.allCases, id: \.self) { order in
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.sortOrder = order
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: order.icon)
+                                        Text(order.rawValue)
+                                        if viewModel.sortOrder == order {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+
+                        // Selection mode toggle
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if viewModel.isSelectionMode {
+                                    viewModel.exitSelectionMode()
+                                } else {
+                                    viewModel.isSelectionMode = true
+                                }
+                            }
+                        }) {
+                            Text(viewModel.isSelectionMode ? "Done" : "Select")
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showFilterSheet) {
+                LibraryFilterSheet(filter: $router.libraryFilter)
+            }
+            .onAppear {
+                library.fetchAssets()
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    // MARK: - Computed Properties
+
+    /// Navigation title based on current view mode
+    var navigationTitle: String {
+        switch viewModel.viewMode {
+        case .procedures:
+            return "Library"
+        case .procedureDetail(let procedure):
+            return procedure
+        case .allPhotos:
+            return "All Photos"
+        }
+    }
+
+    // MARK: - Action Handlers
+
+    /// Handle deletion of selected assets
+    func handleDeleteSelected() {
+        // TODO: Implement delete confirmation and action
+        print("Delete \(viewModel.selectedAssetIds.count) selected photos")
+    }
+
+    /// Handle sharing of selected assets
+    func handleShareSelected() {
+        // TODO: Implement share sheet
+        let ids = Array(viewModel.selectedAssetIds)
+        router.presentSheet(.shareSheet(photoIds: ids))
+    }
+
+    /// Handle adding selected assets to a portfolio
+    func handleAddToPortfolio() {
+        // TODO: Implement portfolio selection sheet
+        print("Add \(viewModel.selectedAssetIds.count) photos to portfolio")
+    }
+}
+
+// MARK: - FilterChipsBar
+
+/// Horizontal bar displaying active filter chips that can be removed
+struct FilterChipsBar: View {
+    @Binding var filter: LibraryFilter
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                // Procedure chips
+                ForEach(Array(filter.procedures), id: \.self) { procedure in
+                    FilterChip(
+                        text: procedure,
+                        color: AppTheme.procedureColor(for: procedure),
+                        onRemove: {
+                            filter.procedures.remove(procedure)
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Stage chips
+                ForEach(Array(filter.stages), id: \.self) { stage in
+                    FilterChip(
+                        text: stage,
+                        color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                        onRemove: {
+                            filter.stages.remove(stage)
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Angle chips
+                ForEach(Array(filter.angles), id: \.self) { angle in
+                    FilterChip(
+                        text: angle,
+                        color: .purple,
+                        onRemove: {
+                            filter.angles.remove(angle)
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Rating chip
+                if let minRating = filter.minimumRating {
+                    FilterChip(
+                        text: "\(minRating)+ Stars",
+                        color: .yellow,
+                        onRemove: {
+                            filter.minimumRating = nil
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Date range chip
+                if let dateRange = filter.dateRange {
+                    FilterChip(
+                        text: dateRangeText(dateRange),
+                        color: AppTheme.Colors.primary,
+                        onRemove: {
+                            filter.dateRange = nil
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Portfolio chip
+                if filter.portfolioId != nil {
+                    FilterChip(
+                        text: "Portfolio",
+                        color: AppTheme.Colors.primary,
+                        onRemove: {
+                            filter.portfolioId = nil
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Clear all button (if multiple filters)
+                if filter.activeFilterCount > 1 {
+                    Button(action: {
+                        filter.reset()
+                        HapticsManager.shared.lightTap()
+                    }) {
+                        Text("Clear All")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.error)
+                            .padding(.horizontal, AppTheme.Spacing.sm)
+                            .padding(.vertical, AppTheme.Spacing.xs)
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+        }
+        .background(AppTheme.Colors.surface)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 2)
+    }
+
+    func dateRangeText(_ range: LibraryFilter.DateRange) -> String {
+        switch range {
+        case .lastWeek:
+            return "Last 7 Days"
+        case .lastMonth:
+            return "Last 30 Days"
+        case .last3Months:
+            return "Last 3 Months"
+        case .lastYear:
+            return "Last Year"
+        case .custom(let start, let end):
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        }
+    }
+}
+
+// MARK: - FilterChip
+
+/// Individual filter chip with colored dot and remove button
+struct FilterChip: View {
+    let text: String
+    let color: Color
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+
+            Text(text)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.xs)
+        .background(color.opacity(0.15))
+        .cornerRadius(AppTheme.CornerRadius.full)
+    }
+}
+
+// MARK: - ProceduresListView
+
+/// List view showing procedure folders with photo counts and stats
+struct ProceduresListView: View {
+    @ObservedObject var viewModel: LibraryViewModel
+    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @EnvironmentObject var router: NavigationRouter
+
+    var procedureStats: [(procedure: String, count: Int, prepCount: Int, restoCount: Int)] {
+        var stats: [(String, Int, Int, Int)] = []
+        let grouped = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)
+
+        for procedure in metadataManager.procedures {
+            let assets = grouped[procedure] ?? []
+            let prepCount = assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Preparation"
+            }.count
+            let restoCount = assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Restoration"
+            }.count
+
+            if assets.count > 0 {
+                stats.append((procedure, assets.count, prepCount, restoCount))
+            }
+        }
+
+        // Add untagged if any
+        let untaggedCount = grouped["Untagged"]?.count ?? 0
+        if untaggedCount > 0 {
+            stats.append(("Untagged", untaggedCount, 0, 0))
+        }
+
+        return stats
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Quick access cards
+                quickAccessSection
+
+                // Procedure folders
+                procedureFoldersSection
+
+                Spacer(minLength: 100)
+            }
+            .padding(.top, AppTheme.Spacing.md)
+        }
+    }
+
+    // MARK: - Quick Access Section
+    var quickAccessSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            DPSectionHeader("Quick Access")
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // All Photos
+                    QuickAccessCard(
+                        icon: "photo.on.rectangle",
+                        title: "All Photos",
+                        count: library.assets.count,
+                        color: AppTheme.Colors.primary
+                    ) {
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Starred
+                    QuickAccessCard(
+                        icon: "star.fill",
+                        title: "Starred",
+                        count: starredCount,
+                        color: .yellow
+                    ) {
+                        router.libraryFilter.minimumRating = 4
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Recent (last 7 days)
+                    QuickAccessCard(
+                        icon: "clock.fill",
+                        title: "Recent",
+                        count: recentCount,
+                        color: AppTheme.Colors.success
+                    ) {
+                        router.libraryFilter.dateRange = .lastWeek
+                        viewModel.showAllPhotos()
+                    }
+
+                    // Untagged
+                    if untaggedCount > 0 {
+                        QuickAccessCard(
+                            icon: "tag.slash",
+                            title: "Untagged",
+                            count: untaggedCount,
+                            color: AppTheme.Colors.textSecondary
+                        ) {
+                            viewModel.showProcedure("Untagged")
+                        }
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+        }
+    }
+
+    // MARK: - Procedure Folders Section
+    var procedureFoldersSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            DPSectionHeader(
+                "Procedures",
+                subtitle: "\(procedureStats.count) with photos"
+            )
+            .padding(.horizontal, AppTheme.Spacing.md)
+
+            if procedureStats.isEmpty {
+                DPEmptyState(
+                    icon: "folder",
+                    title: "No Photos Yet",
+                    message: "Captured photos will be organized here by procedure.",
+                    actionTitle: "Start Capturing"
+                ) {
+                    router.selectedTab = .capture
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            } else {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    ForEach(procedureStats, id: \.procedure) { stat in
+                        ProcedureFolderRow(
+                            procedure: stat.procedure,
+                            totalCount: stat.count,
+                            prepCount: stat.prepCount,
+                            restoCount: stat.restoCount,
+                            isSelectionMode: viewModel.isSelectionMode
+                        ) {
+                            if viewModel.isSelectionMode {
+                                // Select all in this procedure
+                                let assets = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)[stat.procedure] ?? []
+                                for asset in assets {
+                                    viewModel.selectedAssetIds.insert(asset.localIdentifier)
+                                }
+                            } else {
+                                viewModel.showProcedure(stat.procedure)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    var starredCount: Int {
+        library.assets.filter { asset in
+            (metadataManager.getRating(for: asset.localIdentifier) ?? 0) >= 4
+        }.count
+    }
+
+    var recentCount: Int {
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return library.assets.filter { $0.creationDate ?? Date() > weekAgo }.count
+    }
+
+    var untaggedCount: Int {
+        library.assets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+        }.count
+    }
+}
+
+// MARK: - Quick Access Card
+
+/// Card for quick access shortcuts (All Photos, Starred, Recent, etc.)
+struct QuickAccessCard: View {
+    let icon: String
+    let title: String
+    let count: Int
+    let color: Color
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(color)
+                }
+
+                Text(title)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Text("\(count)")
+                    .font(AppTheme.Typography.title3)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .frame(width: 120)
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+    }
+}
+
+// MARK: - Procedure Folder Row
+
+/// Row displaying a procedure folder with stage breakdown
+struct ProcedureFolderRow: View {
+    let procedure: String
+    let totalCount: Int
+    let prepCount: Int
+    let restoCount: Int
+    let isSelectionMode: Bool
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var color: Color {
+        procedure == "Untagged" ? AppTheme.Colors.textSecondary : AppTheme.procedureColor(for: procedure)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                // Color indicator
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+
+                // Procedure name and count
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                    Text(procedure)
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+
+                    Text("\(totalCount) photo\(totalCount == 1 ? "" : "s")")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                // Stage breakdown (mini progress bar)
+                if procedure != "Untagged" && totalCount > 0 {
+                    StageBreakdownBar(
+                        prepCount: prepCount,
+                        restoCount: restoCount,
+                        totalCount: totalCount
+                    )
+                    .frame(width: 60)
+                }
+
+                // Chevron or selection indicator
+                if isSelectionMode {
+                    Image(systemName: "plus.circle")
+                        .foregroundColor(AppTheme.Colors.primary)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+    }
+}
+
+// MARK: - Stage Breakdown Bar
+
+/// Mini progress bar showing prep/resto ratio
+struct StageBreakdownBar: View {
+    let prepCount: Int
+    let restoCount: Int
+    let totalCount: Int
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 1) {
+                // Prep portion
+                if prepCount > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.warning)
+                        .frame(width: geo.size.width * CGFloat(prepCount) / CGFloat(totalCount))
+                }
+
+                // Resto portion
+                if restoCount > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.success)
+                        .frame(width: geo.size.width * CGFloat(restoCount) / CGFloat(totalCount))
+                }
+
+                // Unassigned portion
+                let unassigned = totalCount - prepCount - restoCount
+                if unassigned > 0 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.surfaceSecondary)
+                        .frame(width: geo.size.width * CGFloat(unassigned) / CGFloat(totalCount))
+                }
+            }
+            .cornerRadius(2)
+        }
+        .frame(height: 6)
+    }
+}
+
+// MARK: - ThumbnailView
+
+/// Async thumbnail loader for PHAsset
+struct ThumbnailView: View {
+    let asset: PHAsset
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(AppTheme.Colors.surfaceSecondary)
+                    .overlay(
+                        ProgressView()
+                            .scaleEffect(0.5)
+                    )
+            }
+        }
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        PhotoLibraryManager.shared.requestThumbnail(for: asset, size: CGSize(width: 100, height: 100)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - ProcedureDetailView
+
+/// Detail view showing photos for a specific procedure, grouped by tooth and stage
+struct ProcedureDetailView: View {
+    let procedure: String
+    @ObservedObject var viewModel: LibraryViewModel
+    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @EnvironmentObject var router: NavigationRouter
+
+    @State private var viewStyle: ViewStyle = .grouped
+    @State private var expandedTeeth: Set<Int> = []
+    @State private var selectedPhotoId: String? = nil
+
+    enum ViewStyle {
+        case grouped  // Grouped by tooth
+        case grid     // Flat grid
+    }
+
+    var procedureAssets: [PHAsset] {
+        if procedure == "Untagged" {
+            return library.assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+            }
+        } else {
+            return library.assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == procedure
+            }
+        }
+    }
+
+    var assetsByTooth: [Int: [PHAsset]] {
+        var grouped: [Int: [PHAsset]] = [:]
+
+        for asset in procedureAssets {
+            let toothNumber = metadataManager.getMetadata(for: asset.localIdentifier)?.toothNumber ?? 0
+            grouped[toothNumber, default: []].append(asset)
+        }
+
+        return grouped
+    }
+
+    var sortedToothNumbers: [Int] {
+        assetsByTooth.keys.sorted()
+    }
+
+    var prepCount: Int {
+        procedureAssets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Preparation"
+        }.count
+    }
+
+    var restoCount: Int {
+        procedureAssets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Restoration"
+        }.count
+    }
+
+    var body: some View {
+        if procedureAssets.isEmpty {
+            DPEmptyState(
+                icon: "folder",
+                title: "No Photos",
+                message: "No photos found for \(procedure).",
+                actionTitle: "Take Photo"
+            ) {
+                router.navigateToCapture(procedure: procedure)
+            }
+        } else {
+            ScrollView {
+                VStack(spacing: AppTheme.Spacing.lg) {
+                    // Stats header
+                    statsHeader
+
+                    // View style toggle
+                    viewStyleToggle
+
+                    // Content
+                    if viewStyle == .grouped {
+                        groupedContent
+                    } else {
+                        gridContent
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.top, AppTheme.Spacing.md)
+            }
+            .sheet(item: $selectedPhotoId) { photoId in
+                PhotoDetailSheet(
+                    photoId: photoId,
+                    allAssets: procedureAssets,
+                    onDismiss: { selectedPhotoId = nil }
+                )
+            }
+        }
+    }
+
+    // MARK: - Stats Header
+    var statsHeader: some View {
+        DPCard {
+            HStack(spacing: AppTheme.Spacing.lg) {
+                StatItem(
+                    value: "\(procedureAssets.count)",
+                    label: "Photos",
+                    color: AppTheme.procedureColor(for: procedure)
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(assetsByTooth.count)",
+                    label: "Teeth",
+                    color: AppTheme.Colors.success
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(prepCount)",
+                    label: "Prep",
+                    color: AppTheme.Colors.warning
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(restoCount)",
+                    label: "Resto",
+                    color: AppTheme.Colors.success
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - View Style Toggle
+    var viewStyleToggle: some View {
+        HStack {
+            Spacer()
+
+            Picker("View Style", selection: $viewStyle) {
+                Image(systemName: "list.bullet").tag(ViewStyle.grouped)
+                Image(systemName: "square.grid.2x2").tag(ViewStyle.grid)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .frame(width: 100)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Grouped Content
+    var groupedContent: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            ForEach(sortedToothNumbers, id: \.self) { toothNumber in
+                ToothGroupSection(
+                    toothNumber: toothNumber,
+                    assets: assetsByTooth[toothNumber] ?? [],
+                    isExpanded: expandedTeeth.contains(toothNumber),
+                    isSelectionMode: viewModel.isSelectionMode,
+                    selectedIds: viewModel.selectedAssetIds,
+                    onToggleExpand: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if expandedTeeth.contains(toothNumber) {
+                                expandedTeeth.remove(toothNumber)
+                            } else {
+                                expandedTeeth.insert(toothNumber)
+                            }
+                        }
+                    },
+                    onSelectAsset: { assetId in
+                        if viewModel.isSelectionMode {
+                            viewModel.toggleSelection(for: assetId)
+                        } else {
+                            selectedPhotoId = assetId
+                        }
+                    },
+                    metadataManager: metadataManager
+                )
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Grid Content
+    var gridContent: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+            spacing: AppTheme.Spacing.xs
+        ) {
+            ForEach(procedureAssets, id: \.localIdentifier) { asset in
+                LibraryPhotoThumbnail(
+                    asset: asset,
+                    isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                    isSelectionMode: viewModel.isSelectionMode
+                ) {
+                    if viewModel.isSelectionMode {
+                        viewModel.toggleSelection(for: asset.localIdentifier)
+                    } else {
+                        selectedPhotoId = asset.localIdentifier
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+}
+
+// MARK: - Stat Item
+
+/// Individual stat display for the procedure header
+struct StatItem: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.xxs) {
+            Text(value)
+                .font(AppTheme.Typography.title2)
+                .foregroundColor(color)
+
+            Text(label)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+    }
+}
+
+// MARK: - Tooth Group Section
+
+/// Expandable section showing photos grouped by tooth number
+struct ToothGroupSection: View {
+    let toothNumber: Int
+    let assets: [PHAsset]
+    let isExpanded: Bool
+    let isSelectionMode: Bool
+    let selectedIds: Set<String>
+    let onToggleExpand: () -> Void
+    let onSelectAsset: (String) -> Void
+    @ObservedObject var metadataManager: MetadataManager
+
+    var toothLabel: String {
+        toothNumber == 0 ? "No Tooth Assigned" : "Tooth #\(toothNumber)"
+    }
+
+    var prepAssets: [PHAsset] {
+        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.stage == "Preparation" }
+    }
+
+    var restoAssets: [PHAsset] {
+        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.stage == "Restoration" }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header row
+            Button(action: onToggleExpand) {
+                HStack {
+                    // Tooth icon
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .frame(width: 36, height: 36)
+
+                        Text(toothNumber == 0 ? "?" : "\(toothNumber)")
+                            .font(AppTheme.Typography.headline)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    }
+
+                    // Tooth label and count
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                        Text(toothLabel)
+                            .font(AppTheme.Typography.headline)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+
+                        HStack(spacing: AppTheme.Spacing.sm) {
+                            if !prepAssets.isEmpty {
+                                Text("\(prepAssets.count) Prep")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.warning)
+                            }
+                            if !restoAssets.isEmpty {
+                                Text("\(restoAssets.count) Resto")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.success)
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    // Thumbnail preview (when collapsed)
+                    if !isExpanded {
+                        HStack(spacing: -8) {
+                            ForEach(assets.prefix(3), id: \.localIdentifier) { asset in
+                                AsyncThumbnailView(asset: asset, size: CGSize(width: 32, height: 32))
+                                    .frame(width: 32, height: 32)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(AppTheme.Colors.surface, lineWidth: 2)
+                                    )
+                            }
+                        }
+                    }
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+                .padding(AppTheme.Spacing.md)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // Expanded content
+            if isExpanded {
+                VStack(spacing: AppTheme.Spacing.md) {
+                    // Preparation photos
+                    if !prepAssets.isEmpty {
+                        StagePhotoGrid(
+                            stage: "Preparation",
+                            assets: prepAssets,
+                            isSelectionMode: isSelectionMode,
+                            selectedIds: selectedIds,
+                            onSelectAsset: onSelectAsset,
+                            metadataManager: metadataManager
+                        )
+                    }
+
+                    // Restoration photos
+                    if !restoAssets.isEmpty {
+                        StagePhotoGrid(
+                            stage: "Restoration",
+                            assets: restoAssets,
+                            isSelectionMode: isSelectionMode,
+                            selectedIds: selectedIds,
+                            onSelectAsset: onSelectAsset,
+                            metadataManager: metadataManager
+                        )
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.bottom, AppTheme.Spacing.md)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(AppTheme.CornerRadius.medium)
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - Stage Photo Grid
+
+/// Grid of photos for a specific stage (Preparation or Restoration)
+struct StagePhotoGrid: View {
+    let stage: String
+    let assets: [PHAsset]
+    let isSelectionMode: Bool
+    let selectedIds: Set<String>
+    let onSelectAsset: (String) -> Void
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            // Stage label
+            HStack {
+                Circle()
+                    .fill(stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success)
+                    .frame(width: 8, height: 8)
+
+                Text(stage)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            // Photo grid
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                spacing: AppTheme.Spacing.xs
+            ) {
+                ForEach(assets, id: \.localIdentifier) { asset in
+                    LibraryPhotoThumbnail(
+                        asset: asset,
+                        isSelected: selectedIds.contains(asset.localIdentifier),
+                        isSelectionMode: isSelectionMode
+                    ) {
+                        onSelectAsset(asset.localIdentifier)
+                    }
+                    .aspectRatio(1, contentMode: .fill)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Library Photo Thumbnail
+
+/// Photo thumbnail with selection overlay and rating badge
+struct LibraryPhotoThumbnail: View {
+    let asset: PHAsset
+    let isSelected: Bool
+    let isSelectionMode: Bool
+    let onTap: () -> Void
+
+    @State private var image: UIImage?
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    var rating: Int {
+        metadataManager.getRating(for: asset.localIdentifier) ?? 0
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .topTrailing) {
+                // Thumbnail
+                Group {
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
+
+                // Selection indicator
+                if isSelectionMode {
+                    ZStack {
+                        Circle()
+                            .fill(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.8))
+                            .frame(width: 24, height: 24)
+
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        } else {
+                            Circle()
+                                .stroke(AppTheme.Colors.textTertiary, lineWidth: 1.5)
+                                .frame(width: 22, height: 22)
+                        }
+                    }
+                    .padding(4)
+                }
+
+                // Rating stars (bottom left)
+                if !isSelectionMode && rating > 0 {
+                    HStack(spacing: 1) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8))
+                        Text("\(rating)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(4)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        PhotoLibraryManager.shared.requestThumbnail(for: asset, size: CGSize(width: 150, height: 150)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - Async Thumbnail View
+
+/// Async thumbnail loader for smaller preview images
+struct AsyncThumbnailView: View {
+    let asset: PHAsset
+    let size: CGSize
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(AppTheme.Colors.surfaceSecondary)
+            }
+        }
+        .onAppear {
+            PhotoLibraryManager.shared.requestThumbnail(for: asset, size: size) { loadedImage in
+                self.image = loadedImage
+            }
+        }
+    }
+}
+
+// MARK: - Photo Detail Sheet
+
+/// Sheet wrapper for photo detail view - presents PhotoDetailView in fullscreen
+struct PhotoDetailSheet: View {
+    let photoId: String
+    let allAssets: [PHAsset]
+    let onDismiss: () -> Void
+
+    @State private var isPresented = true
+
+    var body: some View {
+        if let asset = allAssets.first(where: { $0.localIdentifier == photoId }) {
+            PhotoDetailView(
+                asset: asset,
+                allAssets: allAssets,
+                isPresented: $isPresented
+            )
+            .onChange(of: isPresented) { _, newValue in
+                if !newValue {
+                    onDismiss()
+                }
+            }
+        } else {
+            Text("Photo not found")
+        }
+    }
+}
+
+// MARK: - Photo Detail View
+
+/// Full-screen photo viewer with swipe navigation and metadata editing
+struct PhotoDetailView: View {
+    let asset: PHAsset
+    let allAssets: [PHAsset]
+    @Binding var isPresented: Bool
+
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var currentIndex: Int = 0
+    @State private var image: UIImage?
+    @State private var isImmersiveMode = false
+    @State private var showMetadataEditor = false
+    @State private var showDeleteConfirmation = false
+    @State private var showShareSheet = false
+    @State private var dragOffset: CGSize = .zero
+
+    var currentAsset: PHAsset {
+        allAssets.indices.contains(currentIndex) ? allAssets[currentIndex] : asset
+    }
+
+    var currentMetadata: PhotoMetadata? {
+        metadataManager.getMetadata(for: currentAsset.localIdentifier)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Background
+                Color.black.ignoresSafeArea()
+
+                // Photo with gestures
+                photoView(geometry: geometry)
+
+                // UI overlays (hidden in immersive mode)
+                if !isImmersiveMode {
+                    VStack {
+                        // Top bar
+                        topBar
+
+                        Spacer()
+
+                        // Bottom metadata card
+                        metadataCard
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+        .statusBar(hidden: isImmersiveMode)
+        .onAppear {
+            currentIndex = allAssets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier }) ?? 0
+            loadFullImage()
+        }
+        .onChange(of: currentIndex) { _, _ in
+            loadFullImage()
+        }
+        .sheet(isPresented: $showMetadataEditor) {
+            PhotoMetadataEditSheet(
+                asset: currentAsset,
+                isPresented: $showMetadataEditor
+            )
+        }
+        .alert("Delete Photo?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteCurrentPhoto()
+            }
+        } message: {
+            Text("This will permanently delete the photo from your library.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let image = image {
+                ShareSheet(items: [image])
+            }
+        }
+    }
+
+    // MARK: - Photo View
+
+    func photoView(geometry: GeometryProxy) -> some View {
+        TabView(selection: $currentIndex) {
+            ForEach(Array(allAssets.enumerated()), id: \.element.localIdentifier) { index, photoAsset in
+                ZoomablePhotoView(asset: photoAsset)
+                    .tag(index)
+            }
+        }
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        .offset(y: dragOffset.height)
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if abs(value.translation.height) > abs(value.translation.width) {
+                        dragOffset = value.translation
+                    }
+                }
+                .onEnded { value in
+                    if abs(value.translation.height) > 100 {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            isPresented = false
+                        }
+                    } else {
+                        withAnimation(.spring()) {
+                            dragOffset = .zero
+                        }
+                    }
+                }
+        )
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isImmersiveMode.toggle()
+            }
+        }
+    }
+
+    // MARK: - Top Bar
+
+    var topBar: some View {
+        HStack {
+            // Close button
+            Button(action: { isPresented = false }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+
+            Spacer()
+
+            // Photo counter
+            Text("\(currentIndex + 1) / \(allAssets.count)")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.xs)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(AppTheme.CornerRadius.full)
+
+            Spacer()
+
+            // Actions menu
+            Menu {
+                Button(action: { showShareSheet = true }) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+
+                Button(action: { showMetadataEditor = true }) {
+                    Label("Edit Tags", systemImage: "tag")
+                }
+
+                Divider()
+
+                Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.top, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Metadata Card
+
+    var metadataCard: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            // Tags row
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    if let metadata = currentMetadata {
+                        if let procedure = metadata.procedure {
+                            DPTagPill(
+                                procedure,
+                                color: AppTheme.procedureColor(for: procedure),
+                                size: .medium
+                            )
+                        }
+
+                        if let toothNumber = metadata.toothNumber {
+                            DPTagPill(
+                                "#\(toothNumber)",
+                                color: AppTheme.Colors.success,
+                                size: .medium
+                            )
+                        }
+
+                        if let stage = metadata.stage {
+                            DPTagPill(
+                                stage == "Preparation" ? "Prep" : "Resto",
+                                color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                size: .medium
+                            )
+                        }
+
+                        if let angle = metadata.angle {
+                            DPTagPill(
+                                angle,
+                                color: .purple,
+                                size: .medium
+                            )
+                        }
+                    }
+
+                    // Edit tags button
+                    Button(action: { showMetadataEditor = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                            Text("Edit")
+                        }
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background(AppTheme.Colors.primary.opacity(0.15))
+                        .cornerRadius(AppTheme.CornerRadius.full)
+                    }
+                }
+            }
+
+            // Rating row
+            HStack {
+                Text("Rating")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(.white.opacity(0.7))
+
+                Spacer()
+
+                RatingStarsView(
+                    rating: Binding(
+                        get: { currentMetadata?.rating ?? 0 },
+                        set: { newRating in
+                            metadataManager.setRating(newRating, for: currentAsset.localIdentifier)
+                            HapticsManager.shared.selectionChanged()
+                        }
+                    ),
+                    starSize: 28,
+                    spacing: 4
+                )
+            }
+
+            // Date
+            if let date = currentAsset.creationDate {
+                HStack {
+                    Text("Captured")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(.white.opacity(0.7))
+
+                    Spacer()
+
+                    Text(date, style: .date)
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundColor(.white)
+
+                    Text(date, style: .time)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(
+            LinearGradient(
+                colors: [Color.black.opacity(0), Color.black.opacity(0.8)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    // MARK: - Methods
+
+    func loadFullImage() {
+        PhotoLibraryManager.shared.requestImage(for: currentAsset, size: CGSize(width: 1200, height: 1200)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+
+    func deleteCurrentPhoto() {
+        PhotoLibraryManager.shared.deleteAsset(currentAsset) { success in
+            if success {
+                HapticsManager.shared.success()
+
+                if allAssets.count == 1 {
+                    isPresented = false
+                } else if currentIndex >= allAssets.count - 1 {
+                    currentIndex = max(0, currentIndex - 1)
+                }
+            } else {
+                HapticsManager.shared.error()
+            }
+        }
+    }
+}
+
+// MARK: - Zoomable Photo View
+
+/// Photo view with pinch-to-zoom and double-tap zoom support
+struct ZoomablePhotoView: View {
+    let asset: PHAsset
+
+    @State private var image: UIImage?
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geometry in
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let delta = value / lastScale
+                                    lastScale = value
+                                    scale = min(max(scale * delta, 1), 4)
+                                }
+                                .onEnded { _ in
+                                    lastScale = 1.0
+                                    if scale < 1 {
+                                        withAnimation(.spring()) {
+                                            scale = 1
+                                            offset = .zero
+                                        }
+                                    }
+                                }
+                        )
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if scale > 1 {
+                                        offset = CGSize(
+                                            width: lastOffset.width + value.translation.width,
+                                            height: lastOffset.height + value.translation.height
+                                        )
+                                    }
+                                }
+                                .onEnded { _ in
+                                    lastOffset = offset
+                                }
+                        )
+                        .onTapGesture(count: 2) {
+                            withAnimation(.spring()) {
+                                if scale > 1 {
+                                    scale = 1
+                                    offset = .zero
+                                    lastOffset = .zero
+                                } else {
+                                    scale = 2
+                                }
+                            }
+                        }
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    func loadImage() {
+        PhotoLibraryManager.shared.requestImage(for: asset, size: CGSize(width: 1200, height: 1200)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - Rating Stars View
+
+/// Interactive star rating component
+struct RatingStarsView: View {
+    @Binding var rating: Int
+    var starSize: CGFloat = 24
+    var spacing: CGFloat = 2
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(1...5, id: \.self) { star in
+                Button(action: {
+                    if rating == star {
+                        rating = 0
+                    } else {
+                        rating = star
+                    }
+                }) {
+                    Image(systemName: star <= rating ? "star.fill" : "star")
+                        .font(.system(size: starSize))
+                        .foregroundColor(star <= rating ? .yellow : .white.opacity(0.3))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+/// UIActivityViewController wrapper for sharing content
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Photo Metadata Edit Sheet
+
+/// Sheet for editing all photo metadata with change tracking
+struct PhotoMetadataEditSheet: View {
+    let asset: PHAsset
+    @Binding var isPresented: Bool
+
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var selectedProcedure: String?
+    @State private var selectedToothNumber: Int?
+    @State private var selectedToothDate: Date = Date()
+    @State private var selectedStage: String?
+    @State private var selectedAngle: String?
+    @State private var selectedRating: Int = 0
+
+    @State private var showToothPicker = false
+    @State private var hasChanges = false
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                    // Procedure selection
+                    selectionSection(title: "PROCEDURE") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                FilterToggleChip(
+                                    text: procedure,
+                                    color: AppTheme.procedureColor(for: procedure),
+                                    isSelected: selectedProcedure == procedure
+                                ) {
+                                    if selectedProcedure == procedure {
+                                        selectedProcedure = nil
+                                    } else {
+                                        selectedProcedure = procedure
+                                    }
+                                    hasChanges = true
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            // Clear button
+                            if selectedProcedure != nil {
+                                Button(action: {
+                                    selectedProcedure = nil
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                            }
+                        }
+                    }
+
+                    // Tooth selection
+                    selectionSection(title: "TOOTH NUMBER") {
+                        HStack {
+                            if let tooth = selectedToothNumber {
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    Text("Tooth #\(tooth)")
+                                        .font(AppTheme.Typography.headline)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+
+                                    Button(action: {
+                                        selectedToothNumber = nil
+                                        hasChanges = true
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(AppTheme.Colors.textTertiary)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+
+                            Button(action: { showToothPicker = true }) {
+                                HStack {
+                                    Image(systemName: selectedToothNumber == nil ? "plus.circle" : "pencil")
+                                    Text(selectedToothNumber == nil ? "Select Tooth" : "Change")
+                                }
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                    }
+
+                    // Stage selection
+                    selectionSection(title: "STAGE") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach(MetadataManager.stages, id: \.self) { stage in
+                                FilterToggleChip(
+                                    text: stage,
+                                    color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                    isSelected: selectedStage == stage
+                                ) {
+                                    if selectedStage == stage {
+                                        selectedStage = nil
+                                    } else {
+                                        selectedStage = stage
+                                    }
+                                    hasChanges = true
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            Spacer()
+
+                            if selectedStage != nil {
+                                Button(action: {
+                                    selectedStage = nil
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                            }
+                        }
+                    }
+
+                    // Angle selection
+                    selectionSection(title: "ANGLE") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(MetadataManager.angles, id: \.self) { angle in
+                                FilterToggleChip(
+                                    text: angle,
+                                    color: .purple,
+                                    isSelected: selectedAngle == angle
+                                ) {
+                                    if selectedAngle == angle {
+                                        selectedAngle = nil
+                                    } else {
+                                        selectedAngle = angle
+                                    }
+                                    hasChanges = true
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            if selectedAngle != nil {
+                                Button(action: {
+                                    selectedAngle = nil
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                            }
+                        }
+                    }
+
+                    // Rating
+                    selectionSection(title: "RATING") {
+                        HStack {
+                            RatingStarsView(
+                                rating: Binding(
+                                    get: { selectedRating },
+                                    set: { newValue in
+                                        selectedRating = newValue
+                                        hasChanges = true
+                                    }
+                                ),
+                                starSize: 32,
+                                spacing: 8
+                            )
+
+                            Spacer()
+
+                            if selectedRating > 0 {
+                                Button(action: {
+                                    selectedRating = 0
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.top, AppTheme.Spacing.md)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Edit Metadata")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(!hasChanges)
+                }
+            }
+            .onAppear {
+                loadCurrentMetadata()
+            }
+            .sheet(isPresented: $showToothPicker) {
+                ToothChartSheet(
+                    selectedTooth: $selectedToothNumber,
+                    selectedDate: $selectedToothDate,
+                    isPresented: $showToothPicker
+                )
+                .onChange(of: selectedToothNumber) { _, _ in
+                    hasChanges = true
+                }
+            }
+        }
+    }
+
+    func selectionSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text(title)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+
+            content()
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    func loadCurrentMetadata() {
+        if let metadata = metadataManager.getMetadata(for: asset.localIdentifier) {
+            selectedProcedure = metadata.procedure
+            selectedToothNumber = metadata.toothNumber
+            selectedToothDate = metadata.toothDate ?? Date()
+            selectedStage = metadata.stage
+            selectedAngle = metadata.angle
+            selectedRating = metadata.rating ?? 0
+        }
+    }
+
+    func saveChanges() {
+        let metadata = PhotoMetadata(
+            procedure: selectedProcedure,
+            toothNumber: selectedToothNumber,
+            toothDate: selectedToothDate,
+            stage: selectedStage,
+            angle: selectedAngle,
+            rating: selectedRating > 0 ? selectedRating : nil
+        )
+
+        metadataManager.setMetadata(metadata, for: asset.localIdentifier)
+        HapticsManager.shared.success()
+        isPresented = false
+    }
+}
+
+// MARK: - Tooth Chart Sheet
+
+/// Sheet presenting a visual tooth chart for selection
+struct ToothChartSheet: View {
+    @Binding var selectedTooth: Int?
+    @Binding var selectedDate: Date
+    @Binding var isPresented: Bool
+
+    @State private var tempSelection: Int?
+
+    // Tooth numbers arranged by quadrant (Universal Numbering System)
+    let upperRight = Array(1...8)      // Upper right (patient's right)
+    let upperLeft = Array(9...16)      // Upper left (patient's left)
+    let lowerLeft = Array(17...24)     // Lower left (patient's left)
+    let lowerRight = Array(25...32)    // Lower right (patient's right)
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Instructions
+                Text("Tap a tooth to select")
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.top, AppTheme.Spacing.md)
+
+                // Tooth chart
+                VStack(spacing: AppTheme.Spacing.md) {
+                    // Upper arch
+                    VStack(spacing: AppTheme.Spacing.xs) {
+                        Text("UPPER")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+
+                        HStack(spacing: 4) {
+                            // Upper right (1-8)
+                            ForEach(upperRight, id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                            // Upper left (9-16)
+                            ForEach(upperLeft, id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                        }
+                    }
+
+                    // Divider line
+                    Rectangle()
+                        .fill(AppTheme.Colors.surfaceSecondary)
+                        .frame(height: 2)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+
+                    // Lower arch
+                    VStack(spacing: AppTheme.Spacing.xs) {
+                        HStack(spacing: 4) {
+                            // Lower right (32-25, displayed left to right)
+                            ForEach(lowerRight.reversed(), id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                            // Lower left (24-17, displayed left to right)
+                            ForEach(lowerLeft.reversed(), id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                        }
+
+                        Text("LOWER")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.large)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Selected tooth info
+                if let tooth = tempSelection {
+                    DPCard {
+                        HStack {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                                Text("Selected")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Text("Tooth #\(tooth)")
+                                    .font(AppTheme.Typography.title3)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+
+                            Spacer()
+
+                            Text(toothName(for: tooth))
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
+
+                // Date picker
+                if tempSelection != nil {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("PROCEDURE DATE")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(.horizontal, AppTheme.Spacing.md)
+
+                        DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.compact)
+                            .padding(.horizontal, AppTheme.Spacing.md)
+                    }
+                }
+
+                Spacer()
+
+                // Clear selection button
+                if tempSelection != nil {
+                    Button(action: {
+                        tempSelection = nil
+                        HapticsManager.shared.lightTap()
+                    }) {
+                        Text("Clear Selection")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.error)
+                    }
+                    .padding(.bottom, AppTheme.Spacing.md)
+                }
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Select Tooth")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedTooth = tempSelection
+                        isPresented = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                tempSelection = selectedTooth
+            }
+        }
+    }
+
+    func toothButton(_ tooth: Int) -> some View {
+        Button(action: {
+            tempSelection = tooth
+            HapticsManager.shared.selectionChanged()
+        }) {
+            Text("\(tooth)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(tempSelection == tooth ? .white : AppTheme.Colors.textPrimary)
+                .frame(width: 28, height: 28)
+                .background(tempSelection == tooth ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
+                .cornerRadius(4)
+        }
+    }
+
+    func toothName(for number: Int) -> String {
+        // Universal numbering tooth names
+        switch number {
+        case 1, 16, 17, 32: return "Third Molar"
+        case 2, 15, 18, 31: return "Second Molar"
+        case 3, 14, 19, 30: return "First Molar"
+        case 4, 13, 20, 29: return "Second Premolar"
+        case 5, 12, 21, 28: return "First Premolar"
+        case 6, 11, 22, 27: return "Canine"
+        case 7, 10, 23, 26: return "Lateral Incisor"
+        case 8, 9, 24, 25: return "Central Incisor"
+        default: return ""
+        }
+    }
+}
+
+// MARK: - Metadata Row
+
+/// Simple row for displaying metadata key-value pairs
+struct MetadataRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
+}
+
+// MARK: - String Identifiable Extension
+
+extension String: Identifiable {
+    public var id: String { self }
+}
+
+// MARK: - AllPhotosGridView
+
+/// Grid view showing all photos in the library
+struct AllPhotosGridView: View {
+    @ObservedObject var viewModel: LibraryViewModel
+    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @EnvironmentObject var router: NavigationRouter
+
+    @State private var selectedPhotoId: String? = nil
+
+    var filteredAssets: [PHAsset] {
+        viewModel.filteredAssets(
+            from: library.assets,
+            metadata: metadataManager,
+            filter: router.libraryFilter
+        )
+    }
+
+    let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+
+    var body: some View {
+        Group {
+            if filteredAssets.isEmpty {
+                emptyState
+            } else {
+                photoGrid
+            }
+        }
+        .sheet(item: $selectedPhotoId) { photoId in
+            PhotoDetailSheet(
+                photoId: photoId,
+                allAssets: filteredAssets,
+                onDismiss: { selectedPhotoId = nil }
+            )
+        }
+    }
+
+    // MARK: - Empty State
+    var emptyState: some View {
+        VStack {
+            Spacer()
+
+            if router.libraryFilter.isEmpty {
+                DPEmptyState(
+                    icon: "photo.on.rectangle",
+                    title: "No Photos",
+                    message: "Your captured photos will appear here.",
+                    actionTitle: "Start Capturing"
+                ) {
+                    router.selectedTab = .capture
+                }
+            } else {
+                DPEmptyState(
+                    icon: "magnifyingglass",
+                    title: "No Matches",
+                    message: "No photos match your current filters.",
+                    actionTitle: "Clear Filters"
+                ) {
+                    router.libraryFilter.reset()
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Photo Grid
+    var photoGrid: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.sm) {
+                // Results count
+                HStack {
+                    Text("\(filteredAssets.count) photo\(filteredAssets.count == 1 ? "" : "s")")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    Spacer()
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Photo grid
+                LazyVGrid(columns: columns, spacing: 2) {
+                    ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                        LibraryPhotoThumbnail(
+                            asset: asset,
+                            isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                            isSelectionMode: viewModel.isSelectionMode
+                        ) {
+                            if viewModel.isSelectionMode {
+                                viewModel.toggleSelection(for: asset.localIdentifier)
+                            } else {
+                                selectedPhotoId = asset.localIdentifier
+                            }
+                        }
+                        .aspectRatio(1, contentMode: .fill)
+                    }
+                }
+
+                Spacer(minLength: 100)
+            }
+            .padding(.top, AppTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - PhotoGridItem
+
+/// Individual photo cell in the grid with selection support
+struct PhotoGridItem: View {
+    let asset: PHAsset
+    let isSelected: Bool
+    let isSelectionMode: Bool
+    let onTap: () -> Void
+
+    @State private var image: UIImage?
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    var body: some View {
+        Button(action: onTap) {
+            GeometryReader { geometry in
+                ZStack(alignment: .topTrailing) {
+                    // Thumbnail
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geometry.size.width, height: geometry.size.width)
+                            .clipped()
+                    } else {
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .overlay(
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            )
+                    }
+
+                    // Selection indicator
+                    if isSelectionMode {
+                        ZStack {
+                            Circle()
+                                .fill(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.8))
+                                .frame(width: 24, height: 24)
+
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            } else {
+                                Circle()
+                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 2)
+                                    .frame(width: 22, height: 22)
+                            }
+                        }
+                        .padding(AppTheme.Spacing.xs)
+                    }
+
+                    // Rating stars (bottom left)
+                    if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                HStack(spacing: 2) {
+                                    ForEach(0..<rating, id: \.self) { _ in
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 8))
+                                            .foregroundColor(AppTheme.Colors.warning)
+                                    }
+                                }
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(4)
+                                .padding(AppTheme.Spacing.xs)
+
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+                .cornerRadius(AppTheme.CornerRadius.small)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
+                        .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 3)
+                )
+            }
+            .aspectRatio(1, contentMode: .fit)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        PhotoLibraryManager.shared.requestThumbnail(for: asset, size: CGSize(width: 200, height: 200)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - SelectionActionBar
+
+/// Bottom action bar for selection mode operations
+struct SelectionActionBar: View {
+    let selectedCount: Int
+    let onDelete: () -> Void
+    let onShare: () -> Void
+    let onAddToPortfolio: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(spacing: AppTheme.Spacing.xl) {
+                // Share button
+                ActionBarButton(
+                    icon: "square.and.arrow.up",
+                    label: "Share",
+                    isDisabled: selectedCount == 0,
+                    action: onShare
+                )
+
+                // Add to portfolio button
+                ActionBarButton(
+                    icon: "folder.badge.plus",
+                    label: "Add to Portfolio",
+                    isDisabled: selectedCount == 0,
+                    action: onAddToPortfolio
+                )
+
+                // Delete button
+                ActionBarButton(
+                    icon: "trash",
+                    label: "Delete",
+                    isDisabled: selectedCount == 0,
+                    isDestructive: true,
+                    action: onDelete
+                )
+            }
+            .padding(.vertical, AppTheme.Spacing.md)
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .frame(maxWidth: .infinity)
+            .background(AppTheme.Colors.surface)
+        }
+    }
+}
+
+// MARK: - ActionBarButton
+
+/// Individual button for the selection action bar
+struct ActionBarButton: View {
+    let icon: String
+    let label: String
+    var isDisabled: Bool = false
+    var isDestructive: Bool = false
+    let action: () -> Void
+
+    var foregroundColor: Color {
+        if isDisabled {
+            return AppTheme.Colors.textTertiary
+        } else if isDestructive {
+            return AppTheme.Colors.error
+        } else {
+            return AppTheme.Colors.primary
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: AppTheme.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+
+                Text(label)
+                    .font(AppTheme.Typography.caption2)
+            }
+            .foregroundColor(foregroundColor)
+        }
+        .disabled(isDisabled)
+    }
+}
+
+// MARK: - LibraryFilterSheet
+
+/// Sheet for configuring library filters with multiple filter categories
+struct LibraryFilterSheet: View {
+    @Binding var filter: LibraryFilter
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var tempFilter: LibraryFilter = LibraryFilter()
+    @State private var customStartDate: Date = Date()
+    @State private var customEndDate: Date = Date()
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                    // Procedures section
+                    filterSection(title: "PROCEDURES") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                FilterToggleChip(
+                                    text: procedure,
+                                    color: AppTheme.procedureColor(for: procedure),
+                                    isSelected: tempFilter.procedures.contains(procedure)
+                                ) {
+                                    toggleProcedure(procedure)
+                                }
+                            }
+                        }
+                    }
+
+                    // Stages section
+                    filterSection(title: "STAGES") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach(MetadataManager.stages, id: \.self) { stage in
+                                FilterToggleChip(
+                                    text: stage,
+                                    color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                    isSelected: tempFilter.stages.contains(stage)
+                                ) {
+                                    toggleStage(stage)
+                                }
+                            }
+                        }
+                    }
+
+                    // Angles section
+                    filterSection(title: "ANGLES") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(MetadataManager.angles, id: \.self) { angle in
+                                FilterToggleChip(
+                                    text: angle,
+                                    color: .purple,
+                                    isSelected: tempFilter.angles.contains(angle)
+                                ) {
+                                    toggleAngle(angle)
+                                }
+                            }
+                        }
+                    }
+
+                    // Rating section
+                    filterSection(title: "MINIMUM RATING") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach([1, 2, 3, 4, 5], id: \.self) { rating in
+                                RatingFilterButton(
+                                    rating: rating,
+                                    isSelected: tempFilter.minimumRating == rating
+                                ) {
+                                    if tempFilter.minimumRating == rating {
+                                        tempFilter.minimumRating = nil
+                                    } else {
+                                        tempFilter.minimumRating = rating
+                                    }
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Date range section
+                    filterSection(title: "DATE RANGE") {
+                        VStack(spacing: AppTheme.Spacing.sm) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                DateRangeButton(
+                                    text: "Last 7 Days",
+                                    isSelected: tempFilter.dateRange == .lastWeek
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastWeek ? nil : .lastWeek
+                                    HapticsManager.shared.selectionChanged()
+                                }
+
+                                DateRangeButton(
+                                    text: "Last 30 Days",
+                                    isSelected: tempFilter.dateRange == .lastMonth
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastMonth ? nil : .lastMonth
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                DateRangeButton(
+                                    text: "Last 3 Months",
+                                    isSelected: tempFilter.dateRange == .last3Months
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .last3Months ? nil : .last3Months
+                                    HapticsManager.shared.selectionChanged()
+                                }
+
+                                DateRangeButton(
+                                    text: "Last Year",
+                                    isSelected: tempFilter.dateRange == .lastYear
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastYear ? nil : .lastYear
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            // Custom date range
+                            DisclosureGroup("Custom Range") {
+                                VStack(spacing: AppTheme.Spacing.sm) {
+                                    DatePicker("From", selection: $customStartDate, displayedComponents: .date)
+                                    DatePicker("To", selection: $customEndDate, displayedComponents: .date)
+
+                                    Button("Apply Custom Range") {
+                                        tempFilter.dateRange = .custom(start: customStartDate, end: customEndDate)
+                                        HapticsManager.shared.selectionChanged()
+                                    }
+                                    .font(AppTheme.Typography.subheadline)
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                .padding(.top, AppTheme.Spacing.sm)
+                            }
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+
+                    // Active filter count
+                    if tempFilter.activeFilterCount > 0 {
+                        HStack {
+                            Text("\(tempFilter.activeFilterCount) filter\(tempFilter.activeFilterCount == 1 ? "" : "s") active")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+
+                            Spacer()
+
+                            Button("Reset All") {
+                                tempFilter.reset()
+                                HapticsManager.shared.lightTap()
+                            }
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.error)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.top, AppTheme.Spacing.md)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Filter Photos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        filter = tempFilter
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                tempFilter = filter
+
+                // Set custom date picker values if custom range exists
+                if case .custom(let start, let end) = filter.dateRange {
+                    customStartDate = start
+                    customEndDate = end
+                }
+            }
+        }
+    }
+
+    // MARK: - Helper Views
+
+    func filterSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text(title)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            content()
+                .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+
+    // MARK: - Toggle Methods
+
+    func toggleProcedure(_ procedure: String) {
+        if tempFilter.procedures.contains(procedure) {
+            tempFilter.procedures.remove(procedure)
+        } else {
+            tempFilter.procedures.insert(procedure)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+
+    func toggleStage(_ stage: String) {
+        if tempFilter.stages.contains(stage) {
+            tempFilter.stages.remove(stage)
+        } else {
+            tempFilter.stages.insert(stage)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+
+    func toggleAngle(_ angle: String) {
+        if tempFilter.angles.contains(angle) {
+            tempFilter.angles.remove(angle)
+        } else {
+            tempFilter.angles.insert(angle)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+}
+
+// MARK: - Filter Toggle Chip
+
+/// Toggleable chip for filter selection with colored dot and checkmark
+struct FilterToggleChip: View {
+    let text: String
+    let color: Color
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppTheme.Spacing.xs) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+
+                Text(text)
+                    .font(AppTheme.Typography.subheadline)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                }
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(isSelected ? color : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.full)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                    .stroke(isSelected ? color : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Rating Filter Button
+
+/// Button for selecting minimum rating filter
+struct RatingFilterButton: View {
+    let rating: Int
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 2) {
+                Text("\(rating)")
+                    .font(AppTheme.Typography.subheadline)
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12))
+                Text("+")
+                    .font(AppTheme.Typography.caption)
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(isSelected ? Color.yellow : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.full)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                    .stroke(isSelected ? Color.yellow : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Date Range Button
+
+/// Button for selecting preset date ranges
+struct DateRangeButton: View {
+    let text: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(text)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.full)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                        .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - FlowLayout
+
+/// A layout that wraps content to new lines
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                      y: bounds.minY + result.positions[index].y),
+                         proposal: .unspecified)
+        }
+    }
+
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var rowHeight: CGFloat = 0
+
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += rowHeight + spacing
+                    rowHeight = 0
+                }
+
+                positions.append(CGPoint(x: x, y: y))
+                rowHeight = max(rowHeight, size.height)
+                x += size.width + spacing
+
+                self.size.width = max(self.size.width, x)
+            }
+
+            self.size.height = y + rowHeight
+        }
+    }
+}
+
+// MARK: - Preview Provider
+
+#if DEBUG
+struct LibraryView_Previews: PreviewProvider {
+    static var previews: some View {
+        LibraryView()
+            .environmentObject(NavigationRouter())
+    }
+}
+#endif

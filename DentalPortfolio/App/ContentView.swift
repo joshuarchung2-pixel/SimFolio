@@ -32,8 +32,7 @@ struct ContentView: View {
                         .transition(.opacity)
 
                 case .library:
-                    // Temporary placeholder until Phase 4
-                    LibraryTabPlaceholder()
+                    LibraryView()
                         .transition(.opacity)
 
                 case .profile:
