@@ -5608,6 +5608,9 @@ struct PhotoEditorView: View {
     @State private var displayedImageWidth: CGFloat = 0
     @State private var displayedImageHeight: CGFloat = 0
 
+    // Saving state
+    @State private var isSaving = false
+
     private let context = CIContext()
 
     var body: some View {
@@ -5617,9 +5620,11 @@ struct PhotoEditorView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { editorToolbarContent }
                 .onAppear {
-                    originalImage = inputImage  // Store original for revert
-                    baseImage = inputImage
-                    displayedImage = inputImage
+                    // Normalize orientation to ensure pixel data matches display
+                    let normalizedInput = inputImage.normalizedOrientation()
+                    originalImage = normalizedInput  // Store original for revert
+                    baseImage = normalizedInput
+                    displayedImage = normalizedInput
                     applyProcessing()
                 }
                 .onChange(of: brightness) { _, _ in applyProcessing() }
@@ -5632,13 +5637,29 @@ struct PhotoEditorView: View {
     // MARK: - Extracted Views
 
     private var mainContentView: some View {
-        VStack {
-            Spacer()
-            imageDisplayArea
-            Spacer()
-            controlsSection
+        ZStack {
+            VStack {
+                Spacer()
+                imageDisplayArea
+                Spacer()
+                controlsSection
+            }
+            .background(Color.white)
+
+            // Loading overlay when saving
+            if isSaving {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    Text("Saving...")
+                        .font(AppFonts.body)
+                        .foregroundColor(.white)
+                }
+            }
         }
-        .background(Color.white)
     }
 
     @ViewBuilder
@@ -5653,12 +5674,33 @@ struct PhotoEditorView: View {
     @ViewBuilder
     private var normalImageView: some View {
         if let img = displayedImage {
-            Image(uiImage: img)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .rotationEffect(.degrees(rotationAngle))
-                .animation(.easeInOut(duration: 0.3), value: rotationAngle)
-                .padding()
+            GeometryReader { geo in
+                let imageAspect = img.size.width / img.size.height
+                let containerAspect = geo.size.width / geo.size.height
+                let isRotated90 = abs(rotationAngle.truncatingRemainder(dividingBy: 180)) > 45
+
+                // Calculate the size that fits the rotated image
+                let effectiveAspect = isRotated90 ? 1.0 / imageAspect : imageAspect
+                let fitWidth: CGFloat
+                let fitHeight: CGFloat
+
+                if effectiveAspect > containerAspect {
+                    fitWidth = geo.size.width
+                    fitHeight = geo.size.width / effectiveAspect
+                } else {
+                    fitHeight = geo.size.height
+                    fitWidth = geo.size.height * effectiveAspect
+                }
+
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: isRotated90 ? fitHeight : fitWidth, height: isRotated90 ? fitWidth : fitHeight)
+                    .rotationEffect(.degrees(rotationAngle))
+                    .animation(.easeInOut(duration: 0.3), value: rotationAngle)
+                    .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .padding()
         } else {
             ProgressView()
         }
@@ -5845,6 +5887,7 @@ struct PhotoEditorView: View {
                 Button(action: { rotateImage() }) {
                     VStack {
                         Image(systemName: "rotate.right").font(.system(size: 22))
+                            .scaleEffect(x: -1, y: 1)
                         Text("90°").font(AppFonts.caption)
                     }
                 }
@@ -5942,10 +5985,12 @@ struct PhotoEditorView: View {
     func applyCrop() {
         guard let img = originalImage else { return }
 
-        // Apply rotation first
-        var processedImage = img
+        // Normalize image orientation first so pixel data matches display
+        var processedImage = img.normalizedOrientation()
+
+        // Apply rotation if any
         if cropRotation != 0 {
-            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
+            if let rotated = processedImage.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
                 processedImage = rotated
             }
         }
@@ -5982,7 +6027,8 @@ struct PhotoEditorView: View {
             let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
 
             if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
-                processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
+                // Use .up orientation since we already normalized
+                processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: .up)
             }
         }
 
@@ -6063,6 +6109,9 @@ struct PhotoEditorView: View {
             return
         }
 
+        // Show loading state
+        isSaving = true
+
         // Apply the processing filters
         var finalImage = baseImg
         if let ciImage = CIImage(image: finalImage) {
@@ -6084,14 +6133,17 @@ struct PhotoEditorView: View {
 
                     if let finalOutput = sharpFilter.outputImage,
                        let cgimg = context.createCGImage(finalOutput, from: finalOutput.extent) {
-                        finalImage = UIImage(cgImage: cgimg, scale: finalImage.scale, orientation: finalImage.imageOrientation)
+                        // Use .up orientation since images are normalized on editor load
+                        finalImage = UIImage(cgImage: cgimg, scale: finalImage.scale, orientation: .up)
                     }
                 }
             }
         }
 
-        PhotoLibraryManager.shared.save(image: finalImage, procedure: nil, otherTags: [])
-        presentationMode.wrappedValue.dismiss()
+        PhotoLibraryManager.shared.save(image: finalImage, procedure: nil, otherTags: []) { _ in
+            self.isSaving = false
+            self.presentationMode.wrappedValue.dismiss()
+        }
     }
 }
 
@@ -6250,6 +6302,16 @@ extension UIImage {
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext(); return newImage
     }
+
+    /// Normalizes the image orientation so that pixel data matches display orientation
+    func normalizedOrientation() -> UIImage {
+        if imageOrientation == .up { return self }
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        draw(in: CGRect(origin: .zero, size: size))
+        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return normalizedImage ?? self
+    }
 }
 
 // MARK: - 5. HELPERS
@@ -6275,7 +6337,20 @@ struct AssetThumbnail: View {
     let asset: PHAsset
     @State private var image: UIImage?
     var body: some View {
-        Group { if let image = image { Image(uiImage: image).resizable().aspectRatio(contentMode: .fill) } else { Rectangle().fill(Color.gray.opacity(0.2)) } }
+        GeometryReader { geo in
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else {
+                    Rectangle().fill(Color.gray.opacity(0.2))
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
         .onAppear { PhotoLibraryManager.shared.requestThumbnail(for: asset) { img in self.image = img } }
     }
 }
@@ -6293,7 +6368,7 @@ class PhotoLibraryManager: ObservableObject {
         }
     }
     
-    func save(image: UIImage, procedure: String?, otherTags: [String]) {
+    func save(image: UIImage, procedure: String?, otherTags: [String], completion: ((Bool) -> Void)? = nil) {
         createAlbumIfNeeded()
         var placeholder: PHObjectPlaceholder?
         PHPhotoLibrary.shared().performChanges({
@@ -6304,8 +6379,12 @@ class PhotoLibraryManager: ObservableObject {
             guard let album = collection.firstObject, let albumChangeRequest = PHAssetCollectionChangeRequest(for: album), let assetPlaceholder = placeholder else { return }
             albumChangeRequest.addAssets([assetPlaceholder] as NSArray)
         }) { success, error in
-            if success, let id = placeholder?.localIdentifier {
-                DispatchQueue.main.async { TagManager.shared.assign(procedure: procedure, otherTags: otherTags, to: id); self.fetchAssets() }
+            DispatchQueue.main.async {
+                if success, let id = placeholder?.localIdentifier {
+                    TagManager.shared.assign(procedure: procedure, otherTags: otherTags, to: id)
+                    self.fetchAssets()
+                }
+                completion?(success)
             }
         }
     }
