@@ -16,6 +16,12 @@ import AVFoundation
 struct ContentView: View {
     @StateObject private var router = NavigationRouter()
     @StateObject private var sharedCameraService = CameraService()
+    @State private var showOnboarding: Bool = false
+
+    /// Check if user has completed onboarding
+    var hasCompletedOnboarding: Bool {
+        UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -51,8 +57,19 @@ struct ContentView: View {
         .preferredColorScheme(.light)
         .ignoresSafeArea(.keyboard)
         .onAppear {
+            // Check onboarding status
+            if !hasCompletedOnboarding {
+                showOnboarding = true
+            }
             // Initialize photo library
             PhotoLibraryManager.shared.fetchAssets()
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding) {
+                // Onboarding complete callback
+                // Refresh photo library after permissions granted
+                PhotoLibraryManager.shared.fetchAssets()
+            }
         }
     }
 }
