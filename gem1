@@ -2348,13 +2348,14 @@ struct DentalCameraSetupView: View {
                     )
                     .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
                     .transition(.asymmetric(
-                        insertion: .scale(scale: 0.9, anchor: .top).combined(with: .opacity),
-                        removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
+                        insertion: .scale(scale: 0.9, anchor: isLandscapeLeft ? .trailing : isLandscapeRight ? .leading : .top).combined(with: .opacity),
+                        removal: .scale(scale: 0.95, anchor: isLandscapeLeft ? .trailing : isLandscapeRight ? .leading : .top).combined(with: .opacity)
                     ))
                     .zIndex(10)
                     .position(
-                        x: isLandscapeLeft ? geometry.size.width - 310 :
-                           isLandscapeRight ? 310 :
+                        // In landscape, offset "below" the pill from user's perspective (toward screen center)
+                        x: isLandscapeLeft ? geometry.size.width - 310 - 120 :
+                           isLandscapeRight ? 310 + 120 :
                            geometry.size.width / 2,
                         y: isLandscape ? geometry.size.height / 2 : 120
                     )
