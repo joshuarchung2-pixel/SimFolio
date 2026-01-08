@@ -572,62 +572,184 @@ struct QuickToothButton: View {
     }
 }
 
-// MARK: - Tooth Chart Sheet (Placeholder)
+// MARK: - Tooth Chart Sheet
 
 /// Full tooth chart for selecting a specific tooth number
-/// Will be implemented with visual tooth diagram
+/// Visual representation of upper and lower dental arches
 struct ToothChartSheet: View {
     @Binding var selectedTooth: Int?
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
 
+    @State private var tempSelectedTooth: Int?
+
     var body: some View {
         NavigationView {
             VStack(spacing: AppTheme.Spacing.lg) {
-                Text("Select Tooth Number")
-                    .font(AppTheme.Typography.title2)
+                // Visual tooth chart
+                VStack(spacing: AppTheme.Spacing.md) {
+                    Text("Upper Arch")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
 
-                // Simple number grid for now
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: AppTheme.Spacing.sm) {
-                    ForEach(1...32, id: \.self) { number in
-                        Button(action: {
-                            selectedTooth = number
-                            HapticsManager.shared.selectionChanged()
-                        }) {
-                            Text("\(number)")
-                                .font(AppTheme.Typography.headline)
-                                .foregroundColor(selectedTooth == number ? .white : AppTheme.Colors.textPrimary)
-                                .frame(width: 40, height: 40)
-                                .background(selectedTooth == number ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
-                                .cornerRadius(AppTheme.CornerRadius.small)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
+                    // Upper teeth (1-16)
+                    ToothRow(teeth: Array(1...16), selectedTooth: $tempSelectedTooth)
+
+                    Divider()
+                        .padding(.vertical, AppTheme.Spacing.sm)
+
+                    // Lower teeth (17-32)
+                    ToothRow(teeth: Array(17...32), selectedTooth: $tempSelectedTooth)
+
+                    Text("Lower Arch")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.large)
                 .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Selected tooth info
+                if let tooth = tempSelectedTooth {
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        Text("Tooth #\(tooth)")
+                            .font(AppTheme.Typography.title2)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+
+                        Text(toothName(for: tooth))
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.success)
+                    }
+                    .padding(AppTheme.Spacing.md)
+                    .frame(maxWidth: .infinity)
+                    .background(AppTheme.Colors.success.opacity(0.1))
+                    .cornerRadius(AppTheme.CornerRadius.medium)
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
 
                 // Date picker
-                DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
-                    .datePickerStyle(.compact)
-                    .padding(.horizontal, AppTheme.Spacing.md)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                    Text("Procedure Date")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
 
-                Spacer()
-
-                DPButton("Done", style: .primary, isFullWidth: true) {
-                    isPresented = false
+                    DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
+
+                Spacer()
             }
-            .padding(.top, AppTheme.Spacing.lg)
+            .padding(.top, AppTheme.Spacing.md)
+            .background(AppTheme.Colors.background.ignoresSafeArea())
+            .navigationTitle("Select Tooth")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         isPresented = false
                     }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedTooth = tempSelectedTooth
+                        isPresented = false
+                    }
+                    .disabled(tempSelectedTooth == nil)
+                }
+            }
+            .onAppear {
+                tempSelectedTooth = selectedTooth
             }
         }
+    }
+
+    /// Get the anatomical name for a tooth number
+    func toothName(for number: Int) -> String {
+        switch number {
+        // Upper right (1-8)
+        case 1: return "Maxillary Right 3rd Molar"
+        case 2: return "Maxillary Right 2nd Molar"
+        case 3: return "Maxillary Right 1st Molar"
+        case 4: return "Maxillary Right 2nd Premolar"
+        case 5: return "Maxillary Right 1st Premolar"
+        case 6: return "Maxillary Right Canine"
+        case 7: return "Maxillary Right Lateral Incisor"
+        case 8: return "Maxillary Right Central Incisor"
+        // Upper left (9-16)
+        case 9: return "Maxillary Left Central Incisor"
+        case 10: return "Maxillary Left Lateral Incisor"
+        case 11: return "Maxillary Left Canine"
+        case 12: return "Maxillary Left 1st Premolar"
+        case 13: return "Maxillary Left 2nd Premolar"
+        case 14: return "Maxillary Left 1st Molar"
+        case 15: return "Maxillary Left 2nd Molar"
+        case 16: return "Maxillary Left 3rd Molar"
+        // Lower left (17-24)
+        case 17: return "Mandibular Left 3rd Molar"
+        case 18: return "Mandibular Left 2nd Molar"
+        case 19: return "Mandibular Left 1st Molar"
+        case 20: return "Mandibular Left 2nd Premolar"
+        case 21: return "Mandibular Left 1st Premolar"
+        case 22: return "Mandibular Left Canine"
+        case 23: return "Mandibular Left Lateral Incisor"
+        case 24: return "Mandibular Left Central Incisor"
+        // Lower right (25-32)
+        case 25: return "Mandibular Right Central Incisor"
+        case 26: return "Mandibular Right Lateral Incisor"
+        case 27: return "Mandibular Right Canine"
+        case 28: return "Mandibular Right 1st Premolar"
+        case 29: return "Mandibular Right 2nd Premolar"
+        case 30: return "Mandibular Right 1st Molar"
+        case 31: return "Mandibular Right 2nd Molar"
+        case 32: return "Mandibular Right 3rd Molar"
+        default: return "Tooth \(number)"
+        }
+    }
+}
+
+// MARK: - Tooth Row
+
+/// A row of tooth buttons for the tooth chart
+struct ToothRow: View {
+    let teeth: [Int]
+    @Binding var selectedTooth: Int?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(teeth, id: \.self) { tooth in
+                ToothButton(
+                    number: tooth,
+                    isSelected: selectedTooth == tooth
+                ) {
+                    selectedTooth = tooth
+                    HapticsManager.shared.selectionChanged()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Tooth Button
+
+/// Individual tooth button in the tooth chart
+struct ToothButton: View {
+    let number: Int
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Text("\(number)")
+                .font(.system(size: 12, weight: isSelected ? .bold : .regular))
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .frame(width: 20, height: 28)
+                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
+                .cornerRadius(4)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
