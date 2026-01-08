@@ -597,35 +597,7 @@ struct RequirementSummaryRow: View {
 // MARK: - Placeholder Views
 
 // NOTE: PortfolioChecklistTab is now implemented in PortfolioChecklistTab.swift
-
-/// Placeholder for PortfolioPhotosTab - will be implemented in Prompt 5.4
-struct PortfolioPhotosTab: View {
-    let portfolio: Portfolio
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer(minLength: 60)
-
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Text("Photos Tab")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Coming in Prompt 5.4")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-        }
-    }
-}
+// NOTE: PortfolioPhotosTab is now implemented in PortfolioPhotosTab.swift
 
 /// Placeholder for PortfolioExportSheet - will be implemented in Prompt 5.5
 struct PortfolioExportSheet: View {
