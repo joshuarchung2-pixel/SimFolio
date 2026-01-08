@@ -248,16 +248,275 @@ struct CaptureFlowView: View {
     }
 }
 
-// MARK: - Capture Setup View (Placeholder)
+// MARK: - Capture Setup View
 
 /// Pre-capture tagging screen
 /// Allows user to select procedure, tooth number, stage, and angle before capturing
 struct CaptureSetupView: View {
     @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @EnvironmentObject var router: NavigationRouter
+
+    @State private var showToothPicker = false
 
     var body: some View {
-        Text("Setup View")
-            .foregroundColor(.white)
+        ZStack {
+            // Background
+            AppTheme.Colors.background.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: {
+                        router.selectedTab = .home
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 44, height: 44)
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        captureState.startCapturing()
+                    }) {
+                        Text("Skip, tag later")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.top, AppTheme.Spacing.md)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                        // Title
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                            Text("What are you capturing?")
+                                .font(AppTheme.Typography.title)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+
+                            Text("Tag now for automatic organization")
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.md)
+
+                        // Procedure Selection
+                        ProcedureSelectionGrid(
+                            selectedProcedure: $captureState.selectedProcedure,
+                            procedures: metadataManager.procedures
+                        )
+
+                        // Tooth Selection (only if procedure selected)
+                        if captureState.selectedProcedure != nil {
+                            ToothSelectionSection(
+                                selectedToothNumber: $captureState.selectedToothNumber,
+                                selectedDate: $captureState.selectedToothDate,
+                                procedure: captureState.selectedProcedure ?? "",
+                                metadataManager: metadataManager
+                            )
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+
+                        // Stage Selection (only if tooth selected)
+                        if captureState.selectedToothNumber != nil {
+                            StageSelectionSection(
+                                selectedStage: $captureState.selectedStage,
+                                stages: MetadataManager.stages
+                            )
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+
+                        // Angle Selection (only if stage selected)
+                        if captureState.selectedStage != nil {
+                            AngleSelectionSection(
+                                selectedAngle: $captureState.selectedAngle,
+                                angles: MetadataManager.angles
+                            )
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+
+                        Spacer(minLength: 120)
+                    }
+                    .padding(.top, AppTheme.Spacing.lg)
+                    .animation(.easeInOut(duration: 0.3), value: captureState.selectedProcedure != nil)
+                    .animation(.easeInOut(duration: 0.3), value: captureState.selectedToothNumber != nil)
+                    .animation(.easeInOut(duration: 0.3), value: captureState.selectedStage != nil)
+                }
+
+                // Bottom CTA
+                VStack(spacing: AppTheme.Spacing.md) {
+                    if captureState.hasAnyTags {
+                        Text(captureState.tagSummary)
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+
+                    DPButton(
+                        "Start Capturing",
+                        icon: "camera.fill",
+                        style: .primary,
+                        isFullWidth: true,
+                        isDisabled: captureState.selectedProcedure == nil
+                    ) {
+                        captureState.startCapturing()
+                    }
+                }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+            }
+        }
+    }
+}
+
+// MARK: - Procedure Selection Grid
+
+/// Grid of procedure type buttons for selection
+struct ProcedureSelectionGrid: View {
+    @Binding var selectedProcedure: String?
+    let procedures: [String]
+
+    let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text("PROCEDURE")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.sm) {
+                ForEach(procedures, id: \.self) { procedure in
+                    ProcedureSelectionButton(
+                        procedure: procedure,
+                        color: AppTheme.procedureColor(for: procedure),
+                        isSelected: selectedProcedure == procedure
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if selectedProcedure == procedure {
+                                selectedProcedure = nil
+                            } else {
+                                selectedProcedure = procedure
+                            }
+                        }
+                        HapticsManager.shared.selectionChanged()
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - Procedure Selection Button
+
+/// Individual procedure button with color indicator and selection state
+struct ProcedureSelectionButton: View {
+    let procedure: String
+    let color: Color
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+
+                Text(procedure)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(isSelected ? AppTheme.Colors.primary.opacity(0.1) : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary, lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Tooth Selection Section (Placeholder)
+
+/// Section for selecting tooth number and date
+/// Will be implemented in the next phase
+struct ToothSelectionSection: View {
+    @Binding var selectedToothNumber: Int?
+    @Binding var selectedDate: Date
+    let procedure: String
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text("TOOTH NUMBER")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            Text("Tooth selection coming soon...")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textTertiary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - Stage Selection Section (Placeholder)
+
+/// Section for selecting preparation or restoration stage
+/// Will be implemented in the next phase
+struct StageSelectionSection: View {
+    @Binding var selectedStage: String?
+    let stages: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text("STAGE")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            Text("Stage selection coming soon...")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textTertiary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - Angle Selection Section (Placeholder)
+
+/// Section for selecting photo angle
+/// Will be implemented in the next phase
+struct AngleSelectionSection: View {
+    @Binding var selectedAngle: String?
+    let angles: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text("ANGLE")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            Text("Angle selection coming soon...")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textTertiary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+        }
     }
 }
 
