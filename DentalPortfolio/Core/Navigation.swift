@@ -52,7 +52,15 @@ enum MainTab: Int, CaseIterable, Identifiable {
         case .profile: return "person.fill"
         }
     }
+
+    /// Accessibility hint when not selected
+    var accessibilityHint: String {
+        "Double tap to switch to \(title)"
+    }
 }
+
+/// Type alias for use with AccessibilityLabels
+typealias Tab = MainTab
 
 // MARK: - DPTabBar
 
@@ -87,6 +95,7 @@ struct DPTabBar: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTab = tab
             }
+            HapticsManager.shared.selectionChanged()
         } label: {
             VStack(spacing: AppTheme.Spacing.xxs) {
                 ZStack(alignment: .topTrailing) {
@@ -98,6 +107,7 @@ struct DPTabBar: View {
                     if badgeCount > 0 {
                         badgeView(count: badgeCount)
                             .offset(x: 8, y: -4)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -106,10 +116,24 @@ struct DPTabBar: View {
             }
             .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 44) // Minimum touch target
             .scaleEffect(isPressed ? 0.9 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(TabButtonStyle(isPressed: $pressedTab, tab: tab))
+        // Accessibility
+        .accessibilityLabel(tabAccessibilityLabel(tab: tab, badgeCount: badgeCount))
+        .accessibilityHint(isSelected ? "Currently selected" : tab.accessibilityHint)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Generate accessibility label for tab
+    private func tabAccessibilityLabel(tab: MainTab, badgeCount: Int) -> String {
+        var label = tab.title
+        if badgeCount > 0 {
+            label += ", \(badgeCount) notification\(badgeCount == 1 ? "" : "s")"
+        }
+        return label
     }
 
     @ViewBuilder
