@@ -5,7 +5,7 @@
 // comprehensive statistics, and navigation to all settings screens.
 //
 // Features:
-// - Profile header card with gradient avatar and user info
+// - Profile header card with profile photo or gradient avatar
 // - Stats grid showing photos, portfolios, completion, ratings
 // - Procedure breakdown with progress bars
 // - Settings sections for portfolios, capture, notifications, data, about
@@ -19,7 +19,9 @@
 // - SettingsRow: Individual settings row with icon and chevron
 // - PortfolioListSheet: Sheet wrapper for PortfolioListView
 // - Placeholder views for settings subviews (to be implemented)
-// - EditProfileSheet: Form for editing profile
+//
+// Related Files:
+// - EditProfileSheet.swift: Profile editing with photo picker
 
 import SwiftUI
 import Photos
@@ -210,21 +212,30 @@ struct ProfileView: View {
         DPCard {
             VStack(spacing: AppTheme.Spacing.md) {
                 HStack(spacing: AppTheme.Spacing.md) {
-                    // Avatar with gradient
+                    // Avatar with profile photo or gradient initials
                     ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                        if let imageData = UserDefaults.standard.data(forKey: "userProfileImage"),
+                           let uiImage = UIImage(data: imageData) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 80, height: 80)
+                                .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .frame(width: 80, height: 80)
+                                .frame(width: 80, height: 80)
 
-                        Text(userInitials)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.white)
+                            Text(userInitials)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.white)
+                        }
                     }
                     .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
 
@@ -691,124 +702,8 @@ struct PortfolioListSheet: View {
     }
 }
 
-// MARK: - EditProfileSheet
-
-/// Sheet for editing user profile information
-struct EditProfileSheet: View {
-    @Binding var isPresented: Bool
-
-    @State private var name: String = ""
-    @State private var school: String = ""
-    @State private var classYear: String = ""
-
-    var userInitials: String {
-        let components = name.split(separator: " ")
-        if components.count >= 2 {
-            return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
-        } else if let first = components.first {
-            return String(first.prefix(2)).uppercased()
-        }
-        return "DS"
-    }
-
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: AppTheme.Spacing.lg) {
-                    // Avatar preview with gradient
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-
-                        Text(userInitials)
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
-                    .padding(.top, AppTheme.Spacing.lg)
-
-                    // Form fields
-                    VStack(spacing: AppTheme.Spacing.md) {
-                        ProfileFormField(label: "Name", text: $name, placeholder: "Your Name")
-                        ProfileFormField(label: "School", text: $school, placeholder: "Dental School")
-                        ProfileFormField(label: "Class Year", text: $classYear, placeholder: "2025", keyboardType: .numberPad)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.md)
-
-                    Spacer()
-                }
-            }
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        isPresented = false
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveProfile()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-            .onAppear {
-                loadProfile()
-            }
-        }
-    }
-
-    func loadProfile() {
-        name = UserDefaults.standard.string(forKey: "userName") ?? ""
-        school = UserDefaults.standard.string(forKey: "userSchool") ?? ""
-        classYear = UserDefaults.standard.string(forKey: "userClassYear") ?? ""
-    }
-
-    func saveProfile() {
-        UserDefaults.standard.set(name, forKey: "userName")
-        UserDefaults.standard.set(school, forKey: "userSchool")
-        UserDefaults.standard.set(classYear, forKey: "userClassYear")
-        HapticsManager.shared.success()
-        isPresented = false
-    }
-}
-
-// MARK: - ProfileFormField
-
-/// Reusable form field with label and text input
-struct ProfileFormField: View {
-    let label: String
-    @Binding var text: String
-    var placeholder: String = ""
-    var keyboardType: UIKeyboardType = .default
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-            Text(label)
-                .font(AppTheme.Typography.caption)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-
-            TextField(placeholder, text: $text)
-                .font(AppTheme.Typography.body)
-                .keyboardType(keyboardType)
-                .padding(AppTheme.Spacing.md)
-                .background(AppTheme.Colors.surface)
-                .cornerRadius(AppTheme.CornerRadius.medium)
-        }
-    }
-}
-
 // MARK: - Placeholder Views (To be implemented in subsequent prompts)
+// Note: EditProfileSheet is now in EditProfileSheet.swift
 
 /// Placeholder - Procedure management view (Prompt 6.3)
 struct ProcedureManagementView: View {
@@ -989,12 +884,6 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
             .environmentObject(NavigationRouter())
-    }
-}
-
-struct EditProfileSheet_Previews: PreviewProvider {
-    static var previews: some View {
-        EditProfileSheet(isPresented: .constant(true))
     }
 }
 
