@@ -404,47 +404,7 @@ struct CreatePortfolioSheet: View {
     }
 }
 
-/// Placeholder for PortfolioDetailView - will be implemented in Prompt 5.2
-struct PortfolioDetailView: View {
-    let portfolio: Portfolio
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer()
-
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 60, weight: .light))
-                    .foregroundColor(AppTheme.Colors.primary)
-
-                Text(portfolio.name)
-                    .font(AppTheme.Typography.title2)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Portfolio Detail View")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Text("Coming in a future prompt")
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Portfolio Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
-        }
-    }
-}
+// NOTE: PortfolioDetailView is now implemented in PortfolioDetailView.swift
 
 // MARK: - Preview Provider
 
