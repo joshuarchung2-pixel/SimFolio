@@ -2357,7 +2357,7 @@ struct DentalCameraSetupView: View {
                         x: isLandscapeLeft ? geometry.size.width - 310 - 120 :
                            isLandscapeRight ? 310 + 120 :
                            geometry.size.width / 2,
-                        y: isLandscape ? geometry.size.height / 2 : 120
+                        y: isLandscape ? geometry.size.height / 2 : 200
                     )
                 }
 
