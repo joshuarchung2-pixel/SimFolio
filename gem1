@@ -5576,937 +5576,156 @@ struct PhotoDetailView: View {
 }
 
 // MARK: - 4. ADVANCED PHOTO EDITOR
-
-// Edit history state for undo/redo
-struct PhotoEditState: Equatable {
-    var brightness: Double = 0.0
-    var contrast: Double = 1.0
-    var saturation: Double = 1.0
-    var sharpness: Double = 0.0
-    var temperature: Double = 0.0
-    var highlights: Double = 0.0
-    var shadows: Double = 0.0
-    var vignette: Double = 0.0
-    var fade: Double = 0.0
-    var clarity: Double = 0.0
-    var selectedLUT: String? = nil
-    var lutIntensity: Double = 1.0
-}
-
-// LUT preset definition
-struct LUTPreset: Identifiable, Equatable {
-    let id = UUID()
-    let name: String
-    let icon: String
-    let colorMatrix: [Float]  // 3x3 color matrix for simple color grading
-
-    static let presets: [LUTPreset] = [
-        LUTPreset(name: "Original", icon: "photo", colorMatrix: [1,0,0, 0,1,0, 0,0,1]),
-        LUTPreset(name: "Warm", icon: "sun.max.fill", colorMatrix: [1.2,0,0, 0,1.0,0, 0,0,0.8]),
-        LUTPreset(name: "Cool", icon: "snowflake", colorMatrix: [0.9,0,0, 0,1.0,0, 0,0,1.2]),
-        LUTPreset(name: "Vintage", icon: "camera.filters", colorMatrix: [1.1,0.1,0, 0.1,1.0,0.1, 0,0.1,0.9]),
-        LUTPreset(name: "B&W", icon: "circle.lefthalf.filled", colorMatrix: [0.33,0.33,0.33, 0.33,0.33,0.33, 0.33,0.33,0.33]),
-        LUTPreset(name: "Sepia", icon: "leaf.fill", colorMatrix: [0.4,0.35,0.27, 0.35,0.31,0.24, 0.27,0.24,0.19]),
-        LUTPreset(name: "Vivid", icon: "sparkles", colorMatrix: [1.3,0,0, 0,1.3,0, 0,0,1.3]),
-        LUTPreset(name: "Matte", icon: "square.fill", colorMatrix: [0.95,0.05,0.05, 0.05,0.95,0.05, 0.05,0.05,0.95]),
-        LUTPreset(name: "Cinema", icon: "film", colorMatrix: [1.1,0,0.1, 0,1.05,0.05, 0.05,0.1,1.0]),
-        LUTPreset(name: "Fade", icon: "cloud.fill", colorMatrix: [0.9,0.1,0.1, 0.1,0.9,0.1, 0.1,0.1,0.9])
-    ]
-}
-
-// Photo Editor Controller
-class PhotoEditorController: ObservableObject {
-    @Published var currentState: PhotoEditState = PhotoEditState()
-    @Published var previewImage: UIImage?
-    @Published var isProcessing = false
-
-    private var editHistory: [PhotoEditState] = []
-    private var historyIndex: Int = -1
-    private var originalImage: UIImage?
-    private var baseImage: UIImage?
-    private let context = CIContext(options: [.useSoftwareRenderer: false])
-
-    var canUndo: Bool { historyIndex > 0 }
-    var canRedo: Bool { historyIndex < editHistory.count - 1 }
-
-    func setImage(_ image: UIImage) {
-        originalImage = image
-        baseImage = image
-        previewImage = image
-        currentState = PhotoEditState()
-        editHistory = [currentState]
-        historyIndex = 0
-    }
-
-    func saveState() {
-        // Remove any redo states
-        if historyIndex < editHistory.count - 1 {
-            editHistory = Array(editHistory.prefix(historyIndex + 1))
-        }
-        editHistory.append(currentState)
-        historyIndex = editHistory.count - 1
-    }
-
-    func undo() {
-        guard canUndo else { return }
-        historyIndex -= 1
-        currentState = editHistory[historyIndex]
-        applyFilters()
-    }
-
-    func redo() {
-        guard canRedo else { return }
-        historyIndex += 1
-        currentState = editHistory[historyIndex]
-        applyFilters()
-    }
-
-    func revert() {
-        currentState = PhotoEditState()
-        editHistory = [currentState]
-        historyIndex = 0
-        previewImage = originalImage
-    }
-
-    func setBaseImage(_ image: UIImage) {
-        baseImage = image
-        originalImage = image
-        applyFilters()
-    }
-
-    func applyFilters() {
-        guard let image = baseImage else { return }
-        isProcessing = true
-
-        let state = currentState
-        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
-            guard let self = self else { return }
-
-            let processed = self.processImage(image, with: state)
-
-            DispatchQueue.main.async {
-                self.previewImage = processed
-                self.isProcessing = false
-            }
-        }
-    }
-
-    private func processImage(_ image: UIImage, with state: PhotoEditState) -> UIImage? {
-        guard var ciImage = CIImage(image: image) else { return image }
-
-        ciImage = applyBasicFilters(to: ciImage, with: state)
-        ciImage = applyAdvancedFilters(to: ciImage, with: state, imageSize: image.size)
-        ciImage = applyLUTFilter(to: ciImage, with: state)
-
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
-            return image
-        }
-        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
-    }
-
-    private func applyBasicFilters(to ciImage: CIImage, with state: PhotoEditState) -> CIImage {
-        var result = ciImage
-
-        // Apply exposure (brightness)
-        if state.brightness != 0 {
-            let filter = CIFilter.exposureAdjust()
-            filter.inputImage = result
-            filter.ev = Float(state.brightness)
-            result = filter.outputImage ?? result
-        }
-
-        // Apply color controls (contrast, saturation)
-        if state.contrast != 1.0 || state.saturation != 1.0 {
-            let filter = CIFilter.colorControls()
-            filter.inputImage = result
-            filter.contrast = Float(state.contrast)
-            filter.saturation = Float(state.saturation)
-            filter.brightness = 0
-            result = filter.outputImage ?? result
-        }
-
-        // Apply sharpness
-        if state.sharpness != 0 {
-            let filter = CIFilter.sharpenLuminance()
-            filter.inputImage = result
-            filter.sharpness = Float(state.sharpness)
-            result = filter.outputImage ?? result
-        }
-
-        // Apply temperature
-        if state.temperature != 0 {
-            let filter = CIFilter.temperatureAndTint()
-            filter.inputImage = result
-            let temp: CGFloat = CGFloat(6500 + Float(state.temperature) * 3000)
-            filter.neutral = CIVector(x: temp, y: 0)
-            result = filter.outputImage ?? result
-        }
-
-        return result
-    }
-
-    private func applyAdvancedFilters(to ciImage: CIImage, with state: PhotoEditState, imageSize: CGSize) -> CIImage {
-        var result = ciImage
-
-        // Apply highlights
-        if state.highlights != 0 {
-            let filter = CIFilter.highlightShadowAdjust()
-            filter.inputImage = result
-            filter.highlightAmount = Float(1.0 + state.highlights)
-            result = filter.outputImage ?? result
-        }
-
-        // Apply shadows
-        if state.shadows != 0 {
-            let filter = CIFilter.highlightShadowAdjust()
-            filter.inputImage = result
-            filter.shadowAmount = Float(state.shadows)
-            result = filter.outputImage ?? result
-        }
-
-        // Apply vignette
-        if state.vignette != 0 {
-            let filter = CIFilter.vignette()
-            filter.inputImage = result
-            filter.intensity = Float(state.vignette)
-            let radiusValue = Float(max(imageSize.width, imageSize.height) * 0.5)
-            filter.radius = radiusValue
-            result = filter.outputImage ?? result
-        }
-
-        // Apply fade (gamma adjustment for matte look)
-        if state.fade != 0 {
-            let filter = CIFilter.gammaAdjust()
-            filter.inputImage = result
-            filter.power = Float(1.0 - state.fade * 0.3)
-            result = filter.outputImage ?? result
-        }
-
-        // Apply clarity (unsharp mask)
-        if state.clarity != 0 {
-            let filter = CIFilter.unsharpMask()
-            filter.inputImage = result
-            filter.radius = Float(abs(state.clarity) * 2)
-            filter.intensity = Float(abs(state.clarity) * 0.5)
-            result = filter.outputImage ?? result
-        }
-
-        return result
-    }
-
-    private func applyLUTFilter(to ciImage: CIImage, with state: PhotoEditState) -> CIImage {
-        guard let lutName = state.selectedLUT,
-              let preset = LUTPreset.presets.first(where: { $0.name == lutName }),
-              preset.name != "Original" else {
-            return ciImage
-        }
-
-        let matrix = preset.colorMatrix
-        let intensityFloat = Float(state.lutIntensity)
-
-        let filter = CIFilter.colorMatrix()
-        filter.inputImage = ciImage
-
-        let rx: CGFloat = CGFloat(1.0 + (matrix[0] - 1.0) * intensityFloat)
-        let ry: CGFloat = CGFloat(matrix[1] * intensityFloat)
-        let rz: CGFloat = CGFloat(matrix[2] * intensityFloat)
-        let r = CIVector(x: rx, y: ry, z: rz, w: 0)
-
-        let gx: CGFloat = CGFloat(matrix[3] * intensityFloat)
-        let gy: CGFloat = CGFloat(1.0 + (matrix[4] - 1.0) * intensityFloat)
-        let gz: CGFloat = CGFloat(matrix[5] * intensityFloat)
-        let g = CIVector(x: gx, y: gy, z: gz, w: 0)
-
-        let bx: CGFloat = CGFloat(matrix[6] * intensityFloat)
-        let by: CGFloat = CGFloat(matrix[7] * intensityFloat)
-        let bz: CGFloat = CGFloat(1.0 + (matrix[8] - 1.0) * intensityFloat)
-        let b = CIVector(x: bx, y: by, z: bz, w: 0)
-
-        filter.rVector = r
-        filter.gVector = g
-        filter.bVector = b
-        filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        filter.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-
-        return filter.outputImage ?? ciImage
-    }
-
-    func getProcessedImage() -> UIImage? {
-        guard let image = baseImage else { return nil }
-        return processImage(image, with: currentState)
-    }
-}
-
-// Main Photo Editor View
 struct PhotoEditorView: View {
     let inputImage: UIImage
+    @State private var displayedImage: UIImage?
+    @State private var baseImage: UIImage?
+    @State private var originalImage: UIImage?  // Preserved original for revert and crop
     @Environment(\.presentationMode) var presentationMode
-    @StateObject private var controller = PhotoEditorController()
+    @State private var selectedTab = 0
+    @State private var brightness = 0.0
+    @State private var contrast = 1.0
+    @State private var saturation = 1.0
+    @State private var sharpness = 0.0
 
-    // UI State
-    @State private var selectedMenu: EditMenuType = .adjust
-    @State private var selectedFilter: FilterType? = nil
+    // Rotation animation state
+    @State private var rotationAngle: Double = 0
+    @State private var isRotating = false
+
+    // Crop mode state
     @State private var isCropping = false
-
-    // Crop state
-    @State private var cropRotation = 0.0
+    @State private var cropRotation = 0.0  // Fine rotation in degrees (-45 to 45)
+    @State private var cropRect: CGRect = .zero
     @State private var cropScale: CGFloat = 1.0
     @State private var cropOffset: CGSize = .zero
+    // For smooth gesture handling
     @State private var lastCropScale: CGFloat = 1.0
     @State private var lastCropOffset: CGSize = .zero
+    // Adjustable crop frame dimensions
     @State private var cropFrameWidth: CGFloat = 0
     @State private var cropFrameHeight: CGFloat = 0
+    // Track displayed image size for crop calculations
     @State private var displayedImageWidth: CGFloat = 0
     @State private var displayedImageHeight: CGFloat = 0
 
-    // Rotation animation
-    @State private var rotationAngle: Double = 0
-
-    enum EditMenuType: String, CaseIterable {
-        case lut = "LUTs"
-        case adjust = "Adjust"
-        case transform = "Transform"
-    }
-
-    enum FilterType: String, CaseIterable {
-        case brightness = "Brightness"
-        case contrast = "Contrast"
-        case saturation = "Saturation"
-        case sharpness = "Sharpness"
-        case temperature = "Temperature"
-        case highlights = "Highlights"
-        case shadows = "Shadows"
-        case vignette = "Vignette"
-        case fade = "Fade"
-        case clarity = "Clarity"
-
-        var icon: String {
-            switch self {
-            case .brightness: return "sun.max"
-            case .contrast: return "circle.righthalf.filled"
-            case .saturation: return "drop.fill"
-            case .sharpness: return "triangle"
-            case .temperature: return "thermometer"
-            case .highlights: return "sun.and.horizon"
-            case .shadows: return "moon.fill"
-            case .vignette: return "camera.aperture"
-            case .fade: return "cloud"
-            case .clarity: return "sparkle"
-            }
-        }
-
-        var range: ClosedRange<Double> {
-            switch self {
-            case .brightness: return -2.0...2.0
-            case .contrast: return 0.5...1.5
-            case .saturation: return 0.0...2.0
-            case .sharpness: return 0.0...2.0
-            case .temperature: return -1.0...1.0
-            case .highlights: return -1.0...1.0
-            case .shadows: return -1.0...1.0
-            case .vignette: return 0.0...2.0
-            case .fade: return 0.0...1.0
-            case .clarity: return -1.0...1.0
-            }
-        }
-
-        var defaultValue: Double {
-            switch self {
-            case .brightness, .temperature, .highlights, .shadows, .clarity: return 0.0
-            case .contrast, .saturation: return 1.0
-            case .sharpness, .vignette, .fade: return 0.0
-            }
-        }
-    }
+    private let context = CIContext()
 
     var body: some View {
         NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Image preview area
-                    imagePreviewArea
-
-                    // Controls area
-                    controlsArea
+            mainContentView
+                .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { editorToolbarContent }
+                .onAppear {
+                    originalImage = inputImage  // Store original for revert
+                    baseImage = inputImage
+                    displayedImage = inputImage
+                    applyProcessing()
                 }
-            }
-            .navigationTitle(isCropping ? "Crop & Rotate" : "Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
-        }
-        .onAppear {
-            controller.setImage(inputImage)
+                .onChange(of: brightness) { _, _ in applyProcessing() }
+                .onChange(of: contrast) { _, _ in applyProcessing() }
+                .onChange(of: saturation) { _, _ in applyProcessing() }
+                .onChange(of: sharpness) { _, _ in applyProcessing() }
         }
     }
 
-    // MARK: - Image Preview
+    // MARK: - Extracted Views
 
-    private var imagePreviewArea: some View {
-        GeometryReader { geo in
-            ZStack {
-                if isCropping {
-                    cropPreviewView(geo: geo)
-                } else {
-                    normalPreviewView
-                }
-
-                // Processing indicator
-                if controller.isProcessing {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
-                }
-            }
+    private var mainContentView: some View {
+        VStack {
+            Spacer()
+            imageDisplayArea
+            Spacer()
+            controlsSection
         }
-        .padding(.horizontal)
+        .background(Color.white)
     }
 
-    private var normalPreviewView: some View {
-        Group {
-            if let image = controller.previewImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .rotationEffect(.degrees(rotationAngle))
-                    .animation(.easeInOut(duration: 0.3), value: rotationAngle)
-            } else {
-                ProgressView()
-            }
+    @ViewBuilder
+    private var imageDisplayArea: some View {
+        if isCropping {
+            cropModeView.padding()
+        } else {
+            normalImageView
         }
     }
 
     @ViewBuilder
-    private func cropPreviewView(geo: GeometryProxy) -> some View {
-        if let img = controller.previewImage {
+    private var normalImageView: some View {
+        if let img = displayedImage {
+            Image(uiImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .rotationEffect(.degrees(rotationAngle))
+                .animation(.easeInOut(duration: 0.3), value: rotationAngle)
+                .padding()
+        } else {
+            ProgressView()
+        }
+    }
+
+    private var cropModeView: some View {
+        GeometryReader { geo in
+            cropModeContent(geo: geo)
+        }
+    }
+
+    @ViewBuilder
+    private func cropModeContent(geo: GeometryProxy) -> some View {
+        // Use original image for crop to preserve full image data
+        if let img = originalImage {
             let dimensions = calculateDisplayDimensions(for: img, in: geo)
-
-            ZStack {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .rotationEffect(.degrees(cropRotation))
-                    .scaleEffect(cropScale)
-                    .offset(cropOffset)
-                    .animation(.easeInOut(duration: 0.2), value: cropRotation)
-                    .gesture(magnificationGesture)
-                    .simultaneousGesture(dragGesture)
-
-                CropOverlayView(
-                    containerSize: geo.size,
-                    displayedImageWidth: dimensions.width,
-                    displayedImageHeight: dimensions.height,
-                    cropWidth: $cropFrameWidth,
-                    cropHeight: $cropFrameHeight
-                )
-            }
-            .onAppear {
-                displayedImageWidth = dimensions.width
-                displayedImageHeight = dimensions.height
-            }
-        }
-    }
-
-    // MARK: - Controls Area
-
-    private var controlsArea: some View {
-        VStack(spacing: 0) {
-            if isCropping {
-                cropControls
-            } else if selectedFilter != nil {
-                filterEditControls
-            } else {
-                mainMenuControls
-            }
-
-            if !isCropping {
-                menuTabBar
-            }
-        }
-        .background(Color(UIColor.systemBackground))
-    }
-
-    // MARK: - Filter Edit Controls
-
-    private var filterEditControls: some View {
-        VStack(spacing: 16) {
-            if let filter = selectedFilter {
-                HStack {
-                    Button(action: cancelFilterEdit) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(AppColors.error)
-                    }
-
-                    Spacer()
-
-                    Text(filter.rawValue)
-                        .font(AppFonts.headline)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    Spacer()
-
-                    Button(action: confirmFilterEdit) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(AppColors.success)
-                    }
+            cropModeZStack(img: img, geo: geo, dimensions: dimensions)
+                .onAppear {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
                 }
-                .padding(.horizontal)
-
-                FilterSliderView(
-                    value: bindingForFilter(filter),
-                    range: filter.range,
-                    defaultValue: filter.defaultValue,
-                    icon: filter.icon
-                )
-                .padding(.horizontal)
-            }
+                .onChange(of: geo.size) {
+                    displayedImageWidth = dimensions.width
+                    displayedImageHeight = dimensions.height
+                }
         }
-        .padding(.vertical)
     }
 
-    private func bindingForFilter(_ filter: FilterType) -> Binding<Double> {
-        switch filter {
-        case .brightness:
-            return Binding(
-                get: { controller.currentState.brightness },
-                set: { controller.currentState.brightness = $0; controller.applyFilters() }
-            )
-        case .contrast:
-            return Binding(
-                get: { controller.currentState.contrast },
-                set: { controller.currentState.contrast = $0; controller.applyFilters() }
-            )
-        case .saturation:
-            return Binding(
-                get: { controller.currentState.saturation },
-                set: { controller.currentState.saturation = $0; controller.applyFilters() }
-            )
-        case .sharpness:
-            return Binding(
-                get: { controller.currentState.sharpness },
-                set: { controller.currentState.sharpness = $0; controller.applyFilters() }
-            )
-        case .temperature:
-            return Binding(
-                get: { controller.currentState.temperature },
-                set: { controller.currentState.temperature = $0; controller.applyFilters() }
-            )
-        case .highlights:
-            return Binding(
-                get: { controller.currentState.highlights },
-                set: { controller.currentState.highlights = $0; controller.applyFilters() }
-            )
-        case .shadows:
-            return Binding(
-                get: { controller.currentState.shadows },
-                set: { controller.currentState.shadows = $0; controller.applyFilters() }
-            )
-        case .vignette:
-            return Binding(
-                get: { controller.currentState.vignette },
-                set: { controller.currentState.vignette = $0; controller.applyFilters() }
-            )
-        case .fade:
-            return Binding(
-                get: { controller.currentState.fade },
-                set: { controller.currentState.fade = $0; controller.applyFilters() }
-            )
-        case .clarity:
-            return Binding(
-                get: { controller.currentState.clarity },
-                set: { controller.currentState.clarity = $0; controller.applyFilters() }
+    private func calculateDisplayDimensions(for img: UIImage, in geo: GeometryProxy) -> (width: CGFloat, height: CGFloat) {
+        let imageAspect = img.size.width / img.size.height
+        let containerAspect = geo.size.width / geo.size.height
+
+        if imageAspect > containerAspect {
+            return (geo.size.width, geo.size.width / imageAspect)
+        } else {
+            return (geo.size.height * imageAspect, geo.size.height)
+        }
+    }
+
+    private func cropModeZStack(img: UIImage, geo: GeometryProxy, dimensions: (width: CGFloat, height: CGFloat)) -> some View {
+        ZStack {
+            // Clean background without grey borders
+            Color.black
+
+            croppableImage(img: img)
+
+            CropOverlayView(
+                containerSize: geo.size,
+                displayedImageWidth: dimensions.width,
+                displayedImageHeight: dimensions.height,
+                cropWidth: $cropFrameWidth,
+                cropHeight: $cropFrameHeight
             )
         }
     }
 
-    private func cancelFilterEdit() {
-        selectedFilter = nil
+    private func croppableImage(img: UIImage) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .rotationEffect(.degrees(cropRotation))
+            .scaleEffect(cropScale)
+            .offset(cropOffset)
+            .animation(.easeInOut(duration: 0.3), value: cropRotation)
+            .gesture(magnificationGesture)
+            .simultaneousGesture(dragGesture)
     }
-
-    private func confirmFilterEdit() {
-        controller.saveState()
-        selectedFilter = nil
-    }
-
-    // MARK: - Main Menu Controls
-
-    private var mainMenuControls: some View {
-        VStack(spacing: 12) {
-            switch selectedMenu {
-            case .lut:
-                lutMenuView
-            case .adjust:
-                adjustMenuView
-            case .transform:
-                transformMenuView
-            }
-        }
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - LUT Menu
-
-    private var lutMenuView: some View {
-        VStack(spacing: 12) {
-            // LUT presets horizontal scroll
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(LUTPreset.presets) { preset in
-                        LUTPresetButton(
-                            preset: preset,
-                            isSelected: controller.currentState.selectedLUT == preset.name,
-                            previewImage: inputImage
-                        ) {
-                            controller.currentState.selectedLUT = preset.name
-                            controller.applyFilters()
-                            controller.saveState()
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-
-            // LUT intensity slider (only show if a LUT is selected)
-            if controller.currentState.selectedLUT != nil && controller.currentState.selectedLUT != "Original" {
-                VStack(spacing: 8) {
-                    Text("Intensity")
-                        .font(AppFonts.caption)
-                        .foregroundColor(AppColors.textSecondary)
-
-                    HStack {
-                        Image(systemName: "circle")
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
-
-                        Slider(value: Binding(
-                            get: { controller.currentState.lutIntensity },
-                            set: {
-                                controller.currentState.lutIntensity = $0
-                                controller.applyFilters()
-                            }
-                        ), in: 0...1)
-                        .accentColor(AppColors.primary)
-
-                        Image(systemName: "circle.fill")
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                    }
-                    .padding(.horizontal)
-                }
-            }
-        }
-    }
-
-    // MARK: - Adjust Menu
-
-    private var adjustMenuView: some View {
-        VStack(spacing: 8) {
-            // Undo/Redo bar
-            HStack {
-                Button(action: { controller.undo() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.uturn.backward")
-                        Text("Undo")
-                    }
-                    .font(AppFonts.caption)
-                    .foregroundColor(controller.canUndo ? AppColors.primary : AppColors.textSecondary.opacity(0.5))
-                }
-                .disabled(!controller.canUndo)
-
-                Spacer()
-
-                Button(action: { controller.redo() }) {
-                    HStack(spacing: 4) {
-                        Text("Redo")
-                        Image(systemName: "arrow.uturn.forward")
-                    }
-                    .font(AppFonts.caption)
-                    .foregroundColor(controller.canRedo ? AppColors.primary : AppColors.textSecondary.opacity(0.5))
-                }
-                .disabled(!controller.canRedo)
-            }
-            .padding(.horizontal)
-
-            // Filter buttons horizontal scroll
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 20) {
-                    ForEach(FilterType.allCases, id: \.self) { filter in
-                        FilterButton(
-                            filter: filter,
-                            isActive: isFilterActive(filter)
-                        ) {
-                            selectedFilter = filter
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-    }
-
-    private func isFilterActive(_ filter: FilterType) -> Bool {
-        switch filter {
-        case .brightness: return controller.currentState.brightness != 0
-        case .contrast: return controller.currentState.contrast != 1.0
-        case .saturation: return controller.currentState.saturation != 1.0
-        case .sharpness: return controller.currentState.sharpness != 0
-        case .temperature: return controller.currentState.temperature != 0
-        case .highlights: return controller.currentState.highlights != 0
-        case .shadows: return controller.currentState.shadows != 0
-        case .vignette: return controller.currentState.vignette != 0
-        case .fade: return controller.currentState.fade != 0
-        case .clarity: return controller.currentState.clarity != 0
-        }
-    }
-
-    // MARK: - Transform Menu
-
-    private var transformMenuView: some View {
-        HStack(spacing: 40) {
-            Button(action: rotateImage) {
-                VStack(spacing: 8) {
-                    Image(systemName: "rotate.right")
-                        .font(.system(size: 24))
-                    Text("Rotate")
-                        .font(AppFonts.caption)
-                }
-            }
-
-            Button(action: startCropping) {
-                VStack(spacing: 8) {
-                    Image(systemName: "crop")
-                        .font(.system(size: 24))
-                    Text("Crop")
-                        .font(AppFonts.caption)
-                }
-            }
-
-            Button(action: { controller.revert() }) {
-                VStack(spacing: 8) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 24))
-                    Text("Revert")
-                        .font(AppFonts.caption)
-                }
-                .foregroundColor(AppColors.error)
-            }
-        }
-        .foregroundColor(AppColors.textPrimary)
-    }
-
-    // MARK: - Crop Controls
-
-    private var cropControls: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 30) {
-                Button(action: resetCropSettings) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 22))
-                        Text("Reset")
-                            .font(AppFonts.caption)
-                    }
-                }
-
-                Button(action: applyCrop) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 22))
-                        Text("Apply")
-                            .font(AppFonts.caption)
-                    }
-                    .foregroundColor(AppColors.success)
-                }
-
-                Button(action: cancelCrop) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 22))
-                        Text("Cancel")
-                            .font(AppFonts.caption)
-                    }
-                    .foregroundColor(AppColors.error)
-                }
-            }
-            .foregroundColor(AppColors.textPrimary)
-
-            // Rotation slider
-            VStack(spacing: 8) {
-                Text("Rotation")
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.textSecondary)
-
-                HStack {
-                    Image(systemName: "rotate.left")
-                        .foregroundColor(AppColors.textSecondary)
-                    Slider(value: $cropRotation, in: -45...45, step: 0.5)
-                        .accentColor(AppColors.primary)
-                    Image(systemName: "rotate.right")
-                        .foregroundColor(AppColors.textSecondary)
-                }
-
-                Text("\(String(format: "%.1f", cropRotation))°")
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.textPrimary)
-            }
-            .padding(.horizontal)
-        }
-        .padding(.vertical)
-    }
-
-    // MARK: - Menu Tab Bar
-
-    private var menuTabBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-
-            HStack {
-                ForEach(EditMenuType.allCases, id: \.self) { menu in
-                    Button(action: { selectedMenu = menu }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: iconForMenu(menu))
-                                .font(.system(size: 20))
-                            Text(menu.rawValue)
-                                .font(AppFonts.caption2)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .foregroundColor(selectedMenu == menu ? AppColors.primary : AppColors.textSecondary)
-                    }
-                }
-            }
-            .padding(.vertical, 10)
-        }
-    }
-
-    private func iconForMenu(_ menu: EditMenuType) -> String {
-        switch menu {
-        case .lut: return "camera.filters"
-        case .adjust: return "slider.horizontal.3"
-        case .transform: return "crop.rotate"
-        }
-    }
-
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            if !isCropping {
-                Button("Cancel") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-            }
-        }
-
-        ToolbarItem(placement: .navigationBarTrailing) {
-            if !isCropping {
-                Button("Save") {
-                    saveImage()
-                }
-                .fontWeight(.semibold)
-            }
-        }
-    }
-
-    // MARK: - Actions
-
-    private func rotateImage() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            rotationAngle -= 90
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            if let img = controller.previewImage,
-               let rotated = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees)) {
-                controller.setBaseImage(rotated)
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    rotationAngle = 0
-                }
-            }
-        }
-    }
-
-    private func startCropping() {
-        resetCropSettings()
-        withAnimation { isCropping = true }
-    }
-
-    private func cancelCrop() {
-        withAnimation { isCropping = false }
-        resetCropSettings()
-    }
-
-    private func resetCropSettings() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            cropScale = 1.0
-            cropOffset = .zero
-            cropRotation = 0
-            lastCropScale = 1.0
-            lastCropOffset = .zero
-            cropFrameWidth = 0
-            cropFrameHeight = 0
-        }
-    }
-
-    private func applyCrop() {
-        guard let img = controller.previewImage else { return }
-
-        var processedImage = img
-
-        // Apply rotation
-        if cropRotation != 0 {
-            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
-                processedImage = rotated
-            }
-        }
-
-        // Apply crop
-        if cropFrameWidth > 0 && cropFrameHeight > 0 &&
-           displayedImageWidth > 0 && displayedImageHeight > 0 {
-
-            let widthRatio = cropFrameWidth / displayedImageWidth
-            let heightRatio = cropFrameHeight / displayedImageHeight
-
-            let cropWidth = processedImage.size.width * widthRatio
-            let cropHeight = processedImage.size.height * heightRatio
-
-            let scaledImageWidth = displayedImageWidth * cropScale
-            let scaledImageHeight = displayedImageHeight * cropScale
-
-            let offsetXRatio = cropOffset.width / scaledImageWidth
-            let offsetYRatio = cropOffset.height / scaledImageHeight
-
-            let xOffset = (processedImage.size.width - cropWidth) / 2.0 - (offsetXRatio * processedImage.size.width)
-            let yOffset = (processedImage.size.height - cropHeight) / 2.0 - (offsetYRatio * processedImage.size.height)
-
-            let clampedX = max(0, min(processedImage.size.width - cropWidth, xOffset))
-            let clampedY = max(0, min(processedImage.size.height - cropHeight, yOffset))
-
-            let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
-
-            if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
-                processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
-            }
-        }
-
-        controller.setBaseImage(processedImage)
-        withAnimation { isCropping = false }
-        resetCropSettings()
-    }
-
-    private func saveImage() {
-        if let finalImage = controller.getProcessedImage() {
-            PhotoLibraryManager.shared.save(image: finalImage, procedure: nil, otherTags: [])
-        }
-        presentationMode.wrappedValue.dismiss()
-    }
-
-    // MARK: - Gestures
 
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
@@ -6532,109 +5751,347 @@ struct PhotoEditorView: View {
             }
     }
 
-    private func calculateDisplayDimensions(for img: UIImage, in geo: GeometryProxy) -> (width: CGFloat, height: CGFloat) {
-        let imageAspect = img.size.width / img.size.height
-        let containerAspect = geo.size.width / geo.size.height
+    private var controlsSection: some View {
+        VStack(spacing: 20) {
+            currentControlsView
+            if !isCropping {
+                tabBarView
+            }
+        }
+        .padding(.bottom)
+        .background(AppColors.surface)
+    }
 
-        if imageAspect > containerAspect {
-            return (geo.size.width, geo.size.width / imageAspect)
+    @ViewBuilder
+    private var currentControlsView: some View {
+        if isCropping {
+            cropControlsView
+        } else if selectedTab == 0 {
+            transformControlsView
         } else {
-            return (geo.size.height * imageAspect, geo.size.height)
+            adjustmentControlsView
         }
     }
-}
 
-// MARK: - Supporting Views
+    private var cropControlsView: some View {
+        VStack(spacing: 16) {
+            cropButtonsRow
+            rotationSlider
+        }
+        .padding()
+    }
 
-struct FilterButton: View {
-    let filter: PhotoEditorView.FilterType
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(isActive ? AppColors.primary.opacity(0.2) : Color.clear)
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: filter.icon)
-                        .font(.system(size: 22))
-                        .foregroundColor(isActive ? AppColors.primary : AppColors.textPrimary)
+    private var cropButtonsRow: some View {
+        HStack(spacing: 30) {
+            Button(action: resetCropSettings) {
+                VStack {
+                    Image(systemName: "arrow.counterclockwise").font(.system(size: 22))
+                    Text("Reset").font(AppFonts.caption)
                 }
-
-                Text(filter.rawValue)
-                    .font(AppFonts.caption2)
-                    .foregroundColor(isActive ? AppColors.primary : AppColors.textSecondary)
-                    .lineLimit(1)
             }
-        }
-    }
-}
-
-struct LUTPresetButton: View {
-    let preset: LUTPreset
-    let isSelected: Bool
-    let previewImage: UIImage
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 60, height: 60)
-
-                    Image(systemName: preset.icon)
-                        .font(.system(size: 24))
-                        .foregroundColor(isSelected ? AppColors.primary : AppColors.textPrimary)
+            Button(action: { applyCrop() }) {
+                VStack {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 22))
+                    Text("Apply").font(AppFonts.caption)
                 }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? AppColors.primary : Color.clear, lineWidth: 2)
-                )
-
-                Text(preset.name)
-                    .font(AppFonts.caption2)
-                    .foregroundColor(isSelected ? AppColors.primary : AppColors.textSecondary)
-                    .lineLimit(1)
             }
+            .foregroundColor(AppColors.success)
+            Button(action: { cancelCrop() }) {
+                VStack {
+                    Image(systemName: "xmark.circle").font(.system(size: 22))
+                    Text("Cancel").font(AppFonts.caption)
+                }
+            }
+            .foregroundColor(AppColors.error)
+        }
+        .foregroundColor(AppColors.textPrimary)
+    }
+
+    private func resetCropSettings() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            cropScale = 1.0
+            cropOffset = .zero
+            cropRotation = 0
+            lastCropScale = 1.0
+            lastCropOffset = .zero
+            cropFrameWidth = 0
+            cropFrameHeight = 0
         }
     }
-}
 
-struct FilterSliderView: View {
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let defaultValue: Double
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: 12) {
+    private var rotationSlider: some View {
+        VStack(spacing: 8) {
+            Text("Rotation")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textSecondary)
             HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
+                Image(systemName: "rotate.left")
                     .foregroundColor(AppColors.textSecondary)
-                    .frame(width: 30)
-
-                Slider(value: $value, in: range)
+                Slider(value: $cropRotation, in: -45...45, step: 0.5)
                     .accentColor(AppColors.primary)
-
-                Text(String(format: "%.2f", value))
-                    .font(AppFonts.caption)
+                Image(systemName: "rotate.right")
                     .foregroundColor(AppColors.textSecondary)
-                    .frame(width: 50)
             }
+            Text("\(String(format: "%.1f", cropRotation))°")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textPrimary)
+        }
+        .padding(.horizontal)
+    }
 
-            // Reset to default button
-            Button(action: { value = defaultValue }) {
-                Text("Reset")
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.primary)
+    private var transformControlsView: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 30) {
+                Button(action: { rotateImage() }) {
+                    VStack {
+                        Image(systemName: "rotate.right").font(.system(size: 22))
+                        Text("90°").font(AppFonts.caption)
+                    }
+                }
+                Button(action: { startCropping() }) {
+                    VStack {
+                        Image(systemName: "crop").font(.system(size: 22))
+                        Text("Crop").font(AppFonts.caption)
+                    }
+                }
+                Button(action: { revertToOriginal() }) {
+                    VStack {
+                        Image(systemName: "arrow.uturn.backward").font(.system(size: 22))
+                        Text("Revert").font(AppFonts.caption)
+                    }
+                }
+                .foregroundColor(AppColors.error)
+            }
+            .foregroundColor(AppColors.textPrimary)
+        }
+        .padding()
+    }
+
+    private var adjustmentControlsView: some View {
+        VStack(spacing: 15) {
+            AdjustmentRow(icon: "sun.max", label: "Bright", value: $brightness, range: -2.0...2.0)
+            AdjustmentRow(icon: "circle.righthalf.filled", label: "Contrast", value: $contrast, range: 0.625...1.375)
+            AdjustmentRow(icon: "drop.fill", label: "Sat", value: $saturation, range: 0.25...1.75)
+            AdjustmentRow(icon: "triangle", label: "Sharp", value: $sharpness, range: 0.0...7.5)
+        }
+        .padding(.horizontal)
+    }
+
+    private var tabBarView: some View {
+        VStack(spacing: 0) {
+            Divider().background(AppColors.secondary)
+            HStack {
+                Button(action: { selectedTab = 0 }) {
+                    VStack {
+                        Image(systemName: "crop.rotate")
+                        Text("Transform").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 0 ? AppColors.primary : AppColors.textSecondary)
+
+                Button(action: { selectedTab = 1 }) {
+                    VStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Adjust").font(AppFonts.caption2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == 1 ? AppColors.primary : AppColors.textSecondary)
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var editorToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if !isCropping {
+                Button("Cancel") { presentationMode.wrappedValue.dismiss() }
             }
         }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            if !isCropping {
+                Button("Save") { saveImage() }
+            }
+        }
+    }
+
+    func startCropping() {
+        cropRotation = 0
+        cropScale = 1.0
+        cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
+        withAnimation { isCropping = true }
+    }
+
+    func cancelCrop() {
+        withAnimation { isCropping = false }
+        cropRotation = 0
+        cropScale = 1.0
+        cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
+    }
+
+    func applyCrop() {
+        guard let img = originalImage else { return }
+
+        // Apply rotation first
+        var processedImage = img
+        if cropRotation != 0 {
+            if let rotated = img.rotated(by: Measurement(value: cropRotation, unit: UnitAngle.degrees)) {
+                processedImage = rotated
+            }
+        }
+
+        // Apply crop based on the adjustable crop frame
+        // Only crop if the frame has been adjusted from the full image
+        if cropFrameWidth > 0 && cropFrameHeight > 0 &&
+           displayedImageWidth > 0 && displayedImageHeight > 0 {
+
+            // Calculate the ratio of crop frame to displayed image
+            let widthRatio = cropFrameWidth / displayedImageWidth
+            let heightRatio = cropFrameHeight / displayedImageHeight
+
+            // Apply to original image dimensions
+            let cropWidth = processedImage.size.width * widthRatio
+            let cropHeight = processedImage.size.height * heightRatio
+
+            // Center the crop (accounting for scale and offset)
+            let scaledImageWidth = displayedImageWidth * cropScale
+            let scaledImageHeight = displayedImageHeight * cropScale
+
+            // Calculate offset in terms of the scaled image
+            let offsetXRatio = cropOffset.width / scaledImageWidth
+            let offsetYRatio = cropOffset.height / scaledImageHeight
+
+            // Map offset to original image coordinates
+            let xOffset = (processedImage.size.width - cropWidth) / 2.0 - (offsetXRatio * processedImage.size.width)
+            let yOffset = (processedImage.size.height - cropHeight) / 2.0 - (offsetYRatio * processedImage.size.height)
+
+            // Clamp to valid bounds
+            let clampedX = max(0, min(processedImage.size.width - cropWidth, xOffset))
+            let clampedY = max(0, min(processedImage.size.height - cropHeight, yOffset))
+
+            let cropRect = CGRect(x: clampedX, y: clampedY, width: cropWidth, height: cropHeight)
+
+            if let cgImage = processedImage.cgImage?.cropping(to: cropRect) {
+                processedImage = UIImage(cgImage: cgImage, scale: processedImage.scale, orientation: processedImage.imageOrientation)
+            }
+        }
+
+        baseImage = processedImage
+        applyProcessing()
+        withAnimation { isCropping = false }
+        cropRotation = 0
+        cropScale = 1.0
+        cropOffset = .zero
+        lastCropScale = 1.0
+        lastCropOffset = .zero
+        cropFrameWidth = 0
+        cropFrameHeight = 0
+        displayedImageWidth = 0
+        displayedImageHeight = 0
+    }
+
+    func applyProcessing() {
+        guard let currentDisplay = baseImage else { return }
+        let beginImage = CIImage(image: currentDisplay)
+        let exposureFilter = CIFilter.exposureAdjust()
+        exposureFilter.inputImage = beginImage
+        exposureFilter.ev = Float(brightness)
+        guard let exposureOutput = exposureFilter.outputImage else { return }
+
+        let colorFilter = CIFilter.colorControls()
+        colorFilter.inputImage = exposureOutput
+        colorFilter.brightness = 0
+        colorFilter.contrast = Float(contrast)
+        colorFilter.saturation = Float(saturation)
+        guard let colorOutput = colorFilter.outputImage else { return }
+
+        let sharpFilter = CIFilter.sharpenLuminance()
+        sharpFilter.inputImage = colorOutput
+        sharpFilter.sharpness = Float(sharpness)
+        guard let finalOutput = sharpFilter.outputImage else { return }
+
+        if let cgimg = context.createCGImage(finalOutput, from: finalOutput.extent) {
+            let processed = UIImage(cgImage: cgimg, scale: currentDisplay.scale, orientation: currentDisplay.imageOrientation)
+            displayedImage = processed
+        }
+    }
+
+    func rotateImage() {
+        // Animate the rotation visually
+        withAnimation(.easeInOut(duration: 0.3)) {
+            rotationAngle -= 90
+        }
+
+        // After animation completes, apply the actual rotation to the image
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard let img = baseImage else { return }
+            baseImage = img.rotated(by: Measurement(value: -90, unit: UnitAngle.degrees))
+            // Reset visual rotation WITHOUT animation since image data is now rotated
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                rotationAngle = 0
+            }
+            applyProcessing()
+        }
+    }
+
+    func revertToOriginal() {
+        guard let original = originalImage else { return }
+        baseImage = original
+        brightness = 0.0
+        contrast = 1.0
+        saturation = 1.0
+        sharpness = 0.0
+        rotationAngle = 0
+        applyProcessing()
+    }
+
+    func saveImage() {
+        guard let baseImg = baseImage else {
+            presentationMode.wrappedValue.dismiss()
+            return
+        }
+
+        // Apply the processing filters
+        var finalImage = baseImg
+        if let ciImage = CIImage(image: finalImage) {
+            let exposureFilter = CIFilter.exposureAdjust()
+            exposureFilter.inputImage = ciImage
+            exposureFilter.ev = Float(brightness)
+
+            if let exposureOutput = exposureFilter.outputImage {
+                let colorFilter = CIFilter.colorControls()
+                colorFilter.inputImage = exposureOutput
+                colorFilter.brightness = 0
+                colorFilter.contrast = Float(contrast)
+                colorFilter.saturation = Float(saturation)
+
+                if let colorOutput = colorFilter.outputImage {
+                    let sharpFilter = CIFilter.sharpenLuminance()
+                    sharpFilter.inputImage = colorOutput
+                    sharpFilter.sharpness = Float(sharpness)
+
+                    if let finalOutput = sharpFilter.outputImage,
+                       let cgimg = context.createCGImage(finalOutput, from: finalOutput.extent) {
+                        finalImage = UIImage(cgImage: cgimg, scale: finalImage.scale, orientation: finalImage.imageOrientation)
+                    }
+                }
+            }
+        }
+
+        PhotoLibraryManager.shared.save(image: finalImage, procedure: nil, otherTags: [])
+        presentationMode.wrappedValue.dismiss()
     }
 }
 
@@ -6646,13 +6103,16 @@ struct CropOverlayView: View {
     @Binding var cropWidth: CGFloat
     @Binding var cropHeight: CGFloat
 
+    // Minimum crop dimensions
     private let minCropSize: CGFloat = 50
 
     var body: some View {
+        // Use exact displayed image dimensions, or current crop dimensions if already adjusted
         let frameWidth = cropWidth > 0 ? cropWidth : displayedImageWidth
         let frameHeight = cropHeight > 0 ? cropHeight : displayedImageHeight
 
         ZStack {
+            // Transparent center (crop area)
             Rectangle()
                 .fill(Color.clear)
                 .frame(width: frameWidth, height: frameHeight)
@@ -6661,6 +6121,7 @@ struct CropOverlayView: View {
                         .stroke(Color.white, lineWidth: 2)
                 )
                 .overlay(
+                    // Grid lines - horizontal dividers
                     VStack(spacing: 0) {
                         ForEach(0..<3, id: \.self) { _ in
                             Spacer()
@@ -6671,6 +6132,7 @@ struct CropOverlayView: View {
                     }
                 )
                 .overlay(
+                    // Grid lines - vertical dividers
                     HStack(spacing: 0) {
                         ForEach(0..<3, id: \.self) { _ in
                             Spacer()
@@ -6682,8 +6144,10 @@ struct CropOverlayView: View {
                     }
                 )
 
+            // Corner handles with drag gestures
             VStack {
                 HStack {
+                    // Top-left handle
                     CropCornerHandle()
                         .gesture(
                             DragGesture()
@@ -6695,6 +6159,7 @@ struct CropOverlayView: View {
                                 }
                         )
                     Spacer()
+                    // Top-right handle
                     CropCornerHandle()
                         .gesture(
                             DragGesture()
@@ -6708,6 +6173,7 @@ struct CropOverlayView: View {
                 }
                 Spacer()
                 HStack {
+                    // Bottom-left handle
                     CropCornerHandle()
                         .gesture(
                             DragGesture()
@@ -6719,6 +6185,7 @@ struct CropOverlayView: View {
                                 }
                         )
                     Spacer()
+                    // Bottom-right handle
                     CropCornerHandle()
                         .gesture(
                             DragGesture()
@@ -6734,8 +6201,13 @@ struct CropOverlayView: View {
             .frame(width: frameWidth, height: frameHeight)
         }
         .onAppear {
-            if cropWidth == 0 { cropWidth = displayedImageWidth }
-            if cropHeight == 0 { cropHeight = displayedImageHeight }
+            // Initialize crop frame to exact image dimensions
+            if cropWidth == 0 {
+                cropWidth = displayedImageWidth
+            }
+            if cropHeight == 0 {
+                cropHeight = displayedImageHeight
+            }
         }
     }
 }
@@ -6743,9 +6215,11 @@ struct CropOverlayView: View {
 struct CropCornerHandle: View {
     var body: some View {
         ZStack {
+            // Invisible larger hit area for easier touch
             Rectangle()
                 .fill(Color.clear)
                 .frame(width: 44, height: 44)
+            // Visible corner indicator
             Rectangle()
                 .fill(Color.white)
                 .frame(width: 24, height: 4)
@@ -6758,21 +6232,9 @@ struct CropCornerHandle: View {
 }
 
 struct AdjustmentRow: View {
-    let icon: String
-    let label: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-
+    let icon: String; let label: String; @Binding var value: Double; let range: ClosedRange<Double>
     var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .frame(width: 25)
-            Text(label)
-                .font(AppFonts.caption)
-                .frame(width: 50, alignment: .leading)
-            Slider(value: $value, in: range)
-        }
-        .foregroundColor(.primary)
+        HStack { Image(systemName: icon).frame(width: 25); Text(label).font(AppFonts.caption).frame(width: 50, alignment: .leading); Slider(value: $value, in: range) }.foregroundColor(.primary)
     }
 }
 
@@ -6780,16 +6242,13 @@ extension UIImage {
     func rotated(by angle: Measurement<UnitAngle>) -> UIImage? {
         let radians = CGFloat(angle.converted(to: .radians).value)
         var newSize = CGRect(origin: CGPoint.zero, size: self.size).applying(CGAffineTransform(rotationAngle: radians)).size
-        newSize.width = floor(newSize.width)
-        newSize.height = floor(newSize.height)
+        newSize.width = floor(newSize.width); newSize.height = floor(newSize.height)
         UIGraphicsBeginImageContextWithOptions(newSize, false, self.scale)
         let context = UIGraphicsGetCurrentContext()!
-        context.translateBy(x: newSize.width/2, y: newSize.height/2)
-        context.rotate(by: radians)
+        context.translateBy(x: newSize.width/2, y: newSize.height/2); context.rotate(by: radians)
         self.draw(in: CGRect(x: -self.size.width/2, y: -self.size.height/2, width: self.size.width, height: self.size.height))
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return newImage
+        UIGraphicsEndImageContext(); return newImage
     }
 }
 
