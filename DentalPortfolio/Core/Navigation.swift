@@ -52,7 +52,15 @@ enum MainTab: Int, CaseIterable, Identifiable {
         case .profile: return "person.fill"
         }
     }
+
+    /// Accessibility hint when not selected
+    var accessibilityHint: String {
+        "Double tap to switch to \(title)"
+    }
 }
+
+/// Type alias for use with AccessibilityLabels
+typealias Tab = MainTab
 
 // MARK: - DPTabBar
 
@@ -87,6 +95,7 @@ struct DPTabBar: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTab = tab
             }
+            HapticsManager.shared.selectionChanged()
         } label: {
             VStack(spacing: AppTheme.Spacing.xxs) {
                 ZStack(alignment: .topTrailing) {
@@ -98,6 +107,7 @@ struct DPTabBar: View {
                     if badgeCount > 0 {
                         badgeView(count: badgeCount)
                             .offset(x: 8, y: -4)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -106,10 +116,24 @@ struct DPTabBar: View {
             }
             .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 44) // Minimum touch target
             .scaleEffect(isPressed ? 0.9 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(TabButtonStyle(isPressed: $pressedTab, tab: tab))
+        // Accessibility
+        .accessibilityLabel(tabAccessibilityLabel(tab: tab, badgeCount: badgeCount))
+        .accessibilityHint(isSelected ? "Currently selected" : tab.accessibilityHint)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Generate accessibility label for tab
+    private func tabAccessibilityLabel(tab: MainTab, badgeCount: Int) -> String {
+        var label = tab.title
+        if badgeCount > 0 {
+            label += ", \(badgeCount) notification\(badgeCount == 1 ? "" : "s")"
+        }
+        return label
     }
 
     @ViewBuilder
@@ -258,6 +282,26 @@ class NavigationRouter: ObservableObject {
     /// Currently selected tab
     @Published var selectedTab: MainTab = .home
 
+    /// Whether the tab bar should be visible
+    @Published var isTabBarVisible: Bool = true
+
+    // MARK: - Alert State
+
+    /// Whether an alert is currently shown
+    @Published var showAlert: Bool = false
+
+    /// Alert title
+    @Published var alertTitle: String = ""
+
+    /// Alert message
+    @Published var alertMessage: String = ""
+
+    /// Primary action for alert
+    var alertPrimaryAction: (() -> Void)?
+
+    /// Secondary action for alert (cancel)
+    var alertSecondaryAction: (() -> Void)?
+
     // MARK: - Capture Flow State
 
     /// Whether capture flow is actively presenting
@@ -397,6 +441,80 @@ class NavigationRouter: ObservableObject {
         libraryFilter.reset()
         selectedPortfolioId = nil
         activeSheet = nil
+        isTabBarVisible = true
+        dismissAlert()
+    }
+
+    // MARK: - Tab Bar Visibility
+
+    /// Show the tab bar
+    func showTabBar() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = true
+        }
+    }
+
+    /// Hide the tab bar
+    func hideTabBar() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = false
+        }
+    }
+
+    /// Set tab bar visibility
+    /// - Parameter visible: Whether tab bar should be visible
+    func setTabBarVisible(_ visible: Bool) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = visible
+        }
+    }
+
+    // MARK: - Alert Methods
+
+    /// Show an alert
+    /// - Parameters:
+    ///   - title: Alert title
+    ///   - message: Alert message
+    ///   - primaryAction: Action for primary button
+    ///   - secondaryAction: Optional action for secondary (cancel) button
+    func showAlertDialog(
+        title: String,
+        message: String,
+        primaryAction: (() -> Void)? = nil,
+        secondaryAction: (() -> Void)? = nil
+    ) {
+        alertTitle = title
+        alertMessage = message
+        alertPrimaryAction = primaryAction
+        alertSecondaryAction = secondaryAction
+        showAlert = true
+    }
+
+    /// Show a confirmation alert
+    /// - Parameters:
+    ///   - title: Alert title
+    ///   - message: Alert message
+    ///   - confirmAction: Action to perform on confirmation
+    func showConfirmation(
+        title: String,
+        message: String,
+        confirmAction: @escaping () -> Void
+    ) {
+        showAlertDialog(
+            title: title,
+            message: message,
+            primaryAction: confirmAction,
+            secondaryAction: {}
+        )
+    }
+
+    /// Dismiss the current alert
+    func dismissAlert() {
+        showAlert = false
+        alertTitle = ""
+        alertMessage = ""
+        alertPrimaryAction = nil
+        alertSecondaryAction = nil
     }
 }
 

@@ -183,6 +183,31 @@ struct DPButton: View {
         .opacity(isDisabled ? 0.5 : 1.0)
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isPressed)
+        // Accessibility
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(accessibilityHint)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityRemoveTraits(isDisabled || isLoading ? .isButton : [])
+        .accessibilityAddTraits(isDisabled || isLoading ? .isStaticText : [])
+    }
+
+    // MARK: - Accessibility
+
+    private var accessibilityLabel: String {
+        if isLoading {
+            return "\(title), loading"
+        }
+        return title
+    }
+
+    private var accessibilityHint: String {
+        if isDisabled {
+            return "Button disabled"
+        }
+        if isLoading {
+            return "Please wait"
+        }
+        return "Double tap to activate"
     }
 
     // MARK: - Computed Properties
@@ -356,6 +381,32 @@ struct DPTagPill: View {
                 }
             }
         }
+        // Accessibility
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(tagAccessibilityLabel)
+        .accessibilityHint(tagAccessibilityHint)
+        .accessibilityAddTraits(onTap != nil ? .isButton : [])
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: - Accessibility
+
+    private var tagAccessibilityLabel: String {
+        var label = "\(text) tag"
+        if isSelected {
+            label += ", selected"
+        }
+        return label
+    }
+
+    private var tagAccessibilityHint: String {
+        if showRemoveButton {
+            return "Double tap to remove"
+        }
+        if onTap != nil {
+            return isSelected ? "Double tap to deselect" : "Double tap to select"
+        }
+        return ""
     }
 
     // MARK: - Computed Properties
@@ -524,8 +575,13 @@ struct DPProgressBar: View {
                     .font(AppTheme.Typography.caption)
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .frame(width: 40, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
         }
+        // Accessibility
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int(progress * 100)) percent")
     }
 
     private var effectiveCornerRadius: CGFloat {
@@ -628,9 +684,27 @@ struct DPProgressRing: View {
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: size, height: size)
+        // Accessibility
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ringAccessibilityLabel)
+        .accessibilityValue("\(Int(progress * 100)) percent")
+    }
+
+    // MARK: - Accessibility
+
+    private var ringAccessibilityLabel: String {
+        switch labelStyle {
+        case .percentage:
+            return "Progress"
+        case .fraction(_, let total):
+            return "Progress, \(total) total"
+        case .custom(let text):
+            return "\(text) progress"
+        }
     }
 
     private var effectiveForegroundColor: Color {

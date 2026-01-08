@@ -1,294 +1,439 @@
 // ContentView.swift
-// Main container with tab navigation
+// Dental Portfolio - Main App Container
 //
-// The root view of the app that manages tab-based navigation.
-// Uses custom DPTabBar at bottom with four main tabs:
-// - Home: Dashboard with quick actions and stats
-// - Capture: Camera for photo capture
-// - Library: Photo gallery and organization
-// - Profile: Settings and user preferences
+// The root view of the app that manages tab-based navigation, global state,
+// deep linking, and app lifecycle.
+//
+// Features:
+// - Four-tab navigation with custom DPTabBar
+// - App-wide state management with AppState
+// - Deep link handling for portfolios and capture
+// - Lifecycle management (foreground/background)
+// - Global toast notification system
+// - Onboarding flow integration
 
 import SwiftUI
+import Combine
 import AVFoundation
+import Photos
 
 // MARK: - ContentView
 
 struct ContentView: View {
+    // MARK: - State Objects
+
     @StateObject private var router = NavigationRouter()
-    @StateObject private var sharedCameraService = CameraService()
+    @StateObject private var appState = AppState.shared
+    @StateObject private var cameraService = CameraService()
+
+    // MARK: - Observed Objects
+
+    @ObservedObject private var photoLibrary = PhotoLibraryManager.shared
+    @ObservedObject private var metadataManager = MetadataManager.shared
+    @ObservedObject private var accessibilityManager = AccessibilityManager.shared
+
+    // MARK: - Local State
+
+    @State private var showOnboarding: Bool = false
+    @State private var isAppReady: Bool = false
+    @State private var showGlobalToast: Bool = false
+    @State private var globalToastMessage: String = ""
+    @State private var globalToastType: DPToast.ToastType = .info
+
+    // MARK: - Environment
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    // MARK: - Computed Properties
+
+    private var hasCompletedOnboarding: Bool {
+        UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    }
+
+    private var isTabBarVisible: Bool {
+        router.selectedTab != .capture && router.isTabBarVisible
+    }
+
+    // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Tab content
-            Group {
-                switch router.selectedTab {
-                case .home:
-                    HomeView()
-                        .transition(.opacity)
-
-                case .capture:
-                    // Full capture flow (Phase 3)
-                    CaptureFlowView(cameraService: sharedCameraService)
-                        .transition(.opacity)
-
-                case .library:
-                    LibraryView()
-                        .transition(.opacity)
-
-                case .profile:
-                    ProfileView()
-                        .transition(.opacity)
+        ZStack {
+            if isAppReady {
+                mainAppContent
+            } else {
+                launchScreen
+            }
+        }
+        .onAppear {
+            initializeApp()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            handleScenePhaseChange(newPhase)
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding) {
+                onOnboardingComplete()
+            }
+        }
+        .sheet(item: $router.activeSheet) { sheet in
+            sheetContent(for: sheet)
+        }
+        .alert(router.alertTitle, isPresented: $router.showAlert) {
+            Button("OK") {
+                router.alertPrimaryAction?()
+            }
+            if router.alertSecondaryAction != nil {
+                Button("Cancel", role: .cancel) {
+                    router.alertSecondaryAction?()
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
-
-            // Custom tab bar (hide during capture)
-            if router.selectedTab != .capture {
-                DPTabBar(selectedTab: $router.selectedTab)
+        } message: {
+            Text(router.alertMessage)
+        }
+        .overlay(alignment: .top) {
+            if showGlobalToast {
+                DPToast(globalToastMessage, type: globalToastType)
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                    .padding(.top, AppTheme.Spacing.md)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onTapGesture {
+                        withAnimation {
+                            showGlobalToast = false
+                        }
+                    }
+                    .zIndex(1000)
             }
         }
         .environmentObject(router)
+        .environmentObject(appState)
+        .environment(\.accessibilityManager, accessibilityManager)
         .preferredColorScheme(.light)
-        .ignoresSafeArea(.keyboard)
-        .onAppear {
-            // Initialize photo library
-            PhotoLibraryManager.shared.fetchAssets()
-        }
     }
-}
 
-// MARK: - Capture Tab Placeholder
+    // MARK: - Main App Content
 
-/// Temporary placeholder for the Capture tab (will be replaced in Phase 3)
-private struct CaptureTabPlaceholder: View {
-    @EnvironmentObject var router: NavigationRouter
+    @ViewBuilder
+    private var mainAppContent: some View {
+        ZStack(alignment: .bottom) {
+            // Tab content
+            tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-    var body: some View {
-        NavigationView {
+            // Custom tab bar with animated visibility
+            if isTabBarVisible {
+                DPTabBar(selectedTab: $router.selectedTab)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTabBarVisible)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+
+    // MARK: - Tab Content
+
+    @ViewBuilder
+    private var tabContent: some View {
+        Group {
+            switch router.selectedTab {
+            case .home:
+                NavigationView {
+                    HomeView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .transition(.opacity)
+
+            case .capture:
+                CaptureFlowView(cameraService: cameraService)
+                    .transition(.opacity)
+
+            case .library:
+                NavigationView {
+                    LibraryView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .transition(.opacity)
+
+            case .profile:
+                NavigationView {
+                    ProfileView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
+    }
+
+    // MARK: - Launch Screen
+
+    private var launchScreen: some View {
+        ZStack {
+            AppTheme.Colors.background.ignoresSafeArea()
+
             VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer()
-
-                // Camera icon
+                // App icon
                 ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.1))
-                        .frame(width: 120, height: 120)
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 100, height: 100)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 20, x: 0, y: 10)
 
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(AppTheme.Colors.primary)
+                        .font(.system(size: 44))
+                        .foregroundColor(.white)
                 }
 
-                // Title
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    Text("Capture")
-                        .font(AppTheme.Typography.title2)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                Text("Dental Portfolio")
+                    .font(AppTheme.Typography.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
 
-                    Text("Camera capture flow coming in Phase 3")
-                        .font(AppTheme.Typography.body)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                // Show pre-filled values if any
-                if let procedure = router.capturePrefilledProcedure {
-                    VStack(spacing: AppTheme.Spacing.xs) {
-                        Text("Pre-filled values:")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-
-                        HStack(spacing: AppTheme.Spacing.sm) {
-                            DPTagPill(procedure, color: AppTheme.procedureColor(for: procedure))
-
-                            if let stage = router.capturePrefilledStage {
-                                DPTagPill(stage, color: AppTheme.Colors.secondary)
-                            }
-
-                            if let angle = router.capturePrefilledAngle {
-                                DPTagPill(angle, color: AppTheme.Colors.textSecondary)
-                            }
-                        }
-                    }
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
                     .padding(.top, AppTheme.Spacing.md)
-                }
-
-                Spacer()
-
-                // Back to home button
-                DPButton("Back to Home", style: .secondary) {
-                    router.resetCaptureState()
-                    router.selectedTab = .home
-                }
-                .padding(.horizontal, AppTheme.Spacing.lg)
-                .padding(.bottom, 100)
             }
-            .frame(maxWidth: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Capture")
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Dental Portfolio loading")
+    }
+
+    // MARK: - Sheet Content
+
+    @ViewBuilder
+    private func sheetContent(for sheet: NavigationRouter.SheetType) -> some View {
+        switch sheet {
+        case .settings:
+            NavigationView {
+                ProfileView()
+            }
+
+        case .filterPicker:
+            // Filter picker would go here
+            Text("Filter Picker")
+
+        case .photoDetail(let id):
+            // Photo detail with ID lookup
+            if let asset = photoLibrary.assets.first(where: { $0.localIdentifier == id }) {
+                PhotoDetailSheet(asset: asset)
+            }
+
+        case .portfolioDetail(let id):
+            // Portfolio detail with ID lookup
+            if let portfolio = metadataManager.portfolios.first(where: { $0.id == id }) {
+                PortfolioDetailView(portfolio: portfolio)
+            }
+
+        case .tagEditor(let photoId):
+            // Tag editor for specific photo
+            Text("Tag Editor for \(photoId)")
+
+        case .shareSheet(let photoIds):
+            // Share sheet for photos
+            Text("Share \(photoIds.count) photos")
+        }
+    }
+
+    // MARK: - Initialization
+
+    private func initializeApp() {
+        Task {
+            // Load app data
+            await loadAppData()
+
+            // Check permissions
+            await appState.checkAllPermissions()
+
+            // Small delay for smooth transition
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    isAppReady = true
+                }
+
+                // Show onboarding if needed
+                if !hasCompletedOnboarding {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showOnboarding = true
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadAppData() async {
+        // Load metadata
+        metadataManager.loadMetadata()
+        metadataManager.loadPortfolios()
+        metadataManager.loadProcedures()
+
+        // Fetch photo library assets
+        photoLibrary.fetchAssets()
+    }
+
+    // MARK: - Onboarding Complete
+
+    private func onOnboardingComplete() {
+        // Refresh data after permissions granted
+        Task {
+            await loadAppData()
+        }
+
+        // Show welcome toast
+        showToast(type: .success, message: "Welcome to Dental Portfolio!")
+
+        // Announce for accessibility
+        AccessibilityManager.shared.announce("Onboarding complete. Welcome to Dental Portfolio.")
+    }
+
+    // MARK: - Scene Phase Handling
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            onAppBecameActive()
+        case .inactive:
+            onAppBecameInactive()
+        case .background:
+            onAppEnteredBackground()
+        @unknown default:
+            break
+        }
+    }
+
+    private func onAppBecameActive() {
+        // Refresh photo library
+        photoLibrary.fetchAssets()
+
+        // Resume camera if on capture tab
+        if router.selectedTab == .capture {
+            cameraService.startSession()
+        }
+
+        // Check for permission changes
+        Task {
+            await appState.checkAllPermissions()
+        }
+    }
+
+    private func onAppBecameInactive() {
+        // Pause camera
+        cameraService.stopSession()
+    }
+
+    private func onAppEnteredBackground() {
+        // Save any pending data
+        metadataManager.saveMetadata()
+        metadataManager.savePortfolios()
+        appState.saveState()
+    }
+
+    // MARK: - Deep Link Handling
+
+    private func handleDeepLink(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return
+        }
+
+        let pathComponents = components.path.split(separator: "/").map(String.init)
+
+        switch pathComponents.first {
+        case "portfolio":
+            if pathComponents.count > 1 {
+                let portfolioId = pathComponents[1]
+                router.navigateToPortfolio(id: portfolioId)
+            }
+
+        case "capture":
+            // Parse query parameters for pre-fill
+            if let queryItems = components.queryItems {
+                var procedure: String?
+                var stage: String?
+                var angle: String?
+
+                for item in queryItems {
+                    switch item.name {
+                    case "procedure": procedure = item.value
+                    case "stage": stage = item.value
+                    case "angle": angle = item.value
+                    default: break
+                    }
+                }
+
+                router.navigateToCapture(
+                    procedure: procedure,
+                    stage: stage,
+                    angle: angle
+                )
+            } else {
+                router.selectedTab = .capture
+            }
+
+        case "library":
+            router.selectedTab = .library
+
+        case "profile":
+            router.selectedTab = .profile
+
+        default:
+            break
+        }
+
+        // Announce navigation for accessibility
+        AccessibilityManager.shared.announceScreenChange()
+    }
+
+    // MARK: - Toast Helper
+
+    func showToast(type: DPToast.ToastType, message: String, duration: Double = 3.0) {
+        globalToastType = type
+        globalToastMessage = message
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showGlobalToast = true
+        }
+
+        // Auto dismiss
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showGlobalToast = false
+            }
+        }
+    }
+}
+
+// MARK: - Photo Detail Sheet
+
+private struct PhotoDetailSheet: View {
+    let asset: PHAsset
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                // Photo would be displayed here
+                Text("Photo Detail")
+                    .font(AppTheme.Typography.title2)
+            }
+            .navigationTitle("Photo")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-// MARK: - Library Tab Placeholder
-
-/// Temporary placeholder for the Library tab (will be replaced in Phase 4)
-private struct LibraryTabPlaceholder: View {
-    @EnvironmentObject var router: NavigationRouter
-    @ObservedObject var library = PhotoLibraryManager.shared
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                if library.assets.isEmpty {
-                    // Empty state
-                    Spacer()
-
-                    DPEmptyState(
-                        icon: "photo.on.rectangle",
-                        title: "No Photos Yet",
-                        message: "Start capturing dental photos to see them here"
-                    ) {
-                        DPButton("Start Capturing", icon: "camera.fill") {
-                            router.selectedTab = .capture
-                        }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
                     }
-
-                    Spacer()
-                } else {
-                    // Photo count info
-                    VStack(spacing: AppTheme.Spacing.sm) {
-                        Text("\(library.assets.count)")
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.primary)
-
-                        Text("photos in your library")
-                            .font(AppTheme.Typography.body)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    .padding(.top, AppTheme.Spacing.xl)
-
-                    Spacer()
-
-                    // Placeholder message
-                    VStack(spacing: AppTheme.Spacing.sm) {
-                        Image(systemName: "photo.stack")
-                            .font(.system(size: 40))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-
-                        Text("Full library view coming in Phase 4")
-                            .font(AppTheme.Typography.subheadline)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-
-                    Spacer()
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 80)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.large)
         }
-        .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-// MARK: - Profile Tab Placeholder
-
-/// Temporary placeholder for the Profile tab (will be replaced in Phase 6)
-private struct ProfileTabPlaceholder: View {
-    var body: some View {
-        NavigationView {
-            List {
-                // App info section
-                Section {
-                    HStack(spacing: AppTheme.Spacing.md) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(AppTheme.Colors.primary)
-                                .frame(width: 60, height: 60)
-
-                            Image(systemName: "tooth")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white)
-                        }
-
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                            Text("Dental Portfolio")
-                                .font(AppTheme.Typography.headline)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-
-                            Text("Version 2.0 (Redesign)")
-                                .font(AppTheme.Typography.caption)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    .padding(.vertical, AppTheme.Spacing.sm)
-                }
-
-                // Settings placeholder
-                Section(header: Text("Settings")) {
-                    SettingsRow(icon: "bell", title: "Notifications", subtitle: "Coming soon")
-                    SettingsRow(icon: "camera", title: "Camera Settings", subtitle: "Coming soon")
-                    SettingsRow(icon: "photo.on.rectangle", title: "Library Settings", subtitle: "Coming soon")
-                }
-
-                // Data section
-                Section(header: Text("Data")) {
-                    SettingsRow(icon: "square.and.arrow.up", title: "Export Data", subtitle: "Coming soon")
-                    SettingsRow(icon: "trash", title: "Clear Data", subtitle: "Coming soon", isDestructive: true)
-                }
-
-                // About section
-                Section(header: Text("About")) {
-                    SettingsRow(icon: "info.circle", title: "About", subtitle: "Full profile view coming in Phase 6")
-                    SettingsRow(icon: "questionmark.circle", title: "Help & Support", subtitle: "Coming soon")
-                }
-            }
-            .listStyle(InsetGroupedListStyle())
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.large)
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-// MARK: - Settings Row Helper
-
-/// A row for the settings list
-private struct SettingsRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    var isDestructive: Bool = false
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundColor(isDestructive ? AppTheme.Colors.error : AppTheme.Colors.primary)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(isDestructive ? AppTheme.Colors.error : AppTheme.Colors.textPrimary)
-
-                Text(subtitle)
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textTertiary)
-        }
-        .padding(.vertical, AppTheme.Spacing.xs)
     }
 }
 
