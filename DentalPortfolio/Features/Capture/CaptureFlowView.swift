@@ -917,20 +917,6 @@ struct AngleButton: View {
     }
 }
 
-// MARK: - Camera Capture View (Placeholder)
-
-/// Active camera view with minimal controls
-/// Supports batch capture with current tag settings
-struct CameraCaptureView: View {
-    @ObservedObject var captureState: CaptureFlowState
-    @ObservedObject var cameraService: CameraService
-
-    var body: some View {
-        Text("Camera View")
-            .foregroundColor(.white)
-    }
-}
-
 // MARK: - Capture Review View (Placeholder)
 
 /// Post-capture review screen
