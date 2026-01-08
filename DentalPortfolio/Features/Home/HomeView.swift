@@ -87,20 +87,140 @@ struct HomeView: View {
 
 /// Quick capture buttons for each procedure type
 struct QuickCaptureSection: View {
+    @EnvironmentObject var router: NavigationRouter
+    @ObservedObject var metadataManager = MetadataManager.shared
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            DPSectionHeader("Quick Capture")
+            // Section header
+            DPSectionHeader("Quick Capture", subtitle: "Tap a procedure to start")
                 .padding(.horizontal, AppTheme.Spacing.md)
 
-            // Placeholder content
-            DPCard {
-                Text("Quick Capture Section")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 100)
+            // Horizontal scroll of procedure buttons
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    ForEach(metadataManager.procedures, id: \.self) { procedure in
+                        QuickCaptureProcedureButton(
+                            procedure: procedure,
+                            color: AppTheme.procedureColor(for: procedure),
+                            photoCount: metadataManager.photoCount(for: procedure)
+                        ) {
+                            router.navigateToCapture(procedure: procedure)
+                        }
+                    }
+
+                    // Add new procedure button
+                    AddProcedureButton {
+                        // TODO: Show add procedure sheet
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
         }
+    }
+}
+
+// MARK: - Quick Capture Procedure Button
+
+/// A button for quickly starting capture with a specific procedure
+struct QuickCaptureProcedureButton: View {
+    let procedure: String
+    let color: Color
+    let photoCount: Int
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: {
+            HapticsManager.shared.lightTap()
+            action()
+        }) {
+            VStack(spacing: AppTheme.Spacing.sm) {
+                // Color circle with camera icon
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 56, height: 56)
+
+                    Circle()
+                        .fill(color)
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                }
+
+                // Procedure name
+                Text(procedure)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+
+                // Photo count
+                Text("\(photoCount) photos")
+                    .font(AppTheme.Typography.caption2)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .frame(width: 80)
+            .padding(.vertical, AppTheme.Spacing.sm)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+    }
+}
+
+// MARK: - Add Procedure Button
+
+/// Button to add a new custom procedure
+struct AddProcedureButton: View {
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: {
+            HapticsManager.shared.lightTap()
+            action()
+        }) {
+            VStack(spacing: AppTheme.Spacing.sm) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(
+                            AppTheme.Colors.textTertiary,
+                            style: StrokeStyle(lineWidth: 2, dash: [5])
+                        )
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+
+                Text("Add New")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+
+                // Empty text for alignment
+                Text(" ")
+                    .font(AppTheme.Typography.caption2)
+            }
+            .frame(width: 80)
+            .padding(.vertical, AppTheme.Spacing.sm)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 

@@ -129,4 +129,11 @@ class MetadataManager: ObservableObject {
     func getMetadata(for assetId: String) -> PhotoMetadata? {
         return assetMetadata[assetId]
     }
+
+    /// Get photo count for a procedure type
+    /// - Parameter procedure: The procedure name
+    /// - Returns: Number of photos with this procedure
+    func photoCount(for procedure: String) -> Int {
+        return assetMetadata.values.filter { $0.procedure == procedure }.count
+    }
 }
