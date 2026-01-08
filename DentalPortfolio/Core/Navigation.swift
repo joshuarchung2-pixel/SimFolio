@@ -282,6 +282,26 @@ class NavigationRouter: ObservableObject {
     /// Currently selected tab
     @Published var selectedTab: MainTab = .home
 
+    /// Whether the tab bar should be visible
+    @Published var isTabBarVisible: Bool = true
+
+    // MARK: - Alert State
+
+    /// Whether an alert is currently shown
+    @Published var showAlert: Bool = false
+
+    /// Alert title
+    @Published var alertTitle: String = ""
+
+    /// Alert message
+    @Published var alertMessage: String = ""
+
+    /// Primary action for alert
+    var alertPrimaryAction: (() -> Void)?
+
+    /// Secondary action for alert (cancel)
+    var alertSecondaryAction: (() -> Void)?
+
     // MARK: - Capture Flow State
 
     /// Whether capture flow is actively presenting
@@ -421,6 +441,80 @@ class NavigationRouter: ObservableObject {
         libraryFilter.reset()
         selectedPortfolioId = nil
         activeSheet = nil
+        isTabBarVisible = true
+        dismissAlert()
+    }
+
+    // MARK: - Tab Bar Visibility
+
+    /// Show the tab bar
+    func showTabBar() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = true
+        }
+    }
+
+    /// Hide the tab bar
+    func hideTabBar() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = false
+        }
+    }
+
+    /// Set tab bar visibility
+    /// - Parameter visible: Whether tab bar should be visible
+    func setTabBarVisible(_ visible: Bool) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTabBarVisible = visible
+        }
+    }
+
+    // MARK: - Alert Methods
+
+    /// Show an alert
+    /// - Parameters:
+    ///   - title: Alert title
+    ///   - message: Alert message
+    ///   - primaryAction: Action for primary button
+    ///   - secondaryAction: Optional action for secondary (cancel) button
+    func showAlertDialog(
+        title: String,
+        message: String,
+        primaryAction: (() -> Void)? = nil,
+        secondaryAction: (() -> Void)? = nil
+    ) {
+        alertTitle = title
+        alertMessage = message
+        alertPrimaryAction = primaryAction
+        alertSecondaryAction = secondaryAction
+        showAlert = true
+    }
+
+    /// Show a confirmation alert
+    /// - Parameters:
+    ///   - title: Alert title
+    ///   - message: Alert message
+    ///   - confirmAction: Action to perform on confirmation
+    func showConfirmation(
+        title: String,
+        message: String,
+        confirmAction: @escaping () -> Void
+    ) {
+        showAlertDialog(
+            title: title,
+            message: message,
+            primaryAction: confirmAction,
+            secondaryAction: {}
+        )
+    }
+
+    /// Dismiss the current alert
+    func dismissAlert() {
+        showAlert = false
+        alertTitle = ""
+        alertMessage = ""
+        alertPrimaryAction = nil
+        alertSecondaryAction = nil
     }
 }
 
