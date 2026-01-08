@@ -416,20 +416,193 @@ struct PortfolioPreviewCard: View {
 
 /// List of items that need attention (missing photos, incomplete metadata)
 struct NeedsAttentionSection: View {
+    @EnvironmentObject var router: NavigationRouter
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    @State private var showAllItems = false
+
+    /// Get all missing requirements from portfolios due within 14 days
+    var missingRequirements: [MissingRequirement] {
+        var missing: [MissingRequirement] = []
+
+        for portfolio in metadataManager.portfolios {
+            // Only check portfolios due within 14 days
+            guard let daysUntil = portfolio.daysUntilDue, daysUntil <= 14 else { continue }
+
+            for requirement in portfolio.requirements {
+                for stage in requirement.stages {
+                    for angle in requirement.angles {
+                        let currentCount = metadataManager.getPhotoCount(
+                            for: requirement,
+                            stage: stage,
+                            angle: angle
+                        )
+                        let neededCount = requirement.angleCounts[angle] ?? 1
+
+                        if currentCount < neededCount {
+                            missing.append(MissingRequirement(
+                                portfolio: portfolio,
+                                requirement: requirement,
+                                stage: stage,
+                                angle: angle,
+                                currentCount: currentCount,
+                                neededCount: neededCount
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by urgency (portfolio due date)
+        return missing.sorted { m1, m2 in
+            (m1.portfolio.daysUntilDue ?? 999) < (m2.portfolio.daysUntilDue ?? 999)
+        }
+    }
+
+    var displayedItems: [MissingRequirement] {
+        if showAllItems {
+            return missingRequirements
+        } else {
+            return Array(missingRequirements.prefix(5))
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            DPSectionHeader("Needs Attention")
+        if !missingRequirements.isEmpty {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                DPSectionHeader(
+                    "Needs Attention",
+                    subtitle: "\(missingRequirements.count) missing"
+                )
                 .padding(.horizontal, AppTheme.Spacing.md)
 
-            // Placeholder content
-            DPCard {
-                Text("Needs Attention Section")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 100)
+                VStack(spacing: 0) {
+                    ForEach(Array(displayedItems.enumerated()), id: \.element.id) { index, item in
+                        MissingRequirementRow(item: item) {
+                            router.navigateToCapture(
+                                procedure: item.requirement.procedure,
+                                stage: item.stage,
+                                angle: item.angle,
+                                forPortfolioId: item.portfolio.id
+                            )
+                        }
+
+                        if index < displayedItems.count - 1 {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
+                    }
+
+                    // Show more button
+                    if missingRequirements.count > 5 && !showAllItems {
+                        Button(action: {
+                            withAnimation(.dpSpring) {
+                                showAllItems = true
+                            }
+                        }) {
+                            HStack {
+                                Text("Show \(missingRequirements.count - 5) more")
+                                    .font(AppTheme.Typography.subheadline)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, AppTheme.Spacing.md)
+                        }
+                    }
+                }
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.medium)
+                .shadowSmall()
+                .padding(.horizontal, AppTheme.Spacing.md)
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
         }
+    }
+}
+
+// MARK: - Missing Requirement Model
+
+/// Represents a missing photo requirement for a portfolio
+struct MissingRequirement: Identifiable {
+    let id = UUID()
+    let portfolio: Portfolio
+    let requirement: PortfolioRequirement
+    let stage: String
+    let angle: String
+    let currentCount: Int
+    let neededCount: Int
+
+    var description: String {
+        "\(requirement.procedure) \(stage) - \(angle)"
+    }
+
+    var countText: String {
+        let missing = neededCount - currentCount
+        if missing > 1 {
+            return "Need \(missing) more"
+        }
+        return ""
+    }
+}
+
+// MARK: - Missing Requirement Row
+
+/// A row displaying a missing photo requirement with capture button
+struct MissingRequirementRow: View {
+    let item: MissingRequirement
+    let onCaptureTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
+            // Warning icon
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.warning.opacity(0.15))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppTheme.Colors.warning)
+            }
+
+            // Requirement info
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                Text(item.description)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Text("For \(item.portfolio.name)")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+
+                    if !item.countText.isEmpty {
+                        Text("•")
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                        Text(item.countText)
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.warning)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Capture button
+            DPIconButton(
+                icon: "camera.fill",
+                size: 40,
+                backgroundColor: AppTheme.Colors.primary,
+                iconColor: .white
+            ) {
+                HapticsManager.shared.lightTap()
+                onCaptureTap()
+            }
+        }
+        .padding(AppTheme.Spacing.md)
     }
 }
 

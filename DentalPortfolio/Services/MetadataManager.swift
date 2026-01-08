@@ -162,6 +162,16 @@ class MetadataManager: ObservableObject {
         }.count
     }
 
+    /// Get photo count for a requirement's procedure, stage, and angle
+    /// - Parameters:
+    ///   - requirement: The portfolio requirement
+    ///   - stage: Stage to match
+    ///   - angle: Angle to match
+    /// - Returns: Number of matching photos
+    func getPhotoCount(for requirement: PortfolioRequirement, stage: String, angle: String) -> Int {
+        return getMatchingPhotoCount(procedure: requirement.procedure, stage: stage, angle: angle)
+    }
+
     // MARK: - Metadata Methods (Placeholder)
 
     /// Get asset IDs with incomplete metadata
