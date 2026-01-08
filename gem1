@@ -5342,11 +5342,17 @@ struct PhotoDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if !isImmersiveMode {
                     Button("Edit") { isEditing = true }
+                } else {
+                    EmptyView()
                 }
             }
         }
         .fullScreenCover(isPresented: $isEditing) {
-            if let img = image { PhotoEditorView(inputImage: img) }
+            if let img = image {
+                PhotoEditorView(inputImage: img)
+            } else {
+                EmptyView()
+            }
         }
         .onAppear {
             PhotoLibraryManager.shared.requestImage(for: asset) { loadedImg in
