@@ -598,43 +598,7 @@ struct RequirementSummaryRow: View {
 
 // NOTE: PortfolioChecklistTab is now implemented in PortfolioChecklistTab.swift
 // NOTE: PortfolioPhotosTab is now implemented in PortfolioPhotosTab.swift
-
-/// Placeholder for PortfolioExportSheet - will be implemented in Prompt 5.5
-struct PortfolioExportSheet: View {
-    let portfolio: Portfolio
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer()
-
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Text("Export Sheet")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Coming in Prompt 5.5")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Export")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-            }
-        }
-    }
-}
+// NOTE: PortfolioExportSheet is now implemented in PortfolioExportSheet.swift
 
 /// Placeholder for EditPortfolioSheet - will be implemented in Prompt 5.6
 struct EditPortfolioSheet: View {
