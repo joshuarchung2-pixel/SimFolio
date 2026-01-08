@@ -9,11 +9,13 @@
 // - Profile: Settings and user preferences
 
 import SwiftUI
+import AVFoundation
 
 // MARK: - ContentView
 
 struct ContentView: View {
     @StateObject private var router = NavigationRouter()
+    @StateObject private var sharedCameraService = CameraService()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -25,8 +27,8 @@ struct ContentView: View {
                         .transition(.opacity)
 
                 case .capture:
-                    // Temporary placeholder until Phase 3
-                    CaptureTabPlaceholder()
+                    // Full capture flow (Phase 3)
+                    CaptureFlowView(cameraService: sharedCameraService)
                         .transition(.opacity)
 
                 case .library:
@@ -42,8 +44,10 @@ struct ContentView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
 
-            // Custom tab bar
-            DPTabBar(selectedTab: $router.selectedTab)
+            // Custom tab bar (hide during capture)
+            if router.selectedTab != .capture {
+                DPTabBar(selectedTab: $router.selectedTab)
+            }
         }
         .environmentObject(router)
         .preferredColorScheme(.light)
