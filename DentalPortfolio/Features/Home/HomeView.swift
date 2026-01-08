@@ -11,6 +11,7 @@
 // 4. Recent Captures - Last photos taken
 
 import SwiftUI
+import Photos
 
 // MARK: - HomeView
 
@@ -608,26 +609,115 @@ struct MissingRequirementRow: View {
 
 // MARK: - Recent Captures Section
 
-/// Grid of recently captured photos
+/// Horizontal scroll of recently captured photos
 struct RecentCapturesSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            DPSectionHeader(
-                "Recent Captures",
-                actionTitle: "See All"
-            ) {
-                // Navigate to library
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
+    @EnvironmentObject var router: NavigationRouter
+    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var metadataManager = MetadataManager.shared
 
-            // Placeholder content
-            DPCard {
-                Text("Recent Captures Section")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 100)
+    var recentAssets: [PHAsset] {
+        Array(library.assets.prefix(10))
+    }
+
+    var body: some View {
+        if !recentAssets.isEmpty {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                DPSectionHeader(
+                    "Recent Captures",
+                    actionTitle: "See All"
+                ) {
+                    router.selectedTab = .library
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        ForEach(recentAssets, id: \.localIdentifier) { asset in
+                            RecentPhotoThumbnail(
+                                asset: asset,
+                                rating: metadataManager.getRating(for: asset.localIdentifier)
+                            ) {
+                                // Navigate to library for now
+                                // TODO: Navigate to photo detail
+                                router.selectedTab = .library
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+}
+
+// MARK: - Recent Photo Thumbnail
+
+/// A thumbnail for a recently captured photo
+struct RecentPhotoThumbnail: View {
+    let asset: PHAsset
+    let rating: Int?
+    let onTap: () -> Void
+
+    @State private var image: UIImage?
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: {
+            HapticsManager.shared.lightTap()
+            onTap()
+        }) {
+            ZStack(alignment: .bottomTrailing) {
+                // Thumbnail image
+                Group {
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.textTertiary))
+                                    .scaleEffect(0.7)
+                            )
+                    }
+                }
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
+
+                // Rating badge
+                if let rating = rating, rating > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8))
+                        Text("\(rating)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(4)
+                    .padding(4)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressEffect(isPressed: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        PhotoLibraryManager.shared.requestThumbnail(for: asset) { loadedImage in
+            self.image = loadedImage
         }
     }
 }

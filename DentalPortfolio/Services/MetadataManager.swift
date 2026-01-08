@@ -191,4 +191,27 @@ class MetadataManager: ObservableObject {
     func photoCount(for procedure: String) -> Int {
         return assetMetadata.values.filter { $0.procedure == procedure }.count
     }
+
+    /// Get rating for an asset
+    /// - Parameter assetId: The asset's local identifier
+    /// - Returns: Rating (1-5) or nil if not rated
+    func getRating(for assetId: String) -> Int? {
+        return assetMetadata[assetId]?.rating
+    }
+
+    /// Set rating for an asset
+    /// - Parameters:
+    ///   - rating: Rating value (1-5) or nil to clear
+    ///   - assetId: The asset's local identifier
+    func setRating(_ rating: Int?, for assetId: String) {
+        if var metadata = assetMetadata[assetId] {
+            metadata.rating = rating
+            assetMetadata[assetId] = metadata
+        } else {
+            // Create new metadata with just the rating
+            var metadata = PhotoMetadata()
+            metadata.rating = rating
+            assetMetadata[assetId] = metadata
+        }
+    }
 }
