@@ -485,13 +485,73 @@ struct FocusIndicator: View {
 /// Sheet for quickly editing tags during capture
 struct QuickTagEditorSheet: View {
     @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var showToothChart = false
+
+    // MARK: - Computed Properties
+
+    /// Current selected tags as array for display
+    private var currentTags: [String] {
+        var tags: [String] = []
+        if let procedure = captureState.selectedProcedure {
+            tags.append(procedure)
+        }
+        if let tooth = captureState.selectedToothNumber {
+            tags.append("#\(tooth)")
+        }
+        if let stage = captureState.selectedStage {
+            tags.append(stage)
+        }
+        if let angle = captureState.selectedAngle {
+            tags.append(angle)
+        }
+        return tags
+    }
+
+    /// Get color for a specific tag
+    private func tagColor(for tag: String) -> Color {
+        if MetadataManager.baseProcedures.contains(tag) {
+            return AppTheme.procedureColor(for: tag)
+        } else if tag.hasPrefix("#") {
+            return AppTheme.Colors.info
+        } else if MetadataManager.stages.contains(tag) {
+            return tag == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success
+        } else if MetadataManager.angles.contains(tag) {
+            return .purple
+        }
+        return AppTheme.Colors.textSecondary
+    }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                    // Procedure
+                    // Current tags summary
+                    if !currentTags.isEmpty {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                            Text("CURRENT TAGS")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+
+                            FlowLayout(spacing: AppTheme.Spacing.xs) {
+                                ForEach(currentTags, id: \.self) { tag in
+                                    Text(tag)
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xxs)
+                                        .background(tagColor(for: tag))
+                                        .cornerRadius(AppTheme.CornerRadius.full)
+                                }
+                            }
+                        }
+                        .padding(.bottom, AppTheme.Spacing.sm)
+                    }
+
+                    // Procedure selection
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                         Text("PROCEDURE")
                             .font(AppTheme.Typography.caption)
@@ -505,7 +565,11 @@ struct QuickTagEditorSheet: View {
                                         color: AppTheme.procedureColor(for: procedure),
                                         isSelected: captureState.selectedProcedure == procedure
                                     ) {
-                                        captureState.selectedProcedure = procedure
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            captureState.selectedProcedure = procedure
+                                            // Clear tooth if procedure changed
+                                            captureState.selectedToothNumber = nil
+                                        }
                                         HapticsManager.shared.selectionChanged()
                                     }
                                 }
@@ -513,7 +577,68 @@ struct QuickTagEditorSheet: View {
                         }
                     }
 
-                    // Stage
+                    // Tooth selection (only if procedure is selected)
+                    if let procedure = captureState.selectedProcedure {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                            Text("TOOTH")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    // Recent teeth for this procedure
+                                    let recentTeeth = metadataManager.getToothEntries(for: procedure).prefix(5)
+                                    ForEach(recentTeeth.map { $0 }, id: \.id) { entry in
+                                        Button(action: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                captureState.selectedToothNumber = entry.toothNumber
+                                                captureState.selectedToothDate = entry.date
+                                            }
+                                            HapticsManager.shared.selectionChanged()
+                                        }) {
+                                            HStack(spacing: AppTheme.Spacing.xxs) {
+                                                Text("#\(entry.toothNumber)")
+                                                    .font(AppTheme.Typography.subheadline.weight(.semibold))
+                                            }
+                                            .padding(.horizontal, AppTheme.Spacing.sm)
+                                            .padding(.vertical, AppTheme.Spacing.xs)
+                                            .background(
+                                                captureState.selectedToothNumber == entry.toothNumber
+                                                    ? AppTheme.Colors.info
+                                                    : AppTheme.Colors.surfaceSecondary
+                                            )
+                                            .foregroundColor(
+                                                captureState.selectedToothNumber == entry.toothNumber
+                                                    ? .white
+                                                    : AppTheme.Colors.textPrimary
+                                            )
+                                            .cornerRadius(AppTheme.CornerRadius.small)
+                                        }
+                                    }
+
+                                    // "New" button to open tooth chart
+                                    Button(action: {
+                                        showToothChart = true
+                                    }) {
+                                        HStack(spacing: AppTheme.Spacing.xxs) {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text("New")
+                                                .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        }
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(AppTheme.Colors.primary.opacity(0.15))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .cornerRadius(AppTheme.CornerRadius.small)
+                                    }
+                                }
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    // Stage selection
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                         Text("STAGE")
                             .font(AppTheme.Typography.caption)
@@ -526,14 +651,16 @@ struct QuickTagEditorSheet: View {
                                     color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
                                     isSelected: captureState.selectedStage == stage
                                 ) {
-                                    captureState.selectedStage = stage
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        captureState.selectedStage = stage
+                                    }
                                     HapticsManager.shared.selectionChanged()
                                 }
                             }
                         }
                     }
 
-                    // Angle
+                    // Angle selection
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                         Text("ANGLE")
                             .font(AppTheme.Typography.caption)
@@ -547,12 +674,35 @@ struct QuickTagEditorSheet: View {
                                         color: .purple,
                                         isSelected: captureState.selectedAngle == angle
                                     ) {
-                                        captureState.selectedAngle = angle
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            captureState.selectedAngle = angle
+                                        }
                                         HapticsManager.shared.selectionChanged()
                                     }
                                 }
                             }
                         }
+                    }
+
+                    // Clear all button
+                    if !currentTags.isEmpty {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                captureState.selectedProcedure = nil
+                                captureState.selectedToothNumber = nil
+                                captureState.selectedStage = nil
+                                captureState.selectedAngle = nil
+                            }
+                            HapticsManager.shared.lightTap()
+                        }) {
+                            HStack {
+                                Image(systemName: "xmark.circle")
+                                Text("Clear All Tags")
+                            }
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.error)
+                        }
+                        .padding(.top, AppTheme.Spacing.sm)
                     }
                 }
                 .padding(AppTheme.Spacing.md)
@@ -565,9 +715,170 @@ struct QuickTagEditorSheet: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                 }
             }
         }
+        .sheet(isPresented: $showToothChart) {
+            QuickToothChartSheet(captureState: captureState)
+                .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+// MARK: - Quick Tooth Chart Sheet
+
+/// Simplified tooth chart for quick selection during capture
+struct QuickToothChartSheet: View {
+    @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTooth: Int? = nil
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Upper arch
+                VStack(spacing: AppTheme.Spacing.xs) {
+                    Text("UPPER")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    HStack(spacing: 2) {
+                        ForEach(1...16, id: \.self) { tooth in
+                            QuickToothCell(
+                                number: tooth,
+                                isSelected: selectedTooth == tooth
+                            ) {
+                                selectedTooth = tooth
+                                HapticsManager.shared.selectionChanged()
+                            }
+                        }
+                    }
+                }
+
+                // Lower arch
+                VStack(spacing: AppTheme.Spacing.xs) {
+                    HStack(spacing: 2) {
+                        ForEach((17...32).reversed(), id: \.self) { tooth in
+                            QuickToothCell(
+                                number: tooth,
+                                isSelected: selectedTooth == tooth
+                            ) {
+                                selectedTooth = tooth
+                                HapticsManager.shared.selectionChanged()
+                            }
+                        }
+                    }
+
+                    Text("LOWER")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+
+                Spacer()
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Select Tooth")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Select") {
+                        if let tooth = selectedTooth {
+                            captureState.selectedToothNumber = tooth
+                            captureState.selectedToothDate = Date()
+
+                            // Add to tooth history if procedure is selected
+                            if let procedure = captureState.selectedProcedure {
+                                let entry = ToothEntry(
+                                    procedure: procedure,
+                                    toothNumber: tooth,
+                                    date: Date()
+                                )
+                                metadataManager.addToothEntry(entry)
+                            }
+                        }
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(selectedTooth == nil)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Quick Tooth Cell
+
+/// Compact tooth cell for quick selection
+struct QuickToothCell: View {
+    let number: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(number)")
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .frame(width: 20, height: 28)
+                .background(isSelected ? AppTheme.Colors.info : AppTheme.Colors.surfaceSecondary)
+                .cornerRadius(4)
+        }
+    }
+}
+
+// MARK: - Flow Layout
+
+/// A simple flow layout that wraps content to the next line
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                     y: bounds.minY + result.positions[index].y),
+                         proposal: .unspecified)
+        }
+    }
+
+    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+
+            positions.append(CGPoint(x: currentX, y: currentY))
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+            totalHeight = currentY + lineHeight
+        }
+
+        return (CGSize(width: maxWidth, height: totalHeight), positions)
     }
 }
 
