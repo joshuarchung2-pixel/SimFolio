@@ -144,4 +144,74 @@ class PhotoLibraryManager: ObservableObject {
             }
         }
     }
+
+    // MARK: - Save Operations
+
+    /// Save an image with metadata to the Photos library
+    /// - Parameters:
+    ///   - image: The UIImage to save
+    ///   - metadata: PhotoMetadata to associate with the image
+    ///   - completion: Callback with the saved asset's local identifier (or nil on failure)
+    func saveWithMetadata(image: UIImage, metadata: PhotoMetadata, completion: @escaping (String?) -> Void) {
+        var assetIdentifier: String?
+
+        PHPhotoLibrary.shared().performChanges {
+            // Create the asset
+            let request = PHAssetChangeRequest.creationRequestForAsset(from: image)
+            assetIdentifier = request.placeholderForCreatedAsset?.localIdentifier
+
+            // Add to album if available
+            if let album = self.album, let identifier = assetIdentifier {
+                let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
+                let assetPlaceholder = request.placeholderForCreatedAsset
+                if let placeholder = assetPlaceholder {
+                    albumChangeRequest?.addAssets([placeholder] as NSArray)
+                }
+            }
+        } completionHandler: { success, error in
+            DispatchQueue.main.async {
+                if success, let identifier = assetIdentifier {
+                    // Store metadata in MetadataManager
+                    MetadataManager.shared.assetMetadata[identifier] = metadata
+
+                    // Add tooth entry if available
+                    if let entry = metadata.toothEntry {
+                        MetadataManager.shared.addToothEntry(entry)
+                    }
+
+                    // Refresh assets
+                    self.fetchAssets()
+
+                    completion(identifier)
+                } else {
+                    if let error = error {
+                        print("Error saving photo: \(error.localizedDescription)")
+                    }
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    /// Create album if it doesn't exist
+    func createAlbumIfNeeded(completion: @escaping (Bool) -> Void) {
+        // Check if album already exists
+        if album != nil {
+            completion(true)
+            return
+        }
+
+        // Create new album
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: self.albumName)
+        } completionHandler: { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    // Fetch the newly created album
+                    self.findOrCreateAlbum()
+                }
+                completion(success)
+            }
+        }
+    }
 }
