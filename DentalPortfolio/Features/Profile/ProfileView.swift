@@ -549,7 +549,7 @@ struct ProcedureBreakdownRow: View {
     }
 
     var procedureColor: Color {
-        AppTheme.procedureColor(for: procedure)
+        MetadataManager.shared.procedureColor(for: procedure)
     }
 
     var body: some View {
@@ -704,32 +704,7 @@ struct PortfolioListSheet: View {
 
 // MARK: - Placeholder Views (To be implemented in subsequent prompts)
 // Note: EditProfileSheet is now in EditProfileSheet.swift
-
-/// Placeholder - Procedure management view (Prompt 6.3)
-struct ProcedureManagementView: View {
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                DPEmptyState(
-                    icon: "tag.fill",
-                    title: "Procedure Management",
-                    message: "Customize your procedure list, reorder items, and set custom colors."
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Procedures")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { isPresented = false }
-                }
-            }
-        }
-    }
-}
+// Note: ProcedureManagementView is now in ProcedureManagementView.swift
 
 /// Placeholder - Capture settings view (Prompt 6.4)
 struct CaptureSettingsView: View {
