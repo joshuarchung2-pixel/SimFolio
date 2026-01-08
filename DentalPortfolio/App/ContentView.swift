@@ -36,8 +36,7 @@ struct ContentView: View {
                         .transition(.opacity)
 
                 case .profile:
-                    // Temporary placeholder until Phase 6
-                    ProfileTabPlaceholder()
+                    ProfileView()
                         .transition(.opacity)
                 }
             }
