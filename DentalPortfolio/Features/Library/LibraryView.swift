@@ -1967,24 +1967,29 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 // MARK: - Photo Metadata Edit Sheet
 
-/// Sheet for editing photo metadata (procedure, tooth, stage, angle)
+/// Sheet for editing all photo metadata with change tracking
 struct PhotoMetadataEditSheet: View {
     let asset: PHAsset
     @Binding var isPresented: Bool
 
     @ObservedObject var metadataManager = MetadataManager.shared
+
     @State private var selectedProcedure: String?
     @State private var selectedToothNumber: Int?
+    @State private var selectedToothDate: Date = Date()
     @State private var selectedStage: String?
     @State private var selectedAngle: String?
-    @State private var notes: String = ""
+    @State private var selectedRating: Int = 0
+
+    @State private var showToothPicker = false
+    @State private var hasChanges = false
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
-                    // Procedure
-                    metadataSection(title: "PROCEDURE") {
+                    // Procedure selection
+                    selectionSection(title: "PROCEDURE") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(metadataManager.procedures, id: \.self) { procedure in
                                 FilterToggleChip(
@@ -1992,34 +1997,64 @@ struct PhotoMetadataEditSheet: View {
                                     color: AppTheme.procedureColor(for: procedure),
                                     isSelected: selectedProcedure == procedure
                                 ) {
-                                    selectedProcedure = selectedProcedure == procedure ? nil : procedure
+                                    if selectedProcedure == procedure {
+                                        selectedProcedure = nil
+                                    } else {
+                                        selectedProcedure = procedure
+                                    }
+                                    hasChanges = true
                                     HapticsManager.shared.selectionChanged()
                                 }
                             }
-                        }
-                    }
 
-                    // Tooth Number
-                    metadataSection(title: "TOOTH NUMBER") {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: AppTheme.Spacing.xs) {
-                            ForEach(1...32, id: \.self) { tooth in
+                            // Clear button
+                            if selectedProcedure != nil {
                                 Button(action: {
-                                    selectedToothNumber = selectedToothNumber == tooth ? nil : tooth
-                                    HapticsManager.shared.selectionChanged()
+                                    selectedProcedure = nil
+                                    hasChanges = true
                                 }) {
-                                    Text("\(tooth)")
+                                    Text("Clear")
                                         .font(AppTheme.Typography.caption)
-                                        .foregroundColor(selectedToothNumber == tooth ? .white : AppTheme.Colors.textPrimary)
-                                        .frame(width: 36, height: 36)
-                                        .background(selectedToothNumber == tooth ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
-                                        .cornerRadius(AppTheme.CornerRadius.small)
+                                        .foregroundColor(AppTheme.Colors.error)
                                 }
                             }
                         }
                     }
 
-                    // Stage
-                    metadataSection(title: "STAGE") {
+                    // Tooth selection
+                    selectionSection(title: "TOOTH NUMBER") {
+                        HStack {
+                            if let tooth = selectedToothNumber {
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    Text("Tooth #\(tooth)")
+                                        .font(AppTheme.Typography.headline)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+
+                                    Button(action: {
+                                        selectedToothNumber = nil
+                                        hasChanges = true
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(AppTheme.Colors.textTertiary)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+
+                            Button(action: { showToothPicker = true }) {
+                                HStack {
+                                    Image(systemName: selectedToothNumber == nil ? "plus.circle" : "pencil")
+                                    Text(selectedToothNumber == nil ? "Select Tooth" : "Change")
+                                }
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                    }
+
+                    // Stage selection
+                    selectionSection(title: "STAGE") {
                         HStack(spacing: AppTheme.Spacing.md) {
                             ForEach(MetadataManager.stages, id: \.self) { stage in
                                 FilterToggleChip(
@@ -2027,15 +2062,33 @@ struct PhotoMetadataEditSheet: View {
                                     color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
                                     isSelected: selectedStage == stage
                                 ) {
-                                    selectedStage = selectedStage == stage ? nil : stage
+                                    if selectedStage == stage {
+                                        selectedStage = nil
+                                    } else {
+                                        selectedStage = stage
+                                    }
+                                    hasChanges = true
                                     HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            Spacer()
+
+                            if selectedStage != nil {
+                                Button(action: {
+                                    selectedStage = nil
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
                                 }
                             }
                         }
                     }
 
-                    // Angle
-                    metadataSection(title: "ANGLE") {
+                    // Angle selection
+                    selectionSection(title: "ANGLE") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(MetadataManager.angles, id: \.self) { angle in
                                 FilterToggleChip(
@@ -2043,21 +2096,57 @@ struct PhotoMetadataEditSheet: View {
                                     color: .purple,
                                     isSelected: selectedAngle == angle
                                 ) {
-                                    selectedAngle = selectedAngle == angle ? nil : angle
+                                    if selectedAngle == angle {
+                                        selectedAngle = nil
+                                    } else {
+                                        selectedAngle = angle
+                                    }
+                                    hasChanges = true
                                     HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            if selectedAngle != nil {
+                                Button(action: {
+                                    selectedAngle = nil
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
                                 }
                             }
                         }
                     }
 
-                    // Notes
-                    metadataSection(title: "NOTES") {
-                        TextField("Add notes...", text: $notes, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .padding(AppTheme.Spacing.md)
-                            .background(AppTheme.Colors.surfaceSecondary)
-                            .cornerRadius(AppTheme.CornerRadius.medium)
-                            .lineLimit(3...6)
+                    // Rating
+                    selectionSection(title: "RATING") {
+                        HStack {
+                            RatingStarsView(
+                                rating: Binding(
+                                    get: { selectedRating },
+                                    set: { newValue in
+                                        selectedRating = newValue
+                                        hasChanges = true
+                                    }
+                                ),
+                                starSize: 32,
+                                spacing: 8
+                            )
+
+                            Spacer()
+
+                            if selectedRating > 0 {
+                                Button(action: {
+                                    selectedRating = 0
+                                    hasChanges = true
+                                }) {
+                                    Text("Clear")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                            }
+                        }
                     }
 
                     Spacer(minLength: 100)
@@ -2076,50 +2165,243 @@ struct PhotoMetadataEditSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        saveMetadata()
-                        isPresented = false
+                        saveChanges()
                     }
                     .fontWeight(.semibold)
+                    .disabled(!hasChanges)
                 }
             }
             .onAppear {
                 loadCurrentMetadata()
             }
+            .sheet(isPresented: $showToothPicker) {
+                ToothChartSheet(
+                    selectedTooth: $selectedToothNumber,
+                    selectedDate: $selectedToothDate,
+                    isPresented: $showToothPicker
+                )
+                .onChange(of: selectedToothNumber) { _, _ in
+                    hasChanges = true
+                }
+            }
         }
     }
 
-    func metadataSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    func selectionSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Text(title)
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(.horizontal, AppTheme.Spacing.md)
 
             content()
-                .padding(.horizontal, AppTheme.Spacing.md)
         }
+        .padding(.horizontal, AppTheme.Spacing.md)
     }
 
     func loadCurrentMetadata() {
         if let metadata = metadataManager.getMetadata(for: asset.localIdentifier) {
             selectedProcedure = metadata.procedure
             selectedToothNumber = metadata.toothNumber
+            selectedToothDate = metadata.toothDate ?? Date()
             selectedStage = metadata.stage
             selectedAngle = metadata.angle
-            notes = metadata.notes ?? ""
+            selectedRating = metadata.rating ?? 0
         }
     }
 
-    func saveMetadata() {
-        metadataManager.updateMetadata(
-            for: asset.localIdentifier,
+    func saveChanges() {
+        let metadata = PhotoMetadata(
             procedure: selectedProcedure,
             toothNumber: selectedToothNumber,
+            toothDate: selectedToothDate,
             stage: selectedStage,
             angle: selectedAngle,
-            notes: notes.isEmpty ? nil : notes
+            rating: selectedRating > 0 ? selectedRating : nil
         )
+
+        metadataManager.setMetadata(metadata, for: asset.localIdentifier)
         HapticsManager.shared.success()
+        isPresented = false
+    }
+}
+
+// MARK: - Tooth Chart Sheet
+
+/// Sheet presenting a visual tooth chart for selection
+struct ToothChartSheet: View {
+    @Binding var selectedTooth: Int?
+    @Binding var selectedDate: Date
+    @Binding var isPresented: Bool
+
+    @State private var tempSelection: Int?
+
+    // Tooth numbers arranged by quadrant (Universal Numbering System)
+    let upperRight = Array(1...8)      // Upper right (patient's right)
+    let upperLeft = Array(9...16)      // Upper left (patient's left)
+    let lowerLeft = Array(17...24)     // Lower left (patient's left)
+    let lowerRight = Array(25...32)    // Lower right (patient's right)
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Instructions
+                Text("Tap a tooth to select")
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.top, AppTheme.Spacing.md)
+
+                // Tooth chart
+                VStack(spacing: AppTheme.Spacing.md) {
+                    // Upper arch
+                    VStack(spacing: AppTheme.Spacing.xs) {
+                        Text("UPPER")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+
+                        HStack(spacing: 4) {
+                            // Upper right (1-8)
+                            ForEach(upperRight, id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                            // Upper left (9-16)
+                            ForEach(upperLeft, id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                        }
+                    }
+
+                    // Divider line
+                    Rectangle()
+                        .fill(AppTheme.Colors.surfaceSecondary)
+                        .frame(height: 2)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+
+                    // Lower arch
+                    VStack(spacing: AppTheme.Spacing.xs) {
+                        HStack(spacing: 4) {
+                            // Lower right (32-25, displayed left to right)
+                            ForEach(lowerRight.reversed(), id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                            // Lower left (24-17, displayed left to right)
+                            ForEach(lowerLeft.reversed(), id: \.self) { tooth in
+                                toothButton(tooth)
+                            }
+                        }
+
+                        Text("LOWER")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.large)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Selected tooth info
+                if let tooth = tempSelection {
+                    DPCard {
+                        HStack {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                                Text("Selected")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Text("Tooth #\(tooth)")
+                                    .font(AppTheme.Typography.title3)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+
+                            Spacer()
+
+                            Text(toothName(for: tooth))
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
+
+                // Date picker
+                if tempSelection != nil {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("PROCEDURE DATE")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(.horizontal, AppTheme.Spacing.md)
+
+                        DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.compact)
+                            .padding(.horizontal, AppTheme.Spacing.md)
+                    }
+                }
+
+                Spacer()
+
+                // Clear selection button
+                if tempSelection != nil {
+                    Button(action: {
+                        tempSelection = nil
+                        HapticsManager.shared.lightTap()
+                    }) {
+                        Text("Clear Selection")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.error)
+                    }
+                    .padding(.bottom, AppTheme.Spacing.md)
+                }
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Select Tooth")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedTooth = tempSelection
+                        isPresented = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                tempSelection = selectedTooth
+            }
+        }
+    }
+
+    func toothButton(_ tooth: Int) -> some View {
+        Button(action: {
+            tempSelection = tooth
+            HapticsManager.shared.selectionChanged()
+        }) {
+            Text("\(tooth)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(tempSelection == tooth ? .white : AppTheme.Colors.textPrimary)
+                .frame(width: 28, height: 28)
+                .background(tempSelection == tooth ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
+                .cornerRadius(4)
+        }
+    }
+
+    func toothName(for number: Int) -> String {
+        // Universal numbering tooth names
+        switch number {
+        case 1, 16, 17, 32: return "Third Molar"
+        case 2, 15, 18, 31: return "Second Molar"
+        case 3, 14, 19, 30: return "First Molar"
+        case 4, 13, 20, 29: return "Second Premolar"
+        case 5, 12, 21, 28: return "First Premolar"
+        case 6, 11, 22, 27: return "Canine"
+        case 7, 10, 23, 26: return "Lateral Incisor"
+        case 8, 9, 24, 25: return "Central Incisor"
+        default: return ""
+        }
     }
 }
 
