@@ -1952,169 +1952,333 @@ struct ActionBarButton: View {
 
 // MARK: - LibraryFilterSheet
 
-/// Sheet for configuring library filters
+/// Sheet for configuring library filters with multiple filter categories
 struct LibraryFilterSheet: View {
     @Binding var filter: LibraryFilter
     @Environment(\.dismiss) var dismiss
     @ObservedObject var metadataManager = MetadataManager.shared
 
+    @State private var tempFilter: LibraryFilter = LibraryFilter()
+    @State private var customStartDate: Date = Date()
+    @State private var customEndDate: Date = Date()
+
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                    // Procedures Section
-                    FilterSection(title: "Procedures") {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                    // Procedures section
+                    filterSection(title: "PROCEDURES") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                let isSelected = filter.procedures.contains(procedure)
-                                DPTagPill(
-                                    procedure,
+                                FilterToggleChip(
+                                    text: procedure,
                                     color: AppTheme.procedureColor(for: procedure),
-                                    size: .medium,
-                                    isSelected: isSelected,
-                                    onTap: {
-                                        if isSelected {
-                                            filter.procedures.remove(procedure)
-                                        } else {
-                                            filter.procedures.insert(procedure)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Stages Section
-                    FilterSection(title: "Stages") {
-                        FlowLayout(spacing: AppTheme.Spacing.sm) {
-                            ForEach(MetadataManager.stages, id: \.self) { stage in
-                                let isSelected = filter.stages.contains(stage)
-                                DPTagPill(
-                                    stage,
-                                    color: AppTheme.Colors.secondary,
-                                    size: .medium,
-                                    isSelected: isSelected,
-                                    onTap: {
-                                        if isSelected {
-                                            filter.stages.remove(stage)
-                                        } else {
-                                            filter.stages.insert(stage)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Angles Section
-                    FilterSection(title: "Angles") {
-                        FlowLayout(spacing: AppTheme.Spacing.sm) {
-                            ForEach(MetadataManager.angles, id: \.self) { angle in
-                                let isSelected = filter.angles.contains(angle)
-                                DPTagPill(
-                                    angle,
-                                    color: AppTheme.Colors.secondary,
-                                    size: .medium,
-                                    isSelected: isSelected,
-                                    onTap: {
-                                        if isSelected {
-                                            filter.angles.remove(angle)
-                                        } else {
-                                            filter.angles.insert(angle)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Rating Section
-                    FilterSection(title: "Minimum Rating") {
-                        HStack(spacing: AppTheme.Spacing.md) {
-                            ForEach(1...5, id: \.self) { rating in
-                                let isSelected = filter.minimumRating == rating
-                                Button(action: {
-                                    filter.minimumRating = isSelected ? nil : rating
-                                }) {
-                                    HStack(spacing: 2) {
-                                        ForEach(0..<rating, id: \.self) { _ in
-                                            Image(systemName: "star.fill")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                    .foregroundColor(isSelected ? AppTheme.Colors.warning : AppTheme.Colors.textTertiary)
-                                    .padding(.horizontal, AppTheme.Spacing.sm)
-                                    .padding(.vertical, AppTheme.Spacing.xs)
-                                    .background(isSelected ? AppTheme.Colors.warning.opacity(0.15) : AppTheme.Colors.surfaceSecondary)
-                                    .cornerRadius(AppTheme.CornerRadius.small)
+                                    isSelected: tempFilter.procedures.contains(procedure)
+                                ) {
+                                    toggleProcedure(procedure)
                                 }
                             }
                         }
                     }
 
-                    // Date Range Section
-                    FilterSection(title: "Date Range") {
-                        FlowLayout(spacing: AppTheme.Spacing.sm) {
-                            ForEach([
-                                LibraryFilter.DateRange.lastWeek,
-                                LibraryFilter.DateRange.lastMonth,
-                                LibraryFilter.DateRange.last3Months,
-                                LibraryFilter.DateRange.lastYear
-                            ], id: \.displayName) { range in
-                                let isSelected = filter.dateRange?.displayName == range.displayName
-                                DPTagPill(
-                                    range.displayName,
-                                    color: AppTheme.Colors.primary,
-                                    size: .medium,
-                                    isSelected: isSelected,
-                                    onTap: {
-                                        filter.dateRange = isSelected ? nil : range
-                                    }
-                                )
+                    // Stages section
+                    filterSection(title: "STAGES") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach(MetadataManager.stages, id: \.self) { stage in
+                                FilterToggleChip(
+                                    text: stage,
+                                    color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                    isSelected: tempFilter.stages.contains(stage)
+                                ) {
+                                    toggleStage(stage)
+                                }
                             }
                         }
                     }
+
+                    // Angles section
+                    filterSection(title: "ANGLES") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(MetadataManager.angles, id: \.self) { angle in
+                                FilterToggleChip(
+                                    text: angle,
+                                    color: .purple,
+                                    isSelected: tempFilter.angles.contains(angle)
+                                ) {
+                                    toggleAngle(angle)
+                                }
+                            }
+                        }
+                    }
+
+                    // Rating section
+                    filterSection(title: "MINIMUM RATING") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach([1, 2, 3, 4, 5], id: \.self) { rating in
+                                RatingFilterButton(
+                                    rating: rating,
+                                    isSelected: tempFilter.minimumRating == rating
+                                ) {
+                                    if tempFilter.minimumRating == rating {
+                                        tempFilter.minimumRating = nil
+                                    } else {
+                                        tempFilter.minimumRating = rating
+                                    }
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Date range section
+                    filterSection(title: "DATE RANGE") {
+                        VStack(spacing: AppTheme.Spacing.sm) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                DateRangeButton(
+                                    text: "Last 7 Days",
+                                    isSelected: tempFilter.dateRange == .lastWeek
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastWeek ? nil : .lastWeek
+                                    HapticsManager.shared.selectionChanged()
+                                }
+
+                                DateRangeButton(
+                                    text: "Last 30 Days",
+                                    isSelected: tempFilter.dateRange == .lastMonth
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastMonth ? nil : .lastMonth
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                DateRangeButton(
+                                    text: "Last 3 Months",
+                                    isSelected: tempFilter.dateRange == .last3Months
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .last3Months ? nil : .last3Months
+                                    HapticsManager.shared.selectionChanged()
+                                }
+
+                                DateRangeButton(
+                                    text: "Last Year",
+                                    isSelected: tempFilter.dateRange == .lastYear
+                                ) {
+                                    tempFilter.dateRange = tempFilter.dateRange == .lastYear ? nil : .lastYear
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+
+                            // Custom date range
+                            DisclosureGroup("Custom Range") {
+                                VStack(spacing: AppTheme.Spacing.sm) {
+                                    DatePicker("From", selection: $customStartDate, displayedComponents: .date)
+                                    DatePicker("To", selection: $customEndDate, displayedComponents: .date)
+
+                                    Button("Apply Custom Range") {
+                                        tempFilter.dateRange = .custom(start: customStartDate, end: customEndDate)
+                                        HapticsManager.shared.selectionChanged()
+                                    }
+                                    .font(AppTheme.Typography.subheadline)
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                .padding(.top, AppTheme.Spacing.sm)
+                            }
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+
+                    // Active filter count
+                    if tempFilter.activeFilterCount > 0 {
+                        HStack {
+                            Text("\(tempFilter.activeFilterCount) filter\(tempFilter.activeFilterCount == 1 ? "" : "s") active")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+
+                            Spacer()
+
+                            Button("Reset All") {
+                                tempFilter.reset()
+                                HapticsManager.shared.lightTap()
+                            }
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.error)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                    }
+
+                    Spacer(minLength: 100)
                 }
-                .padding(AppTheme.Spacing.md)
+                .padding(.top, AppTheme.Spacing.md)
             }
             .background(AppTheme.Colors.background)
-            .navigationTitle("Filters")
+            .navigationTitle("Filter Photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Reset") {
-                        filter.reset()
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
                     }
-                    .foregroundColor(AppTheme.Colors.error)
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        filter = tempFilter
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .onAppear {
+                tempFilter = filter
+
+                // Set custom date picker values if custom range exists
+                if case .custom(let start, let end) = filter.dateRange {
+                    customStartDate = start
+                    customEndDate = end
                 }
             }
         }
     }
-}
 
-// MARK: - FilterSection
+    // MARK: - Helper Views
 
-/// Section container for filter options
-struct FilterSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
+    func filterSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Text(title)
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
 
-            content
+            content()
+                .padding(.horizontal, AppTheme.Spacing.md)
         }
+    }
+
+    // MARK: - Toggle Methods
+
+    func toggleProcedure(_ procedure: String) {
+        if tempFilter.procedures.contains(procedure) {
+            tempFilter.procedures.remove(procedure)
+        } else {
+            tempFilter.procedures.insert(procedure)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+
+    func toggleStage(_ stage: String) {
+        if tempFilter.stages.contains(stage) {
+            tempFilter.stages.remove(stage)
+        } else {
+            tempFilter.stages.insert(stage)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+
+    func toggleAngle(_ angle: String) {
+        if tempFilter.angles.contains(angle) {
+            tempFilter.angles.remove(angle)
+        } else {
+            tempFilter.angles.insert(angle)
+        }
+        HapticsManager.shared.selectionChanged()
+    }
+}
+
+// MARK: - Filter Toggle Chip
+
+/// Toggleable chip for filter selection with colored dot and checkmark
+struct FilterToggleChip: View {
+    let text: String
+    let color: Color
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppTheme.Spacing.xs) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+
+                Text(text)
+                    .font(AppTheme.Typography.subheadline)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                }
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(isSelected ? color : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.full)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                    .stroke(isSelected ? color : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Rating Filter Button
+
+/// Button for selecting minimum rating filter
+struct RatingFilterButton: View {
+    let rating: Int
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 2) {
+                Text("\(rating)")
+                    .font(AppTheme.Typography.subheadline)
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12))
+                Text("+")
+                    .font(AppTheme.Typography.caption)
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(isSelected ? Color.yellow : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.full)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                    .stroke(isSelected ? Color.yellow : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Date Range Button
+
+/// Button for selecting preset date ranges
+struct DateRangeButton: View {
+    let text: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(text)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.full)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
+                        .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -2125,46 +2289,45 @@ struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let containerWidth = proposal.width ?? .infinity
-        var height: CGFloat = 0
-        var rowWidth: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if rowWidth + size.width > containerWidth && rowWidth > 0 {
-                height += rowHeight + spacing
-                rowWidth = 0
-                rowHeight = 0
-            }
-
-            rowWidth += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-
-        height += rowHeight
-
-        return CGSize(width: containerWidth, height: height)
+        let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing)
+        return result.size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
+        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                      y: bounds.minY + result.positions[index].y),
+                         proposal: .unspecified)
+        }
+    }
 
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
 
-            if x + size.width > bounds.maxX && x > bounds.minX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var rowHeight: CGFloat = 0
+
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += rowHeight + spacing
+                    rowHeight = 0
+                }
+
+                positions.append(CGPoint(x: x, y: y))
+                rowHeight = max(rowHeight, size.height)
+                x += size.width + spacing
+
+                self.size.width = max(self.size.width, x)
             }
 
-            subview.place(at: CGPoint(x: x, y: y), proposal: .unspecified)
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+            self.size.height = y + rowHeight
         }
     }
 }
