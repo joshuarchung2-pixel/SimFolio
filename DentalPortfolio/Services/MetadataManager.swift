@@ -78,6 +78,9 @@ class MetadataManager: ObservableObject {
     /// Asset ID -> PhotoMetadata mapping
     @Published var assetMetadata: [String: PhotoMetadata] = [:]
 
+    /// Tooth history by procedure type
+    @Published var toothHistory: [String: [ToothEntry]] = [:]
+
     // MARK: - Constants
 
     /// Base procedure types that cannot be deleted
@@ -212,6 +215,28 @@ class MetadataManager: ObservableObject {
             var metadata = PhotoMetadata()
             metadata.rating = rating
             assetMetadata[assetId] = metadata
+        }
+    }
+
+    // MARK: - Tooth Entry Methods
+
+    /// Get tooth entries for a specific procedure
+    /// - Parameter procedure: The procedure type
+    /// - Returns: Array of tooth entries, sorted by date (most recent first)
+    func getToothEntries(for procedure: String) -> [ToothEntry] {
+        return (toothHistory[procedure] ?? []).sorted { $0.date > $1.date }
+    }
+
+    /// Add a new tooth entry
+    /// - Parameter entry: The tooth entry to add
+    func addToothEntry(_ entry: ToothEntry) {
+        if toothHistory[entry.procedure] == nil {
+            toothHistory[entry.procedure] = []
+        }
+
+        // Check if entry already exists
+        if !toothHistory[entry.procedure]!.contains(where: { $0.id == entry.id }) {
+            toothHistory[entry.procedure]!.append(entry)
         }
     }
 }

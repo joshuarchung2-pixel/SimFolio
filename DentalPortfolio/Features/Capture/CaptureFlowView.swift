@@ -449,35 +449,191 @@ struct ProcedureSelectionButton: View {
     }
 }
 
-// MARK: - Tooth Selection Section (Placeholder)
+// MARK: - Tooth Selection Section
 
 /// Section for selecting tooth number and date
-/// Will be implemented in the next phase
+/// Shows recent teeth for quick selection and a button to open the full tooth chart
 struct ToothSelectionSection: View {
     @Binding var selectedToothNumber: Int?
     @Binding var selectedDate: Date
     let procedure: String
     @ObservedObject var metadataManager: MetadataManager
 
+    @State private var showFullToothChart = false
+
+    /// Get existing tooth entries for this procedure
+    var existingTeeth: [ToothEntry] {
+        metadataManager.getToothEntries(for: procedure)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("TOOTH NUMBER")
+            Text("TOOTH")
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .padding(.horizontal, AppTheme.Spacing.md)
 
-            Text("Tooth selection coming soon...")
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(AppTheme.Colors.textTertiary)
+            VStack(spacing: AppTheme.Spacing.md) {
+                // Quick select from existing teeth
+                if !existingTeeth.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("Recent teeth")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                ForEach(existingTeeth.prefix(5)) { entry in
+                                    QuickToothButton(
+                                        toothNumber: entry.toothNumber,
+                                        date: entry.date,
+                                        isSelected: selectedToothNumber == entry.toothNumber
+                                    ) {
+                                        selectedToothNumber = entry.toothNumber
+                                        selectedDate = entry.date
+                                        HapticsManager.shared.selectionChanged()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
+
+                // New tooth selection
+                Button(action: { showFullToothChart = true }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(AppTheme.Colors.primary)
+
+                        if let tooth = selectedToothNumber {
+                            Text("Tooth #\(tooth)")
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                        } else {
+                            Text("Select tooth number")
+                                .font(AppTheme.Typography.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                    .padding(AppTheme.Spacing.md)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(AppTheme.CornerRadius.medium)
+                }
                 .padding(.horizontal, AppTheme.Spacing.md)
+            }
+        }
+        .sheet(isPresented: $showFullToothChart) {
+            ToothChartSheet(
+                selectedTooth: $selectedToothNumber,
+                selectedDate: $selectedDate,
+                isPresented: $showFullToothChart
+            )
         }
     }
 }
 
-// MARK: - Stage Selection Section (Placeholder)
+// MARK: - Quick Tooth Button
+
+/// Button for quickly selecting a recently used tooth
+struct QuickToothButton: View {
+    let toothNumber: Int
+    let date: Date
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: AppTheme.Spacing.xxs) {
+                Text("#\(toothNumber)")
+                    .font(AppTheme.Typography.headline)
+                    .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+
+                Text(date, style: .date)
+                    .font(AppTheme.Typography.caption2)
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.Colors.textSecondary)
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(isSelected ? AppTheme.Colors.success : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(isSelected ? AppTheme.Colors.success : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Tooth Chart Sheet (Placeholder)
+
+/// Full tooth chart for selecting a specific tooth number
+/// Will be implemented with visual tooth diagram
+struct ToothChartSheet: View {
+    @Binding var selectedTooth: Int?
+    @Binding var selectedDate: Date
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                Text("Select Tooth Number")
+                    .font(AppTheme.Typography.title2)
+
+                // Simple number grid for now
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: AppTheme.Spacing.sm) {
+                    ForEach(1...32, id: \.self) { number in
+                        Button(action: {
+                            selectedTooth = number
+                            HapticsManager.shared.selectionChanged()
+                        }) {
+                            Text("\(number)")
+                                .font(AppTheme.Typography.headline)
+                                .foregroundColor(selectedTooth == number ? .white : AppTheme.Colors.textPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(selectedTooth == number ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
+                                .cornerRadius(AppTheme.CornerRadius.small)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Date picker
+                DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                    .datePickerStyle(.compact)
+                    .padding(.horizontal, AppTheme.Spacing.md)
+
+                Spacer()
+
+                DPButton("Done", style: .primary, isFullWidth: true) {
+                    isPresented = false
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+            .padding(.top, AppTheme.Spacing.lg)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Stage Selection Section
 
 /// Section for selecting preparation or restoration stage
-/// Will be implemented in the next phase
 struct StageSelectionSection: View {
     @Binding var selectedStage: String?
     let stages: [String]
@@ -489,21 +645,78 @@ struct StageSelectionSection: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .padding(.horizontal, AppTheme.Spacing.md)
 
-            Text("Stage selection coming soon...")
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(AppTheme.Colors.textTertiary)
-                .padding(.horizontal, AppTheme.Spacing.md)
+            HStack(spacing: AppTheme.Spacing.md) {
+                ForEach(stages, id: \.self) { stage in
+                    StageButton(
+                        stage: stage,
+                        isSelected: selectedStage == stage
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedStage = stage
+                        }
+                        HapticsManager.shared.selectionChanged()
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
         }
     }
 }
 
-// MARK: - Angle Selection Section (Placeholder)
+// MARK: - Stage Button
+
+/// Button for selecting a stage (Preparation or Restoration)
+struct StageButton: View {
+    let stage: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var icon: String {
+        stage == "Preparation" ? "wrench.and.screwdriver.fill" : "checkmark.seal.fill"
+    }
+
+    var color: Color {
+        stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: AppTheme.Spacing.sm) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? color : color.opacity(0.15))
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(isSelected ? .white : color)
+                }
+
+                Text(stage)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppTheme.Spacing.md)
+            .background(isSelected ? color.opacity(0.1) : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(isSelected ? color : AppTheme.Colors.surfaceSecondary, lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Angle Selection Section
 
 /// Section for selecting photo angle
-/// Will be implemented in the next phase
 struct AngleSelectionSection: View {
     @Binding var selectedAngle: String?
     let angles: [String]
+
+    let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
@@ -512,11 +725,73 @@ struct AngleSelectionSection: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .padding(.horizontal, AppTheme.Spacing.md)
 
-            Text("Angle selection coming soon...")
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(AppTheme.Colors.textTertiary)
-                .padding(.horizontal, AppTheme.Spacing.md)
+            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.sm) {
+                ForEach(angles, id: \.self) { angle in
+                    AngleButton(
+                        angle: angle,
+                        isSelected: selectedAngle == angle
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedAngle = angle
+                        }
+                        HapticsManager.shared.selectionChanged()
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
         }
+    }
+}
+
+// MARK: - Angle Button
+
+/// Button for selecting a photo angle
+struct AngleButton: View {
+    let angle: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var icon: String {
+        switch angle {
+        case "Occlusal": return "arrow.down"
+        case "Buccal/Facial": return "arrow.left"
+        case "Lingual": return "arrow.right"
+        case "Proximal": return "arrow.left.arrow.right"
+        case "Mesial": return "arrow.up.left"
+        case "Distal": return "arrow.up.right"
+        default: return "questionmark"
+        }
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(isSelected ? .white : .purple)
+                    .frame(width: 24)
+
+                Text(angle)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(isSelected ? Color.purple : AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(isSelected ? Color.purple : AppTheme.Colors.surfaceSecondary, lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
