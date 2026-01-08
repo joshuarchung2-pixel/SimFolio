@@ -86,10 +86,8 @@ class LibraryViewModel: ObservableObject {
         // Filter by procedure
         if !filter.procedures.isEmpty {
             result = result.filter { asset in
-                guard let meta = metadata.getMetadata(for: asset.localIdentifier),
-                      let procedure = meta.procedure else {
-                    return false
-                }
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let procedure = m.procedure else { return false }
                 return filter.procedures.contains(procedure)
             }
         }
@@ -97,10 +95,8 @@ class LibraryViewModel: ObservableObject {
         // Filter by stage
         if !filter.stages.isEmpty {
             result = result.filter { asset in
-                guard let meta = metadata.getMetadata(for: asset.localIdentifier),
-                      let stage = meta.stage else {
-                    return false
-                }
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let stage = m.stage else { return false }
                 return filter.stages.contains(stage)
             }
         }
@@ -108,10 +104,8 @@ class LibraryViewModel: ObservableObject {
         // Filter by angle
         if !filter.angles.isEmpty {
             result = result.filter { asset in
-                guard let meta = metadata.getMetadata(for: asset.localIdentifier),
-                      let angle = meta.angle else {
-                    return false
-                }
+                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                      let angle = m.angle else { return false }
                 return filter.angles.contains(angle)
             }
         }
@@ -119,34 +113,47 @@ class LibraryViewModel: ObservableObject {
         // Filter by minimum rating
         if let minRating = filter.minimumRating {
             result = result.filter { asset in
-                guard let rating = metadata.getRating(for: asset.localIdentifier) else {
-                    return false
-                }
-                return rating >= minRating
+                (metadata.getRating(for: asset.localIdentifier) ?? 0) >= minRating
             }
         }
 
         // Filter by date range
         if let dateRange = filter.dateRange {
-            let dates = dateRange.dates
-            result = result.filter { asset in
-                guard let creationDate = asset.creationDate else {
-                    return false
+            let now = Date()
+            let calendar = Calendar.current
+
+            switch dateRange {
+            case .lastWeek:
+                let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= weekAgo }
+
+            case .lastMonth:
+                let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= monthAgo }
+
+            case .last3Months:
+                let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= threeMonthsAgo }
+
+            case .lastYear:
+                let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+                result = result.filter { ($0.creationDate ?? now) >= yearAgo }
+
+            case .custom(let start, let end):
+                result = result.filter { asset in
+                    guard let date = asset.creationDate else { return false }
+                    return date >= start && date <= end
                 }
-                return creationDate >= dates.start && creationDate <= dates.end
             }
         }
 
         // Filter by portfolio (assets matching portfolio requirements)
         if let portfolioId = filter.portfolioId {
-            // Get portfolio and filter assets that match its requirements
             if let portfolio = metadata.portfolios.first(where: { $0.id == portfolioId }) {
                 let proceduresInPortfolio = Set(portfolio.requirements.map { $0.procedure })
                 result = result.filter { asset in
-                    guard let meta = metadata.getMetadata(for: asset.localIdentifier),
-                          let procedure = meta.procedure else {
-                        return false
-                    }
+                    guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                          let procedure = m.procedure else { return false }
                     return proceduresInPortfolio.contains(procedure)
                 }
             }
@@ -159,7 +166,6 @@ class LibraryViewModel: ObservableObject {
                 guard let meta = metadata.getMetadata(for: asset.localIdentifier) else {
                     return false
                 }
-                // Search in procedure, stage, angle, and tooth number
                 if let procedure = meta.procedure, procedure.lowercased().contains(searchLower) {
                     return true
                 }
@@ -176,38 +182,27 @@ class LibraryViewModel: ObservableObject {
             }
         }
 
-        // Apply sort order
-        result = sortAssets(result, metadata: metadata)
-
-        return result
-    }
-
-    /// Sort assets based on current sort order
-    private func sortAssets(_ assets: [PHAsset], metadata: MetadataManager) -> [PHAsset] {
+        // Sort
         switch sortOrder {
         case .dateNewest:
-            return assets.sorted { ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast) }
+            result.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
         case .dateOldest:
-            return assets.sorted { ($0.creationDate ?? .distantPast) < ($1.creationDate ?? .distantPast) }
+            result.sort { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
         case .procedure:
-            return assets.sorted { asset1, asset2 in
-                let proc1 = metadata.getMetadata(for: asset1.localIdentifier)?.procedure ?? ""
-                let proc2 = metadata.getMetadata(for: asset2.localIdentifier)?.procedure ?? ""
-                if proc1 == proc2 {
-                    return (asset1.creationDate ?? .distantPast) > (asset2.creationDate ?? .distantPast)
-                }
-                return proc1 < proc2
+            result.sort { asset1, asset2 in
+                let p1 = metadata.getMetadata(for: asset1.localIdentifier)?.procedure ?? ""
+                let p2 = metadata.getMetadata(for: asset2.localIdentifier)?.procedure ?? ""
+                return p1 < p2
             }
         case .rating:
-            return assets.sorted { asset1, asset2 in
-                let rating1 = metadata.getRating(for: asset1.localIdentifier) ?? 0
-                let rating2 = metadata.getRating(for: asset2.localIdentifier) ?? 0
-                if rating1 == rating2 {
-                    return (asset1.creationDate ?? .distantPast) > (asset2.creationDate ?? .distantPast)
-                }
-                return rating1 > rating2
+            result.sort { asset1, asset2 in
+                let r1 = metadata.getRating(for: asset1.localIdentifier) ?? 0
+                let r2 = metadata.getRating(for: asset2.localIdentifier) ?? 0
+                return r1 > r2
             }
         }
+
+        return result
     }
 
     // MARK: - Grouping Methods
