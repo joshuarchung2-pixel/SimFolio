@@ -1671,49 +1671,103 @@ struct AllPhotosGridView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
-    var body: some View {
-        let filteredAssets = viewModel.filteredAssets(
+    @State private var selectedPhotoId: String? = nil
+
+    var filteredAssets: [PHAsset] {
+        viewModel.filteredAssets(
             from: library.assets,
             metadata: metadataManager,
             filter: router.libraryFilter
         )
+    }
 
-        if filteredAssets.isEmpty {
-            DPEmptyState(
-                icon: "photo.on.rectangle.angled",
-                title: "No Photos",
-                message: "No photos match the current filters.",
-                actionTitle: "Clear Filters"
-            ) {
-                router.libraryFilter.reset()
+    let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+
+    var body: some View {
+        Group {
+            if filteredAssets.isEmpty {
+                emptyState
+            } else {
+                photoGrid
             }
-        } else {
-            ScrollView {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs),
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs),
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs)
-                    ],
-                    spacing: AppTheme.Spacing.xs
+        }
+        .sheet(item: $selectedPhotoId) { photoId in
+            PhotoDetailSheet(
+                photoId: photoId,
+                allAssets: filteredAssets,
+                onDismiss: { selectedPhotoId = nil }
+            )
+        }
+    }
+
+    // MARK: - Empty State
+    var emptyState: some View {
+        VStack {
+            Spacer()
+
+            if router.libraryFilter.isEmpty {
+                DPEmptyState(
+                    icon: "photo.on.rectangle",
+                    title: "No Photos",
+                    message: "Your captured photos will appear here.",
+                    actionTitle: "Start Capturing"
                 ) {
+                    router.selectedTab = .capture
+                }
+            } else {
+                DPEmptyState(
+                    icon: "magnifyingglass",
+                    title: "No Matches",
+                    message: "No photos match your current filters.",
+                    actionTitle: "Clear Filters"
+                ) {
+                    router.libraryFilter.reset()
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Photo Grid
+    var photoGrid: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.sm) {
+                // Results count
+                HStack {
+                    Text("\(filteredAssets.count) photo\(filteredAssets.count == 1 ? "" : "s")")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    Spacer()
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+                // Photo grid
+                LazyVGrid(columns: columns, spacing: 2) {
                     ForEach(filteredAssets, id: \.localIdentifier) { asset in
-                        PhotoGridItem(
+                        LibraryPhotoThumbnail(
                             asset: asset,
                             isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
-                            isSelectionMode: viewModel.isSelectionMode,
-                            onTap: {
-                                if viewModel.isSelectionMode {
-                                    viewModel.toggleSelection(for: asset.localIdentifier)
-                                } else {
-                                    router.navigateToPhotoDetail(id: asset.localIdentifier)
-                                }
+                            isSelectionMode: viewModel.isSelectionMode
+                        ) {
+                            if viewModel.isSelectionMode {
+                                viewModel.toggleSelection(for: asset.localIdentifier)
+                            } else {
+                                selectedPhotoId = asset.localIdentifier
                             }
-                        )
+                        }
+                        .aspectRatio(1, contentMode: .fill)
                     }
                 }
-                .padding(AppTheme.Spacing.sm)
+
+                Spacer(minLength: 100)
             }
+            .padding(.top, AppTheme.Spacing.md)
         }
     }
 }
