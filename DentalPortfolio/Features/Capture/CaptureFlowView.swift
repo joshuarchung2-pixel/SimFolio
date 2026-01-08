@@ -917,16 +917,611 @@ struct AngleButton: View {
     }
 }
 
-// MARK: - Capture Review View (Placeholder)
+// MARK: - Capture Review View
 
 /// Post-capture review screen
 /// Shows all captured photos with rating and keep/discard options
 struct CaptureReviewView: View {
     @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @EnvironmentObject var router: NavigationRouter
+
+    @State private var showTagEditor = false
+    @State private var selectedPhotoIndex: Int? = nil
+    @State private var isSaving = false
+
+    var photosToSave: [CapturedPhoto] {
+        captureState.photosToKeep
+    }
 
     var body: some View {
-        Text("Review View")
-            .foregroundColor(.white)
+        ZStack {
+            AppTheme.Colors.background.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header
+                header
+
+                // Tag summary
+                tagSummaryBar
+
+                // Photo grid
+                ScrollView {
+                    photoGrid
+                        .padding(AppTheme.Spacing.md)
+                }
+
+                // Portfolio match indicator
+                portfolioMatchIndicator
+
+                // Bottom actions
+                bottomActions
+            }
+
+            // Loading overlay
+            if isSaving {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+
+                VStack(spacing: AppTheme.Spacing.md) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    Text("Saving...")
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .sheet(isPresented: $showTagEditor) {
+            ReviewTagEditorSheet(captureState: captureState)
+                .presentationDetents([.medium])
+        }
+    }
+
+    // MARK: - Header
+
+    var header: some View {
+        HStack {
+            Button(action: { captureState.currentStep = .camera }) {
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.primary)
+            }
+
+            Spacer()
+
+            Text("Review \(captureState.capturedPhotos.count) Photos")
+                .font(AppTheme.Typography.headline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            Spacer()
+
+            Button("Done") {
+                savePhotos()
+            }
+            .font(AppTheme.Typography.headline)
+            .foregroundColor(photosToSave.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
+            .disabled(photosToSave.isEmpty)
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.surface)
+    }
+
+    // MARK: - Tag Summary Bar
+
+    var tagSummaryBar: some View {
+        Button(action: { showTagEditor = true }) {
+            HStack {
+                // Tag pills
+                ForEach(currentTagPills, id: \.text) { pill in
+                    DPTagPill(pill.text, color: pill.color, size: .small)
+                }
+
+                if currentTagPills.isEmpty {
+                    Text("No tags")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+
+                Spacer()
+
+                Text("Edit")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.primary)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surfaceSecondary)
+        }
+    }
+
+    // MARK: - Photo Grid
+
+    var photoGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppTheme.Spacing.md) {
+            ForEach(Array(captureState.capturedPhotos.enumerated()), id: \.element.id) { index, photo in
+                ReviewPhotoCard(
+                    photo: photo,
+                    index: index,
+                    onToggleKeep: {
+                        captureState.togglePhotoKeep(id: photo.id)
+                        HapticsManager.shared.lightTap()
+                    },
+                    onRatingChange: { rating in
+                        captureState.setRating(rating, for: photo.id)
+                        HapticsManager.shared.selectionChanged()
+                    },
+                    onTap: {
+                        selectedPhotoIndex = index
+                    }
+                )
+            }
+        }
+    }
+
+    // MARK: - Portfolio Match Indicator
+
+    @ViewBuilder
+    var portfolioMatchIndicator: some View {
+        if let match = findPortfolioMatch() {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(AppTheme.Colors.success)
+
+                Text(match)
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .padding(AppTheme.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .background(AppTheme.Colors.success.opacity(0.1))
+        }
+    }
+
+    // MARK: - Bottom Actions
+
+    var bottomActions: some View {
+        VStack(spacing: AppTheme.Spacing.sm) {
+            DPButton(
+                "Save \(photosToSave.count) Photo\(photosToSave.count == 1 ? "" : "s")",
+                icon: "checkmark.circle.fill",
+                style: .primary,
+                isFullWidth: true,
+                isDisabled: photosToSave.isEmpty
+            ) {
+                savePhotos()
+            }
+
+            HStack(spacing: AppTheme.Spacing.md) {
+                DPButton(
+                    "Capture More",
+                    icon: "camera",
+                    style: .secondary
+                ) {
+                    captureState.currentStep = .camera
+                }
+
+                Button(action: {
+                    captureState.capturedPhotos.removeAll()
+                    captureState.currentStep = .camera
+                    HapticsManager.shared.lightTap()
+                }) {
+                    Text("Discard All")
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundColor(AppTheme.Colors.error)
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.surface)
+    }
+
+    // MARK: - Helper Methods
+
+    var currentTagPills: [(text: String, color: Color)] {
+        var pills: [(String, Color)] = []
+        if let p = captureState.selectedProcedure {
+            pills.append((p, AppTheme.procedureColor(for: p)))
+        }
+        if let t = captureState.selectedToothNumber {
+            pills.append(("#\(t)", AppTheme.Colors.info))
+        }
+        if let s = captureState.selectedStage {
+            pills.append((s == "Preparation" ? "Prep" : "Resto", s == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success))
+        }
+        if let a = captureState.selectedAngle {
+            pills.append((a, .purple))
+        }
+        return pills
+    }
+
+    func findPortfolioMatch() -> String? {
+        // Check if current tags match any portfolio requirement
+        guard let procedure = captureState.selectedProcedure,
+              let stage = captureState.selectedStage,
+              let angle = captureState.selectedAngle else {
+            return nil
+        }
+
+        for portfolio in metadataManager.portfolios {
+            for requirement in portfolio.requirements {
+                if requirement.procedure == procedure &&
+                   requirement.stages.contains(stage) &&
+                   requirement.angles.contains(angle) {
+                    let currentCount = metadataManager.getPhotoCount(for: requirement, stage: stage, angle: angle)
+                    let needed = requirement.angleCounts[angle] ?? 1
+                    let willAdd = photosToSave.count
+
+                    if currentCount + willAdd >= needed {
+                        return "Completes \(angle) for \(portfolio.name)!"
+                    } else {
+                        return "\(currentCount + willAdd)/\(needed) \(angle) for \(portfolio.name)"
+                    }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func savePhotos() {
+        isSaving = true
+
+        let baseMetadata = PhotoMetadata(
+            procedure: captureState.selectedProcedure,
+            toothNumber: captureState.selectedToothNumber,
+            toothDate: captureState.selectedToothDate,
+            stage: captureState.selectedStage,
+            angle: captureState.selectedAngle,
+            rating: nil
+        )
+
+        let group = DispatchGroup()
+
+        for photo in photosToSave {
+            group.enter()
+
+            var photoMetadata = baseMetadata
+            photoMetadata.rating = photo.rating > 0 ? photo.rating : nil
+
+            PhotoLibraryManager.shared.saveWithMetadata(image: photo.image, metadata: photoMetadata) { _ in
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            isSaving = false
+            HapticsManager.shared.success()
+
+            // Reset and go home
+            captureState.reset()
+            router.resetCaptureState()
+            router.selectedTab = .home
+        }
+    }
+}
+
+// MARK: - Review Photo Card
+
+/// Card displaying a captured photo with keep/discard toggle and rating
+struct ReviewPhotoCard: View {
+    let photo: CapturedPhoto
+    let index: Int
+    let onToggleKeep: () -> Void
+    let onRatingChange: (Int) -> Void
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.sm) {
+            // Photo with keep/delete overlay
+            ZStack(alignment: .topTrailing) {
+                Button(action: onTap) {
+                    Image(uiImage: photo.image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 150)
+                        .clipped()
+                        .cornerRadius(AppTheme.CornerRadius.medium)
+                        .opacity(photo.shouldKeep ? 1.0 : 0.4)
+                }
+
+                // Keep/Delete toggle
+                Button(action: onToggleKeep) {
+                    Image(systemName: photo.shouldKeep ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(photo.shouldKeep ? AppTheme.Colors.success : AppTheme.Colors.error)
+                        .background(Color.white.clipShape(Circle()))
+                }
+                .padding(AppTheme.Spacing.sm)
+            }
+
+            // Rating stars or discard message
+            if photo.shouldKeep {
+                HStack(spacing: 4) {
+                    ForEach(1...5, id: \.self) { star in
+                        Button(action: { onRatingChange(star) }) {
+                            Image(systemName: star <= photo.rating ? "star.fill" : "star")
+                                .font(.system(size: 20))
+                                .foregroundColor(star <= photo.rating ? .yellow : AppTheme.Colors.textTertiary)
+                        }
+                    }
+                }
+            } else {
+                Text("Will be discarded")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.error)
+            }
+        }
+        .padding(AppTheme.Spacing.sm)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(AppTheme.CornerRadius.medium)
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Review Tag Editor Sheet
+
+/// Tag editor sheet for the review screen
+struct ReviewTagEditorSheet: View {
+    @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var showToothChart = false
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                    // Procedure selection
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("PROCEDURE")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                ForEach(MetadataManager.baseProcedures, id: \.self) { procedure in
+                                    DPTagPill(
+                                        procedure,
+                                        color: AppTheme.procedureColor(for: procedure),
+                                        isSelected: captureState.selectedProcedure == procedure
+                                    ) {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            captureState.selectedProcedure = procedure
+                                        }
+                                        HapticsManager.shared.selectionChanged()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Tooth selection
+                    if let procedure = captureState.selectedProcedure {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                            Text("TOOTH")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    let recentTeeth = metadataManager.getToothEntries(for: procedure).prefix(5)
+                                    ForEach(recentTeeth.map { $0 }, id: \.id) { entry in
+                                        Button(action: {
+                                            captureState.selectedToothNumber = entry.toothNumber
+                                            captureState.selectedToothDate = entry.date
+                                            HapticsManager.shared.selectionChanged()
+                                        }) {
+                                            Text("#\(entry.toothNumber)")
+                                                .font(AppTheme.Typography.subheadline.weight(.semibold))
+                                                .padding(.horizontal, AppTheme.Spacing.sm)
+                                                .padding(.vertical, AppTheme.Spacing.xs)
+                                                .background(
+                                                    captureState.selectedToothNumber == entry.toothNumber
+                                                        ? AppTheme.Colors.info
+                                                        : AppTheme.Colors.surfaceSecondary
+                                                )
+                                                .foregroundColor(
+                                                    captureState.selectedToothNumber == entry.toothNumber
+                                                        ? .white
+                                                        : AppTheme.Colors.textPrimary
+                                                )
+                                                .cornerRadius(AppTheme.CornerRadius.small)
+                                        }
+                                    }
+
+                                    Button(action: { showToothChart = true }) {
+                                        HStack(spacing: AppTheme.Spacing.xxs) {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text("New")
+                                                .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        }
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(AppTheme.Colors.primary.opacity(0.15))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .cornerRadius(AppTheme.CornerRadius.small)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Stage selection
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("STAGE")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+
+                        HStack(spacing: AppTheme.Spacing.sm) {
+                            ForEach(MetadataManager.stages, id: \.self) { stage in
+                                DPTagPill(
+                                    stage,
+                                    color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                    isSelected: captureState.selectedStage == stage
+                                ) {
+                                    captureState.selectedStage = stage
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Angle selection
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("ANGLE")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                ForEach(MetadataManager.angles, id: \.self) { angle in
+                                    DPTagPill(
+                                        angle,
+                                        color: .purple,
+                                        isSelected: captureState.selectedAngle == angle
+                                    ) {
+                                        captureState.selectedAngle = angle
+                                        HapticsManager.shared.selectionChanged()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(AppTheme.Spacing.md)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Edit Tags")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .sheet(isPresented: $showToothChart) {
+            ReviewToothChartSheet(captureState: captureState)
+                .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+// MARK: - Review Tooth Chart Sheet
+
+/// Tooth chart for the review tag editor
+struct ReviewToothChartSheet: View {
+    @ObservedObject var captureState: CaptureFlowState
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTooth: Int? = nil
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Upper arch
+                VStack(spacing: AppTheme.Spacing.xs) {
+                    Text("UPPER")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    HStack(spacing: 2) {
+                        ForEach(1...16, id: \.self) { tooth in
+                            ReviewToothCell(
+                                number: tooth,
+                                isSelected: selectedTooth == tooth
+                            ) {
+                                selectedTooth = tooth
+                                HapticsManager.shared.selectionChanged()
+                            }
+                        }
+                    }
+                }
+
+                // Lower arch
+                VStack(spacing: AppTheme.Spacing.xs) {
+                    HStack(spacing: 2) {
+                        ForEach((17...32).reversed(), id: \.self) { tooth in
+                            ReviewToothCell(
+                                number: tooth,
+                                isSelected: selectedTooth == tooth
+                            ) {
+                                selectedTooth = tooth
+                                HapticsManager.shared.selectionChanged()
+                            }
+                        }
+                    }
+
+                    Text("LOWER")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+
+                Spacer()
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Select Tooth")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Select") {
+                        if let tooth = selectedTooth {
+                            captureState.selectedToothNumber = tooth
+                            captureState.selectedToothDate = Date()
+
+                            if let procedure = captureState.selectedProcedure {
+                                let entry = ToothEntry(
+                                    procedure: procedure,
+                                    toothNumber: tooth,
+                                    date: Date()
+                                )
+                                metadataManager.addToothEntry(entry)
+                            }
+                        }
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(selectedTooth == nil)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Review Tooth Cell
+
+/// Tooth cell for review tooth chart
+struct ReviewToothCell: View {
+    let number: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(number)")
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .frame(width: 20, height: 28)
+                .background(isSelected ? AppTheme.Colors.info : AppTheme.Colors.surfaceSecondary)
+                .cornerRadius(4)
+        }
     }
 }
 
