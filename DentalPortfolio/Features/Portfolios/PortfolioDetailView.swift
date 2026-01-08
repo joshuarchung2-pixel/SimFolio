@@ -596,34 +596,7 @@ struct RequirementSummaryRow: View {
 
 // MARK: - Placeholder Views
 
-/// Placeholder for PortfolioChecklistTab - will be implemented in Prompt 5.3
-struct PortfolioChecklistTab: View {
-    let portfolio: Portfolio
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer(minLength: 60)
-
-                Image(systemName: "checklist")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Text("Checklist Tab")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Coming in Prompt 5.3")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-        }
-    }
-}
+// NOTE: PortfolioChecklistTab is now implemented in PortfolioChecklistTab.swift
 
 /// Placeholder for PortfolioPhotosTab - will be implemented in Prompt 5.4
 struct PortfolioPhotosTab: View {
