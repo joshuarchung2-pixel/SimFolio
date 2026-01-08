@@ -1011,17 +1011,55 @@ struct ProcedureDetailView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
-    var body: some View {
-        let allFiltered = viewModel.filteredAssets(
-            from: library.assets,
-            metadata: metadataManager,
-            filter: router.libraryFilter
-        )
-        let procedureAssets = allFiltered.filter { asset in
-            let meta = metadataManager.getMetadata(for: asset.localIdentifier)
-            return meta?.procedure == procedure || (procedure == "Untagged" && meta?.procedure == nil)
+    @State private var viewStyle: ViewStyle = .grouped
+    @State private var expandedTeeth: Set<Int> = []
+    @State private var selectedPhotoId: String? = nil
+
+    enum ViewStyle {
+        case grouped  // Grouped by tooth
+        case grid     // Flat grid
+    }
+
+    var procedureAssets: [PHAsset] {
+        if procedure == "Untagged" {
+            return library.assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+            }
+        } else {
+            return library.assets.filter { asset in
+                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == procedure
+            }
+        }
+    }
+
+    var assetsByTooth: [Int: [PHAsset]] {
+        var grouped: [Int: [PHAsset]] = [:]
+
+        for asset in procedureAssets {
+            let toothNumber = metadataManager.getMetadata(for: asset.localIdentifier)?.toothNumber ?? 0
+            grouped[toothNumber, default: []].append(asset)
         }
 
+        return grouped
+    }
+
+    var sortedToothNumbers: [Int] {
+        assetsByTooth.keys.sorted()
+    }
+
+    var prepCount: Int {
+        procedureAssets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Preparation"
+        }.count
+    }
+
+    var restoCount: Int {
+        procedureAssets.filter { asset in
+            metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Restoration"
+        }.count
+    }
+
+    var body: some View {
         if procedureAssets.isEmpty {
             DPEmptyState(
                 icon: "folder",
@@ -1033,33 +1071,595 @@ struct ProcedureDetailView: View {
             }
         } else {
             ScrollView {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs),
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs),
-                        GridItem(.flexible(), spacing: AppTheme.Spacing.xs)
-                    ],
-                    spacing: AppTheme.Spacing.xs
-                ) {
-                    ForEach(procedureAssets, id: \.localIdentifier) { asset in
-                        PhotoGridItem(
-                            asset: asset,
-                            isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
-                            isSelectionMode: viewModel.isSelectionMode,
-                            onTap: {
-                                if viewModel.isSelectionMode {
-                                    viewModel.toggleSelection(for: asset.localIdentifier)
-                                } else {
-                                    router.navigateToPhotoDetail(id: asset.localIdentifier)
-                                }
-                            }
-                        )
+                VStack(spacing: AppTheme.Spacing.lg) {
+                    // Stats header
+                    statsHeader
+
+                    // View style toggle
+                    viewStyleToggle
+
+                    // Content
+                    if viewStyle == .grouped {
+                        groupedContent
+                    } else {
+                        gridContent
                     }
+
+                    Spacer(minLength: 100)
                 }
-                .padding(AppTheme.Spacing.sm)
+                .padding(.top, AppTheme.Spacing.md)
+            }
+            .sheet(item: $selectedPhotoId) { photoId in
+                PhotoDetailSheet(
+                    photoId: photoId,
+                    allAssets: procedureAssets,
+                    onDismiss: { selectedPhotoId = nil }
+                )
             }
         }
     }
+
+    // MARK: - Stats Header
+    var statsHeader: some View {
+        DPCard {
+            HStack(spacing: AppTheme.Spacing.lg) {
+                StatItem(
+                    value: "\(procedureAssets.count)",
+                    label: "Photos",
+                    color: AppTheme.procedureColor(for: procedure)
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(assetsByTooth.count)",
+                    label: "Teeth",
+                    color: AppTheme.Colors.success
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(prepCount)",
+                    label: "Prep",
+                    color: AppTheme.Colors.warning
+                )
+
+                Divider()
+                    .frame(height: 40)
+
+                StatItem(
+                    value: "\(restoCount)",
+                    label: "Resto",
+                    color: AppTheme.Colors.success
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - View Style Toggle
+    var viewStyleToggle: some View {
+        HStack {
+            Spacer()
+
+            Picker("View Style", selection: $viewStyle) {
+                Image(systemName: "list.bullet").tag(ViewStyle.grouped)
+                Image(systemName: "square.grid.2x2").tag(ViewStyle.grid)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .frame(width: 100)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Grouped Content
+    var groupedContent: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            ForEach(sortedToothNumbers, id: \.self) { toothNumber in
+                ToothGroupSection(
+                    toothNumber: toothNumber,
+                    assets: assetsByTooth[toothNumber] ?? [],
+                    isExpanded: expandedTeeth.contains(toothNumber),
+                    isSelectionMode: viewModel.isSelectionMode,
+                    selectedIds: viewModel.selectedAssetIds,
+                    onToggleExpand: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if expandedTeeth.contains(toothNumber) {
+                                expandedTeeth.remove(toothNumber)
+                            } else {
+                                expandedTeeth.insert(toothNumber)
+                            }
+                        }
+                    },
+                    onSelectAsset: { assetId in
+                        if viewModel.isSelectionMode {
+                            viewModel.toggleSelection(for: assetId)
+                        } else {
+                            selectedPhotoId = assetId
+                        }
+                    },
+                    metadataManager: metadataManager
+                )
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Grid Content
+    var gridContent: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+            spacing: AppTheme.Spacing.xs
+        ) {
+            ForEach(procedureAssets, id: \.localIdentifier) { asset in
+                LibraryPhotoThumbnail(
+                    asset: asset,
+                    isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                    isSelectionMode: viewModel.isSelectionMode
+                ) {
+                    if viewModel.isSelectionMode {
+                        viewModel.toggleSelection(for: asset.localIdentifier)
+                    } else {
+                        selectedPhotoId = asset.localIdentifier
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+    }
+}
+
+// MARK: - Stat Item
+
+/// Individual stat display for the procedure header
+struct StatItem: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.xxs) {
+            Text(value)
+                .font(AppTheme.Typography.title2)
+                .foregroundColor(color)
+
+            Text(label)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+    }
+}
+
+// MARK: - Tooth Group Section
+
+/// Expandable section showing photos grouped by tooth number
+struct ToothGroupSection: View {
+    let toothNumber: Int
+    let assets: [PHAsset]
+    let isExpanded: Bool
+    let isSelectionMode: Bool
+    let selectedIds: Set<String>
+    let onToggleExpand: () -> Void
+    let onSelectAsset: (String) -> Void
+    @ObservedObject var metadataManager: MetadataManager
+
+    var toothLabel: String {
+        toothNumber == 0 ? "No Tooth Assigned" : "Tooth #\(toothNumber)"
+    }
+
+    var prepAssets: [PHAsset] {
+        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.stage == "Preparation" }
+    }
+
+    var restoAssets: [PHAsset] {
+        assets.filter { metadataManager.getMetadata(for: $0.localIdentifier)?.stage == "Restoration" }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header row
+            Button(action: onToggleExpand) {
+                HStack {
+                    // Tooth icon
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .frame(width: 36, height: 36)
+
+                        Text(toothNumber == 0 ? "?" : "\(toothNumber)")
+                            .font(AppTheme.Typography.headline)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    }
+
+                    // Tooth label and count
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                        Text(toothLabel)
+                            .font(AppTheme.Typography.headline)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+
+                        HStack(spacing: AppTheme.Spacing.sm) {
+                            if !prepAssets.isEmpty {
+                                Text("\(prepAssets.count) Prep")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.warning)
+                            }
+                            if !restoAssets.isEmpty {
+                                Text("\(restoAssets.count) Resto")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.success)
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    // Thumbnail preview (when collapsed)
+                    if !isExpanded {
+                        HStack(spacing: -8) {
+                            ForEach(assets.prefix(3), id: \.localIdentifier) { asset in
+                                AsyncThumbnailView(asset: asset, size: CGSize(width: 32, height: 32))
+                                    .frame(width: 32, height: 32)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(AppTheme.Colors.surface, lineWidth: 2)
+                                    )
+                            }
+                        }
+                    }
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+                .padding(AppTheme.Spacing.md)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // Expanded content
+            if isExpanded {
+                VStack(spacing: AppTheme.Spacing.md) {
+                    // Preparation photos
+                    if !prepAssets.isEmpty {
+                        StagePhotoGrid(
+                            stage: "Preparation",
+                            assets: prepAssets,
+                            isSelectionMode: isSelectionMode,
+                            selectedIds: selectedIds,
+                            onSelectAsset: onSelectAsset,
+                            metadataManager: metadataManager
+                        )
+                    }
+
+                    // Restoration photos
+                    if !restoAssets.isEmpty {
+                        StagePhotoGrid(
+                            stage: "Restoration",
+                            assets: restoAssets,
+                            isSelectionMode: isSelectionMode,
+                            selectedIds: selectedIds,
+                            onSelectAsset: onSelectAsset,
+                            metadataManager: metadataManager
+                        )
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.bottom, AppTheme.Spacing.md)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(AppTheme.CornerRadius.medium)
+        .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - Stage Photo Grid
+
+/// Grid of photos for a specific stage (Preparation or Restoration)
+struct StagePhotoGrid: View {
+    let stage: String
+    let assets: [PHAsset]
+    let isSelectionMode: Bool
+    let selectedIds: Set<String>
+    let onSelectAsset: (String) -> Void
+    @ObservedObject var metadataManager: MetadataManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            // Stage label
+            HStack {
+                Circle()
+                    .fill(stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success)
+                    .frame(width: 8, height: 8)
+
+                Text(stage)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            // Photo grid
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                spacing: AppTheme.Spacing.xs
+            ) {
+                ForEach(assets, id: \.localIdentifier) { asset in
+                    LibraryPhotoThumbnail(
+                        asset: asset,
+                        isSelected: selectedIds.contains(asset.localIdentifier),
+                        isSelectionMode: isSelectionMode
+                    ) {
+                        onSelectAsset(asset.localIdentifier)
+                    }
+                    .aspectRatio(1, contentMode: .fill)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Library Photo Thumbnail
+
+/// Photo thumbnail with selection overlay and rating badge
+struct LibraryPhotoThumbnail: View {
+    let asset: PHAsset
+    let isSelected: Bool
+    let isSelectionMode: Bool
+    let onTap: () -> Void
+
+    @State private var image: UIImage?
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    var rating: Int {
+        metadataManager.getRating(for: asset.localIdentifier) ?? 0
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .topTrailing) {
+                // Thumbnail
+                Group {
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
+
+                // Selection indicator
+                if isSelectionMode {
+                    ZStack {
+                        Circle()
+                            .fill(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.8))
+                            .frame(width: 24, height: 24)
+
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        } else {
+                            Circle()
+                                .stroke(AppTheme.Colors.textTertiary, lineWidth: 1.5)
+                                .frame(width: 22, height: 22)
+                        }
+                    }
+                    .padding(4)
+                }
+
+                // Rating stars (bottom left)
+                if !isSelectionMode && rating > 0 {
+                    HStack(spacing: 1) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8))
+                        Text("\(rating)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(4)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        PhotoLibraryManager.shared.requestThumbnail(for: asset, size: CGSize(width: 150, height: 150)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - Async Thumbnail View
+
+/// Async thumbnail loader for smaller preview images
+struct AsyncThumbnailView: View {
+    let asset: PHAsset
+    let size: CGSize
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(AppTheme.Colors.surfaceSecondary)
+            }
+        }
+        .onAppear {
+            PhotoLibraryManager.shared.requestThumbnail(for: asset, size: size) { loadedImage in
+                self.image = loadedImage
+            }
+        }
+    }
+}
+
+// MARK: - Photo Detail Sheet
+
+/// Sheet wrapper for photo detail view
+struct PhotoDetailSheet: View {
+    let photoId: String
+    let allAssets: [PHAsset]
+    let onDismiss: () -> Void
+
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationView {
+            if let asset = allAssets.first(where: { $0.localIdentifier == photoId }) {
+                PhotoDetailContent(asset: asset, allAssets: allAssets)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") {
+                                onDismiss()
+                                dismiss()
+                            }
+                        }
+                    }
+            } else {
+                Text("Photo not found")
+            }
+        }
+    }
+}
+
+// MARK: - Photo Detail Content
+
+/// Placeholder for photo detail view content
+struct PhotoDetailContent: View {
+    let asset: PHAsset
+    let allAssets: [PHAsset]
+
+    @State private var image: UIImage?
+    @ObservedObject var metadataManager = MetadataManager.shared
+
+    var metadata: PhotoMetadata? {
+        metadataManager.getMetadata(for: asset.localIdentifier)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // Full image
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .cornerRadius(AppTheme.CornerRadius.medium)
+                } else {
+                    Rectangle()
+                        .fill(AppTheme.Colors.surfaceSecondary)
+                        .aspectRatio(4/3, contentMode: .fit)
+                        .cornerRadius(AppTheme.CornerRadius.medium)
+                        .overlay(ProgressView())
+                }
+
+                // Metadata info
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                    if let meta = metadata {
+                        if let procedure = meta.procedure {
+                            MetadataRow(label: "Procedure", value: procedure)
+                        }
+                        if let toothNumber = meta.toothNumber {
+                            MetadataRow(label: "Tooth", value: "#\(toothNumber)")
+                        }
+                        if let stage = meta.stage {
+                            MetadataRow(label: "Stage", value: stage)
+                        }
+                        if let angle = meta.angle {
+                            MetadataRow(label: "Angle", value: angle)
+                        }
+                        if let rating = meta.rating, rating > 0 {
+                            HStack {
+                                Text("Rating")
+                                    .font(AppTheme.Typography.subheadline)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Spacer()
+                                HStack(spacing: 2) {
+                                    ForEach(0..<rating, id: \.self) { _ in
+                                        Image(systemName: "star.fill")
+                                            .foregroundColor(AppTheme.Colors.warning)
+                                            .font(.system(size: 14))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let date = asset.creationDate {
+                        MetadataRow(label: "Date", value: dateFormatter.string(from: date))
+                    }
+                }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(AppTheme.CornerRadius.medium)
+            }
+            .padding(AppTheme.Spacing.md)
+        }
+        .background(AppTheme.Colors.background)
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .short
+        return formatter
+    }
+
+    private func loadImage() {
+        PhotoLibraryManager.shared.requestImage(for: asset, size: CGSize(width: 800, height: 800)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+}
+
+// MARK: - Metadata Row
+
+/// Simple row for displaying metadata key-value pairs
+struct MetadataRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
+}
+
+// MARK: - String Identifiable Extension
+
+extension String: Identifiable {
+    public var id: String { self }
 }
 
 // MARK: - AllPhotosGridView
