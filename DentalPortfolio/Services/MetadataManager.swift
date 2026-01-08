@@ -175,6 +175,36 @@ class MetadataManager: ObservableObject {
         return getMatchingPhotoCount(procedure: requirement.procedure, stage: stage, angle: angle)
     }
 
+    /// Add a new portfolio
+    /// - Parameter portfolio: The portfolio to add
+    func addPortfolio(_ portfolio: Portfolio) {
+        portfolios.append(portfolio)
+        // TODO: Persist to storage
+    }
+
+    /// Update an existing portfolio
+    /// - Parameter portfolio: The updated portfolio (matched by id)
+    func updatePortfolio(_ portfolio: Portfolio) {
+        if let index = portfolios.firstIndex(where: { $0.id == portfolio.id }) {
+            portfolios[index] = portfolio
+            // TODO: Persist to storage
+        }
+    }
+
+    /// Delete a portfolio by ID
+    /// - Parameter portfolioId: The ID of the portfolio to delete
+    func deletePortfolio(_ portfolioId: String) {
+        portfolios.removeAll { $0.id == portfolioId }
+        // TODO: Persist to storage
+    }
+
+    /// Get a portfolio by ID
+    /// - Parameter portfolioId: The ID of the portfolio to find
+    /// - Returns: The portfolio if found, nil otherwise
+    func getPortfolio(by portfolioId: String) -> Portfolio? {
+        return portfolios.first { $0.id == portfolioId }
+    }
+
     // MARK: - Metadata Methods (Placeholder)
 
     /// Get asset IDs with incomplete metadata
