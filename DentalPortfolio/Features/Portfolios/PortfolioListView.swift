@@ -366,44 +366,9 @@ extension String: @retroactive Identifiable {
     public var id: String { self }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Notes
 
-/// Placeholder for CreatePortfolioSheet - will be implemented in Prompt 5.6
-struct CreatePortfolioSheet: View {
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer()
-
-                Image(systemName: "folder.badge.plus")
-                    .font(.system(size: 60, weight: .light))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Text("Create Portfolio Sheet")
-                    .font(AppTheme.Typography.title3)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Coming in a future prompt")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("New Portfolio")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-            }
-        }
-    }
-}
-
+// NOTE: CreatePortfolioSheet is now implemented in CreatePortfolioSheet.swift
 // NOTE: PortfolioDetailView is now implemented in PortfolioDetailView.swift
 
 // MARK: - Preview Provider

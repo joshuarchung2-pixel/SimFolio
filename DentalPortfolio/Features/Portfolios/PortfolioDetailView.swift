@@ -594,48 +594,12 @@ struct RequirementSummaryRow: View {
     }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Notes
 
 // NOTE: PortfolioChecklistTab is now implemented in PortfolioChecklistTab.swift
 // NOTE: PortfolioPhotosTab is now implemented in PortfolioPhotosTab.swift
 // NOTE: PortfolioExportSheet is now implemented in PortfolioExportSheet.swift
-
-/// Placeholder for EditPortfolioSheet - will be implemented in Prompt 5.6
-struct EditPortfolioSheet: View {
-    let portfolio: Portfolio
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                Spacer()
-
-                Image(systemName: "pencil.circle")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-
-                Text("Edit Portfolio")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text("Coming in Prompt 5.6")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Edit Portfolio")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-            }
-        }
-    }
-}
+// NOTE: EditPortfolioSheet is now implemented in CreatePortfolioSheet.swift
 
 // MARK: - Preview Provider
 
