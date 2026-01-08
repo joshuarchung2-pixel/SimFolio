@@ -1515,124 +1515,611 @@ struct AsyncThumbnailView: View {
 
 // MARK: - Photo Detail Sheet
 
-/// Sheet wrapper for photo detail view
+/// Sheet wrapper for photo detail view - presents PhotoDetailView in fullscreen
 struct PhotoDetailSheet: View {
     let photoId: String
     let allAssets: [PHAsset]
     let onDismiss: () -> Void
 
-    @Environment(\.dismiss) var dismiss
+    @State private var isPresented = true
 
     var body: some View {
-        NavigationView {
-            if let asset = allAssets.first(where: { $0.localIdentifier == photoId }) {
-                PhotoDetailContent(asset: asset, allAssets: allAssets)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                onDismiss()
-                                dismiss()
-                            }
+        if let asset = allAssets.first(where: { $0.localIdentifier == photoId }) {
+            PhotoDetailView(
+                asset: asset,
+                allAssets: allAssets,
+                isPresented: $isPresented
+            )
+            .onChange(of: isPresented) { _, newValue in
+                if !newValue {
+                    onDismiss()
+                }
+            }
+        } else {
+            Text("Photo not found")
+        }
+    }
+}
+
+// MARK: - Photo Detail View
+
+/// Full-screen photo viewer with swipe navigation and metadata editing
+struct PhotoDetailView: View {
+    let asset: PHAsset
+    let allAssets: [PHAsset]
+    @Binding var isPresented: Bool
+
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var currentIndex: Int = 0
+    @State private var image: UIImage?
+    @State private var isImmersiveMode = false
+    @State private var showMetadataEditor = false
+    @State private var showDeleteConfirmation = false
+    @State private var showShareSheet = false
+    @State private var dragOffset: CGSize = .zero
+
+    var currentAsset: PHAsset {
+        allAssets.indices.contains(currentIndex) ? allAssets[currentIndex] : asset
+    }
+
+    var currentMetadata: PhotoMetadata? {
+        metadataManager.getMetadata(for: currentAsset.localIdentifier)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Background
+                Color.black.ignoresSafeArea()
+
+                // Photo with gestures
+                photoView(geometry: geometry)
+
+                // UI overlays (hidden in immersive mode)
+                if !isImmersiveMode {
+                    VStack {
+                        // Top bar
+                        topBar
+
+                        Spacer()
+
+                        // Bottom metadata card
+                        metadataCard
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+        .statusBar(hidden: isImmersiveMode)
+        .onAppear {
+            currentIndex = allAssets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier }) ?? 0
+            loadFullImage()
+        }
+        .onChange(of: currentIndex) { _, _ in
+            loadFullImage()
+        }
+        .sheet(isPresented: $showMetadataEditor) {
+            PhotoMetadataEditSheet(
+                asset: currentAsset,
+                isPresented: $showMetadataEditor
+            )
+        }
+        .alert("Delete Photo?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteCurrentPhoto()
+            }
+        } message: {
+            Text("This will permanently delete the photo from your library.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let image = image {
+                ShareSheet(items: [image])
+            }
+        }
+    }
+
+    // MARK: - Photo View
+
+    func photoView(geometry: GeometryProxy) -> some View {
+        TabView(selection: $currentIndex) {
+            ForEach(Array(allAssets.enumerated()), id: \.element.localIdentifier) { index, photoAsset in
+                ZoomablePhotoView(asset: photoAsset)
+                    .tag(index)
+            }
+        }
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        .offset(y: dragOffset.height)
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if abs(value.translation.height) > abs(value.translation.width) {
+                        dragOffset = value.translation
+                    }
+                }
+                .onEnded { value in
+                    if abs(value.translation.height) > 100 {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            isPresented = false
+                        }
+                    } else {
+                        withAnimation(.spring()) {
+                            dragOffset = .zero
                         }
                     }
+                }
+        )
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isImmersiveMode.toggle()
+            }
+        }
+    }
+
+    // MARK: - Top Bar
+
+    var topBar: some View {
+        HStack {
+            // Close button
+            Button(action: { isPresented = false }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+
+            Spacer()
+
+            // Photo counter
+            Text("\(currentIndex + 1) / \(allAssets.count)")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.xs)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(AppTheme.CornerRadius.full)
+
+            Spacer()
+
+            // Actions menu
+            Menu {
+                Button(action: { showShareSheet = true }) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+
+                Button(action: { showMetadataEditor = true }) {
+                    Label("Edit Tags", systemImage: "tag")
+                }
+
+                Divider()
+
+                Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.top, AppTheme.Spacing.md)
+    }
+
+    // MARK: - Metadata Card
+
+    var metadataCard: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            // Tags row
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    if let metadata = currentMetadata {
+                        if let procedure = metadata.procedure {
+                            DPTagPill(
+                                procedure,
+                                color: AppTheme.procedureColor(for: procedure),
+                                size: .medium
+                            )
+                        }
+
+                        if let toothNumber = metadata.toothNumber {
+                            DPTagPill(
+                                "#\(toothNumber)",
+                                color: AppTheme.Colors.success,
+                                size: .medium
+                            )
+                        }
+
+                        if let stage = metadata.stage {
+                            DPTagPill(
+                                stage == "Preparation" ? "Prep" : "Resto",
+                                color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                size: .medium
+                            )
+                        }
+
+                        if let angle = metadata.angle {
+                            DPTagPill(
+                                angle,
+                                color: .purple,
+                                size: .medium
+                            )
+                        }
+                    }
+
+                    // Edit tags button
+                    Button(action: { showMetadataEditor = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                            Text("Edit")
+                        }
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background(AppTheme.Colors.primary.opacity(0.15))
+                        .cornerRadius(AppTheme.CornerRadius.full)
+                    }
+                }
+            }
+
+            // Rating row
+            HStack {
+                Text("Rating")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(.white.opacity(0.7))
+
+                Spacer()
+
+                RatingStarsView(
+                    rating: Binding(
+                        get: { currentMetadata?.rating ?? 0 },
+                        set: { newRating in
+                            metadataManager.setRating(newRating, for: currentAsset.localIdentifier)
+                            HapticsManager.shared.selectionChanged()
+                        }
+                    ),
+                    starSize: 28,
+                    spacing: 4
+                )
+            }
+
+            // Date
+            if let date = currentAsset.creationDate {
+                HStack {
+                    Text("Captured")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(.white.opacity(0.7))
+
+                    Spacer()
+
+                    Text(date, style: .date)
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundColor(.white)
+
+                    Text(date, style: .time)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(
+            LinearGradient(
+                colors: [Color.black.opacity(0), Color.black.opacity(0.8)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    // MARK: - Methods
+
+    func loadFullImage() {
+        PhotoLibraryManager.shared.requestImage(for: currentAsset, size: CGSize(width: 1200, height: 1200)) { loadedImage in
+            self.image = loadedImage
+        }
+    }
+
+    func deleteCurrentPhoto() {
+        PhotoLibraryManager.shared.deleteAsset(currentAsset) { success in
+            if success {
+                HapticsManager.shared.success()
+
+                if allAssets.count == 1 {
+                    isPresented = false
+                } else if currentIndex >= allAssets.count - 1 {
+                    currentIndex = max(0, currentIndex - 1)
+                }
             } else {
-                Text("Photo not found")
+                HapticsManager.shared.error()
             }
         }
     }
 }
 
-// MARK: - Photo Detail Content
+// MARK: - Zoomable Photo View
 
-/// Placeholder for photo detail view content
-struct PhotoDetailContent: View {
+/// Photo view with pinch-to-zoom and double-tap zoom support
+struct ZoomablePhotoView: View {
     let asset: PHAsset
-    let allAssets: [PHAsset]
 
     @State private var image: UIImage?
-    @ObservedObject var metadataManager = MetadataManager.shared
-
-    var metadata: PhotoMetadata? {
-        metadataManager.getMetadata(for: asset.localIdentifier)
-    }
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                // Full image
+        GeometryReader { geometry in
+            Group {
                 if let image = image {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .cornerRadius(AppTheme.CornerRadius.medium)
-                } else {
-                    Rectangle()
-                        .fill(AppTheme.Colors.surfaceSecondary)
-                        .aspectRatio(4/3, contentMode: .fit)
-                        .cornerRadius(AppTheme.CornerRadius.medium)
-                        .overlay(ProgressView())
-                }
-
-                // Metadata info
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    if let meta = metadata {
-                        if let procedure = meta.procedure {
-                            MetadataRow(label: "Procedure", value: procedure)
-                        }
-                        if let toothNumber = meta.toothNumber {
-                            MetadataRow(label: "Tooth", value: "#\(toothNumber)")
-                        }
-                        if let stage = meta.stage {
-                            MetadataRow(label: "Stage", value: stage)
-                        }
-                        if let angle = meta.angle {
-                            MetadataRow(label: "Angle", value: angle)
-                        }
-                        if let rating = meta.rating, rating > 0 {
-                            HStack {
-                                Text("Rating")
-                                    .font(AppTheme.Typography.subheadline)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                Spacer()
-                                HStack(spacing: 2) {
-                                    ForEach(0..<rating, id: \.self) { _ in
-                                        Image(systemName: "star.fill")
-                                            .foregroundColor(AppTheme.Colors.warning)
-                                            .font(.system(size: 14))
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let delta = value / lastScale
+                                    lastScale = value
+                                    scale = min(max(scale * delta, 1), 4)
+                                }
+                                .onEnded { _ in
+                                    lastScale = 1.0
+                                    if scale < 1 {
+                                        withAnimation(.spring()) {
+                                            scale = 1
+                                            offset = .zero
+                                        }
                                     }
+                                }
+                        )
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if scale > 1 {
+                                        offset = CGSize(
+                                            width: lastOffset.width + value.translation.width,
+                                            height: lastOffset.height + value.translation.height
+                                        )
+                                    }
+                                }
+                                .onEnded { _ in
+                                    lastOffset = offset
+                                }
+                        )
+                        .onTapGesture(count: 2) {
+                            withAnimation(.spring()) {
+                                if scale > 1 {
+                                    scale = 1
+                                    offset = .zero
+                                    lastOffset = .zero
+                                } else {
+                                    scale = 2
                                 }
                             }
                         }
-                    }
-
-                    if let date = asset.creationDate {
-                        MetadataRow(label: "Date", value: dateFormatter.string(from: date))
-                    }
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 }
-                .padding(AppTheme.Spacing.md)
-                .background(AppTheme.Colors.surface)
-                .cornerRadius(AppTheme.CornerRadius.medium)
             }
-            .padding(AppTheme.Spacing.md)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .background(AppTheme.Colors.background)
         .onAppear {
             loadImage()
         }
     }
 
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.timeStyle = .short
-        return formatter
-    }
-
-    private func loadImage() {
-        PhotoLibraryManager.shared.requestImage(for: asset, size: CGSize(width: 800, height: 800)) { loadedImage in
+    func loadImage() {
+        PhotoLibraryManager.shared.requestImage(for: asset, size: CGSize(width: 1200, height: 1200)) { loadedImage in
             self.image = loadedImage
         }
+    }
+}
+
+// MARK: - Rating Stars View
+
+/// Interactive star rating component
+struct RatingStarsView: View {
+    @Binding var rating: Int
+    var starSize: CGFloat = 24
+    var spacing: CGFloat = 2
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(1...5, id: \.self) { star in
+                Button(action: {
+                    if rating == star {
+                        rating = 0
+                    } else {
+                        rating = star
+                    }
+                }) {
+                    Image(systemName: star <= rating ? "star.fill" : "star")
+                        .font(.system(size: starSize))
+                        .foregroundColor(star <= rating ? .yellow : .white.opacity(0.3))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+/// UIActivityViewController wrapper for sharing content
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Photo Metadata Edit Sheet
+
+/// Sheet for editing photo metadata (procedure, tooth, stage, angle)
+struct PhotoMetadataEditSheet: View {
+    let asset: PHAsset
+    @Binding var isPresented: Bool
+
+    @ObservedObject var metadataManager = MetadataManager.shared
+    @State private var selectedProcedure: String?
+    @State private var selectedToothNumber: Int?
+    @State private var selectedStage: String?
+    @State private var selectedAngle: String?
+    @State private var notes: String = ""
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                    // Procedure
+                    metadataSection(title: "PROCEDURE") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(metadataManager.procedures, id: \.self) { procedure in
+                                FilterToggleChip(
+                                    text: procedure,
+                                    color: AppTheme.procedureColor(for: procedure),
+                                    isSelected: selectedProcedure == procedure
+                                ) {
+                                    selectedProcedure = selectedProcedure == procedure ? nil : procedure
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Tooth Number
+                    metadataSection(title: "TOOTH NUMBER") {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: AppTheme.Spacing.xs) {
+                            ForEach(1...32, id: \.self) { tooth in
+                                Button(action: {
+                                    selectedToothNumber = selectedToothNumber == tooth ? nil : tooth
+                                    HapticsManager.shared.selectionChanged()
+                                }) {
+                                    Text("\(tooth)")
+                                        .font(AppTheme.Typography.caption)
+                                        .foregroundColor(selectedToothNumber == tooth ? .white : AppTheme.Colors.textPrimary)
+                                        .frame(width: 36, height: 36)
+                                        .background(selectedToothNumber == tooth ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
+                                        .cornerRadius(AppTheme.CornerRadius.small)
+                                }
+                            }
+                        }
+                    }
+
+                    // Stage
+                    metadataSection(title: "STAGE") {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            ForEach(MetadataManager.stages, id: \.self) { stage in
+                                FilterToggleChip(
+                                    text: stage,
+                                    color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
+                                    isSelected: selectedStage == stage
+                                ) {
+                                    selectedStage = selectedStage == stage ? nil : stage
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Angle
+                    metadataSection(title: "ANGLE") {
+                        FlowLayout(spacing: AppTheme.Spacing.sm) {
+                            ForEach(MetadataManager.angles, id: \.self) { angle in
+                                FilterToggleChip(
+                                    text: angle,
+                                    color: .purple,
+                                    isSelected: selectedAngle == angle
+                                ) {
+                                    selectedAngle = selectedAngle == angle ? nil : angle
+                                    HapticsManager.shared.selectionChanged()
+                                }
+                            }
+                        }
+                    }
+
+                    // Notes
+                    metadataSection(title: "NOTES") {
+                        TextField("Add notes...", text: $notes, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .padding(AppTheme.Spacing.md)
+                            .background(AppTheme.Colors.surfaceSecondary)
+                            .cornerRadius(AppTheme.CornerRadius.medium)
+                            .lineLimit(3...6)
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.top, AppTheme.Spacing.md)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Edit Metadata")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveMetadata()
+                        isPresented = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                loadCurrentMetadata()
+            }
+        }
+    }
+
+    func metadataSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text(title)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.horizontal, AppTheme.Spacing.md)
+
+            content()
+                .padding(.horizontal, AppTheme.Spacing.md)
+        }
+    }
+
+    func loadCurrentMetadata() {
+        if let metadata = metadataManager.getMetadata(for: asset.localIdentifier) {
+            selectedProcedure = metadata.procedure
+            selectedToothNumber = metadata.toothNumber
+            selectedStage = metadata.stage
+            selectedAngle = metadata.angle
+            notes = metadata.notes ?? ""
+        }
+    }
+
+    func saveMetadata() {
+        metadataManager.updateMetadata(
+            for: asset.localIdentifier,
+            procedure: selectedProcedure,
+            toothNumber: selectedToothNumber,
+            stage: selectedStage,
+            angle: selectedAngle,
+            notes: notes.isEmpty ? nil : notes
+        )
+        HapticsManager.shared.success()
     }
 }
 
