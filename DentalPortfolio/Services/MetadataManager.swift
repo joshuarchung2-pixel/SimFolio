@@ -72,8 +72,11 @@ class MetadataManager: ObservableObject {
     /// All portfolios
     @Published var portfolios: [Portfolio] = []
 
-    /// Available procedure types
+    /// Available procedure types (legacy - for backward compatibility)
     @Published var procedures: [String] = []
+
+    /// Procedure configurations with colors and settings
+    @Published var procedureConfigs: [ProcedureConfig] = []
 
     /// Asset ID -> PhotoMetadata mapping
     @Published var assetMetadata: [String: PhotoMetadata] = [:]
@@ -83,7 +86,7 @@ class MetadataManager: ObservableObject {
 
     // MARK: - Constants
 
-    /// Base procedure types that cannot be deleted
+    /// Base procedure types that cannot be deleted (legacy)
     static let baseProcedures = ["Class 1", "Class 2", "Class 3", "Crown"]
 
     /// Available stages for photos
@@ -98,12 +101,14 @@ class MetadataManager: ObservableObject {
         loadData()
     }
 
-    // MARK: - Data Loading (Placeholder)
+    // MARK: - Data Loading
 
     private func loadData() {
-        // TODO: Load from UserDefaults or persistent storage
-        // For now, initialize with base procedures
-        procedures = Self.baseProcedures
+        // Load procedure configurations
+        loadProcedures()
+
+        // Update legacy procedures array for backward compatibility
+        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
     }
 
     // MARK: - Portfolio Methods
@@ -268,5 +273,171 @@ class MetadataManager: ObservableObject {
         if !toothHistory[entry.procedure]!.contains(where: { $0.id == entry.id }) {
             toothHistory[entry.procedure]!.append(entry)
         }
+    }
+
+    // MARK: - Procedure Configuration Management
+
+    /// Load procedure configurations from UserDefaults
+    func loadProcedures() {
+        if let data = UserDefaults.standard.data(forKey: "procedureConfigs"),
+           let decoded = try? JSONDecoder().decode([ProcedureConfig].self, from: data) {
+            procedureConfigs = decoded.sorted { $0.sortOrder < $1.sortOrder }
+        } else {
+            // Load defaults on first launch
+            procedureConfigs = ProcedureConfig.defaultProcedures
+            saveProcedures()
+        }
+
+        // Update legacy procedures array
+        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
+    }
+
+    /// Save procedure configurations to UserDefaults
+    func saveProcedures() {
+        if let encoded = try? JSONEncoder().encode(procedureConfigs) {
+            UserDefaults.standard.set(encoded, forKey: "procedureConfigs")
+        }
+
+        // Update legacy procedures array
+        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
+    }
+
+    /// Add a new procedure configuration
+    /// - Parameter procedure: The procedure configuration to add
+    func addProcedure(_ procedure: ProcedureConfig) {
+        var newProcedure = procedure
+        newProcedure.sortOrder = (procedureConfigs.map { $0.sortOrder }.max() ?? -1) + 1
+        procedureConfigs.append(newProcedure)
+        saveProcedures()
+    }
+
+    /// Update an existing procedure configuration
+    /// - Parameter procedure: The updated procedure (matched by id)
+    func updateProcedure(_ procedure: ProcedureConfig) {
+        if let index = procedureConfigs.firstIndex(where: { $0.id == procedure.id }) {
+            procedureConfigs[index] = procedure
+            saveProcedures()
+        }
+    }
+
+    /// Delete a procedure configuration by ID
+    /// - Parameter procedureId: The ID of the procedure to delete
+    func deleteProcedure(_ procedureId: String) {
+        procedureConfigs.removeAll { $0.id == procedureId }
+        saveProcedures()
+    }
+
+    /// Reorder procedures via drag and drop
+    /// - Parameters:
+    ///   - source: Source indices
+    ///   - destination: Destination index
+    func reorderProcedures(from source: IndexSet, to destination: Int) {
+        procedureConfigs.move(fromOffsets: source, toOffset: destination)
+
+        // Update sort orders
+        for (index, _) in procedureConfigs.enumerated() {
+            procedureConfigs[index].sortOrder = index
+        }
+
+        saveProcedures()
+    }
+
+    /// Reset procedures to default configurations
+    func resetToDefaults() {
+        procedureConfigs = ProcedureConfig.defaultProcedures
+        saveProcedures()
+    }
+
+    /// Get only enabled procedure configurations
+    /// - Returns: Array of enabled procedures sorted by sort order
+    func getEnabledProcedures() -> [ProcedureConfig] {
+        procedureConfigs.filter { $0.isEnabled }.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// Get enabled procedure names (for use in pickers)
+    /// - Returns: Array of enabled procedure names
+    func getEnabledProcedureNames() -> [String] {
+        getEnabledProcedures().map { $0.name }
+    }
+
+    /// Get color for a procedure by name
+    /// - Parameter procedureName: The procedure name to look up
+    /// - Returns: The procedure's color, or primary color if not found
+    func procedureColor(for procedureName: String) -> Color {
+        if let config = procedureConfigs.first(where: { $0.name.lowercased() == procedureName.lowercased() }) {
+            return config.color
+        }
+        return AppTheme.Colors.primary
+    }
+
+    /// Get procedure configuration by name
+    /// - Parameter name: The procedure name to find
+    /// - Returns: The procedure config if found
+    func getProcedure(byName name: String) -> ProcedureConfig? {
+        procedureConfigs.first { $0.name.lowercased() == name.lowercased() }
+    }
+
+    // MARK: - Data Management
+
+    /// Clear all photo metadata (keeps portfolios and procedures)
+    func clearAllMetadata() {
+        assetMetadata.removeAll()
+        toothHistory.removeAll()
+
+        // Clear from UserDefaults
+        UserDefaults.standard.removeObject(forKey: "assetMetadata")
+        UserDefaults.standard.removeObject(forKey: "toothHistory")
+    }
+
+    /// Reset all app data to defaults
+    func resetAllData() {
+        // Clear metadata
+        assetMetadata.removeAll()
+        toothHistory.removeAll()
+
+        // Clear portfolios
+        portfolios.removeAll()
+
+        // Reset procedures to defaults
+        procedureConfigs = ProcedureConfig.defaultProcedures
+        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
+
+        // Clear all UserDefaults keys related to the app
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "assetMetadata")
+        defaults.removeObject(forKey: "toothHistory")
+        defaults.removeObject(forKey: "portfolios")
+        defaults.removeObject(forKey: "procedureConfigs")
+
+        // Clear profile data
+        defaults.removeObject(forKey: "userFirstName")
+        defaults.removeObject(forKey: "userLastName")
+        defaults.removeObject(forKey: "userSchool")
+        defaults.removeObject(forKey: "userClassYear")
+        defaults.removeObject(forKey: "profileImageData")
+
+        // Reset capture settings
+        defaults.removeObject(forKey: "showGridLines")
+        defaults.removeObject(forKey: "defaultFlashMode")
+        defaults.removeObject(forKey: "captureHaptics")
+        defaults.removeObject(forKey: "captureSound")
+        defaults.removeObject(forKey: "preCaptureTagging")
+        defaults.removeObject(forKey: "rememberLastTags")
+        defaults.removeObject(forKey: "autoSaveToLibrary")
+        defaults.removeObject(forKey: "imageQuality")
+
+        // Reset notification settings
+        defaults.removeObject(forKey: "notificationsEnabled")
+        defaults.removeObject(forKey: "dailyReminder")
+        defaults.removeObject(forKey: "dailyReminderTime")
+        defaults.removeObject(forKey: "weeklyProgress")
+        defaults.removeObject(forKey: "portfolioMilestones")
+        defaults.removeObject(forKey: "incompleteTagsReminder")
+
+        // Synchronize
+        defaults.synchronize()
+
+        // Reload default procedures
+        saveProcedures()
     }
 }
