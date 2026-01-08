@@ -5675,11 +5675,15 @@ struct PhotoEditorView: View {
         ToolbarItem(placement: .navigationBarLeading) {
             if !isCropping {
                 Button("Cancel") { presentationMode.wrappedValue.dismiss() }
+            } else {
+                EmptyView()
             }
         }
         ToolbarItem(placement: .navigationBarTrailing) {
             if !isCropping {
                 Button("Save") { saveImage() }
+            } else {
+                EmptyView()
             }
         }
     }
