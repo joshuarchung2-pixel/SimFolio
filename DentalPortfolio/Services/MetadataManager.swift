@@ -57,4 +57,76 @@
 
 import SwiftUI
 
-// Placeholder - implementation will be migrated from gem1
+// MARK: - MetadataManager
+
+/// Central manager for photo metadata and portfolio storage
+/// Singleton accessible via MetadataManager.shared
+class MetadataManager: ObservableObject {
+
+    // MARK: - Singleton
+
+    static let shared = MetadataManager()
+
+    // MARK: - Published State
+
+    /// All portfolios
+    @Published var portfolios: [Portfolio] = []
+
+    /// Available procedure types
+    @Published var procedures: [String] = []
+
+    /// Asset ID -> PhotoMetadata mapping
+    @Published var assetMetadata: [String: PhotoMetadata] = [:]
+
+    // MARK: - Constants
+
+    /// Base procedure types that cannot be deleted
+    static let baseProcedures = ["Class 1", "Class 2", "Class 3", "Crown"]
+
+    /// Available stages for photos
+    static let stages = ["Preparation", "Restoration"]
+
+    /// Available angles for photos
+    static let angles = ["Occlusal", "Buccal/Facial", "Lingual", "Proximal", "Mesial", "Distal", "Other"]
+
+    // MARK: - Initialization
+
+    private init() {
+        loadData()
+    }
+
+    // MARK: - Data Loading (Placeholder)
+
+    private func loadData() {
+        // TODO: Load from UserDefaults or persistent storage
+        // For now, initialize with base procedures
+        procedures = Self.baseProcedures
+    }
+
+    // MARK: - Portfolio Methods (Placeholder)
+
+    /// Get completion percentage for a portfolio
+    func getPortfolioCompletionPercentage(_ portfolio: Portfolio) -> Double {
+        // TODO: Implement actual calculation
+        return 0.0
+    }
+
+    /// Get number of fulfilled requirements for a portfolio
+    func getFulfilledCount(for portfolio: Portfolio) -> Int {
+        // TODO: Implement actual count
+        return 0
+    }
+
+    // MARK: - Metadata Methods (Placeholder)
+
+    /// Get asset IDs with incomplete metadata
+    func getIncompleteAssetIds() -> [String] {
+        // TODO: Implement actual logic
+        return []
+    }
+
+    /// Get metadata for an asset
+    func getMetadata(for assetId: String) -> PhotoMetadata? {
+        return assetMetadata[assetId]
+    }
+}
