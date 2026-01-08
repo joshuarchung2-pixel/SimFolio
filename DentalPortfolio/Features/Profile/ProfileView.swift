@@ -188,16 +188,24 @@ struct ProfileView: View {
                 ProcedureManagementView(isPresented: $showProcedureManagement)
             }
             .sheet(isPresented: $showCaptureSettings) {
-                CaptureSettingsView(isPresented: $showCaptureSettings)
+                SettingsSheetWrapper(title: "Capture Settings", isPresented: $showCaptureSettings) {
+                    CaptureSettingsView()
+                }
             }
             .sheet(isPresented: $showNotificationSettings) {
-                NotificationSettingsView(isPresented: $showNotificationSettings)
+                SettingsSheetWrapper(title: "Notifications", isPresented: $showNotificationSettings) {
+                    NotificationSettingsView()
+                }
             }
             .sheet(isPresented: $showDataManagement) {
-                DataManagementView(isPresented: $showDataManagement)
+                SettingsSheetWrapper(title: "Data Management", isPresented: $showDataManagement) {
+                    DataManagementView()
+                }
             }
             .sheet(isPresented: $showAbout) {
-                AboutView(isPresented: $showAbout)
+                SettingsSheetWrapper(title: "About", isPresented: $showAbout) {
+                    AboutView()
+                }
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -702,155 +710,37 @@ struct PortfolioListSheet: View {
     }
 }
 
-// MARK: - Placeholder Views (To be implemented in subsequent prompts)
-// Note: EditProfileSheet is now in EditProfileSheet.swift
-// Note: ProcedureManagementView is now in ProcedureManagementView.swift
+// MARK: - SettingsSheetWrapper
 
-/// Placeholder - Capture settings view (Prompt 6.4)
-struct CaptureSettingsView: View {
+/// Wrapper for presenting settings views in a sheet with Done button
+struct SettingsSheetWrapper<Content: View>: View {
+    let title: String
     @Binding var isPresented: Bool
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
         NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                DPEmptyState(
-                    icon: "camera.fill",
-                    title: "Capture Settings",
-                    message: "Configure camera preferences, default save locations, and capture options."
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Capture Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { isPresented = false }
-                }
-            }
-        }
-    }
-}
-
-/// Placeholder - Notification settings view (Prompt 6.4)
-struct NotificationSettingsView: View {
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                DPEmptyState(
-                    icon: "bell.fill",
-                    title: "Notification Settings",
-                    message: "Configure due date reminders and other notification preferences."
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Notifications")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { isPresented = false }
-                }
-            }
-        }
-    }
-}
-
-/// Placeholder - Data management view (Prompt 6.4)
-struct DataManagementView: View {
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                DPEmptyState(
-                    icon: "externaldrive.fill",
-                    title: "Data Management",
-                    message: "Export your data, create backups, and manage storage."
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Data Management")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { isPresented = false }
-                }
-            }
-        }
-    }
-}
-
-/// Placeholder - About view (Prompt 6.4)
-struct AboutView: View {
-    @Binding var isPresented: Bool
-
-    var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0"
-    }
-
-    var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    }
-
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: AppTheme.Spacing.xl) {
-                    // App icon and name
-                    VStack(spacing: AppTheme.Spacing.md) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 80, height: 80)
-
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 36))
-                                .foregroundColor(.white)
+            content()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            isPresented = false
                         }
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
-
-                        Text("Dental Portfolio")
-                            .font(AppTheme.Typography.title2)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-
-                        Text("Version \(appVersion) (\(buildNumber))")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        .font(AppTheme.Typography.bodyBold)
+                        .foregroundColor(AppTheme.Colors.primary)
                     }
-                    .padding(.top, AppTheme.Spacing.xl)
-
-                    // Description
-                    Text("The essential app for dental students to document, organize, and track their clinical work.")
-                        .font(AppTheme.Typography.body)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, AppTheme.Spacing.xl)
-
-                    Spacer()
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("About")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { isPresented = false }
-                }
-            }
         }
     }
 }
+
+// Note: The following views are now in separate files:
+// - EditProfileSheet.swift: Profile editing with photo picker
+// - ProcedureManagementView.swift: Procedure management
+// - Settings/CaptureSettingsView.swift: Camera and capture settings
+// - Settings/NotificationSettingsView.swift: Notification preferences
+// - Settings/DataManagementView.swift: Data export and management
+// - Settings/AboutView.swift: App information and credits
 
 // MARK: - Preview Provider
 

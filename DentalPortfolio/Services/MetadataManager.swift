@@ -376,4 +376,68 @@ class MetadataManager: ObservableObject {
     func getProcedure(byName name: String) -> ProcedureConfig? {
         procedureConfigs.first { $0.name.lowercased() == name.lowercased() }
     }
+
+    // MARK: - Data Management
+
+    /// Clear all photo metadata (keeps portfolios and procedures)
+    func clearAllMetadata() {
+        assetMetadata.removeAll()
+        toothHistory.removeAll()
+
+        // Clear from UserDefaults
+        UserDefaults.standard.removeObject(forKey: "assetMetadata")
+        UserDefaults.standard.removeObject(forKey: "toothHistory")
+    }
+
+    /// Reset all app data to defaults
+    func resetAllData() {
+        // Clear metadata
+        assetMetadata.removeAll()
+        toothHistory.removeAll()
+
+        // Clear portfolios
+        portfolios.removeAll()
+
+        // Reset procedures to defaults
+        procedureConfigs = ProcedureConfig.defaultProcedures
+        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
+
+        // Clear all UserDefaults keys related to the app
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "assetMetadata")
+        defaults.removeObject(forKey: "toothHistory")
+        defaults.removeObject(forKey: "portfolios")
+        defaults.removeObject(forKey: "procedureConfigs")
+
+        // Clear profile data
+        defaults.removeObject(forKey: "userFirstName")
+        defaults.removeObject(forKey: "userLastName")
+        defaults.removeObject(forKey: "userSchool")
+        defaults.removeObject(forKey: "userClassYear")
+        defaults.removeObject(forKey: "profileImageData")
+
+        // Reset capture settings
+        defaults.removeObject(forKey: "showGridLines")
+        defaults.removeObject(forKey: "defaultFlashMode")
+        defaults.removeObject(forKey: "captureHaptics")
+        defaults.removeObject(forKey: "captureSound")
+        defaults.removeObject(forKey: "preCaptureTagging")
+        defaults.removeObject(forKey: "rememberLastTags")
+        defaults.removeObject(forKey: "autoSaveToLibrary")
+        defaults.removeObject(forKey: "imageQuality")
+
+        // Reset notification settings
+        defaults.removeObject(forKey: "notificationsEnabled")
+        defaults.removeObject(forKey: "dailyReminder")
+        defaults.removeObject(forKey: "dailyReminderTime")
+        defaults.removeObject(forKey: "weeklyProgress")
+        defaults.removeObject(forKey: "portfolioMilestones")
+        defaults.removeObject(forKey: "incompleteTagsReminder")
+
+        // Synchronize
+        defaults.synchronize()
+
+        // Reload default procedures
+        saveProcedures()
+    }
 }
