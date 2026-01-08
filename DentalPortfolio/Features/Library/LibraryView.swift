@@ -490,91 +490,89 @@ struct FilterChipsBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppTheme.Spacing.sm) {
-                // Procedure filters
+                // Procedure chips
                 ForEach(Array(filter.procedures), id: \.self) { procedure in
-                    DPTagPill(
-                        procedure,
+                    FilterChip(
+                        text: procedure,
                         color: AppTheme.procedureColor(for: procedure),
-                        size: .small,
-                        showRemoveButton: true,
                         onRemove: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                filter.procedures.remove(procedure)
-                            }
+                            filter.procedures.remove(procedure)
+                            HapticsManager.shared.lightTap()
                         }
                     )
                 }
 
-                // Stage filters
+                // Stage chips
                 ForEach(Array(filter.stages), id: \.self) { stage in
-                    DPTagPill(
-                        stage,
-                        color: AppTheme.Colors.secondary,
-                        size: .small,
-                        showRemoveButton: true,
+                    FilterChip(
+                        text: stage,
+                        color: stage == "Preparation" ? AppTheme.Colors.warning : AppTheme.Colors.success,
                         onRemove: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                filter.stages.remove(stage)
-                            }
+                            filter.stages.remove(stage)
+                            HapticsManager.shared.lightTap()
                         }
                     )
                 }
 
-                // Angle filters
+                // Angle chips
                 ForEach(Array(filter.angles), id: \.self) { angle in
-                    DPTagPill(
-                        angle,
-                        color: AppTheme.Colors.secondary,
-                        size: .small,
-                        showRemoveButton: true,
+                    FilterChip(
+                        text: angle,
+                        color: .purple,
                         onRemove: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                filter.angles.remove(angle)
-                            }
+                            filter.angles.remove(angle)
+                            HapticsManager.shared.lightTap()
                         }
                     )
                 }
 
-                // Rating filter
-                if let rating = filter.minimumRating {
-                    DPTagPill(
-                        "\(rating)+ Stars",
-                        color: AppTheme.Colors.warning,
-                        size: .small,
-                        showRemoveButton: true,
+                // Rating chip
+                if let minRating = filter.minimumRating {
+                    FilterChip(
+                        text: "\(minRating)+ Stars",
+                        color: .yellow,
                         onRemove: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                filter.minimumRating = nil
-                            }
+                            filter.minimumRating = nil
+                            HapticsManager.shared.lightTap()
                         }
                     )
                 }
 
-                // Date range filter
+                // Date range chip
                 if let dateRange = filter.dateRange {
-                    DPTagPill(
-                        dateRange.displayName,
+                    FilterChip(
+                        text: dateRangeText(dateRange),
                         color: AppTheme.Colors.primary,
-                        size: .small,
-                        showRemoveButton: true,
                         onRemove: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                filter.dateRange = nil
-                            }
+                            filter.dateRange = nil
+                            HapticsManager.shared.lightTap()
                         }
                     )
                 }
 
-                // Clear all button (if multiple filters active)
+                // Portfolio chip
+                if filter.portfolioId != nil {
+                    FilterChip(
+                        text: "Portfolio",
+                        color: AppTheme.Colors.primary,
+                        onRemove: {
+                            filter.portfolioId = nil
+                            HapticsManager.shared.lightTap()
+                        }
+                    )
+                }
+
+                // Clear all button (if multiple filters)
                 if filter.activeFilterCount > 1 {
                     Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            filter.reset()
-                        }
+                        filter.reset()
+                        HapticsManager.shared.lightTap()
                     }) {
                         Text("Clear All")
                             .font(AppTheme.Typography.caption)
                             .foregroundColor(AppTheme.Colors.error)
+                            .padding(.horizontal, AppTheme.Spacing.sm)
+                            .padding(.vertical, AppTheme.Spacing.xs)
                     }
                 }
             }
@@ -582,7 +580,55 @@ struct FilterChipsBar: View {
             .padding(.vertical, AppTheme.Spacing.sm)
         }
         .background(AppTheme.Colors.surface)
-        .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 2)
+    }
+
+    func dateRangeText(_ range: LibraryFilter.DateRange) -> String {
+        switch range {
+        case .lastWeek:
+            return "Last 7 Days"
+        case .lastMonth:
+            return "Last 30 Days"
+        case .last3Months:
+            return "Last 3 Months"
+        case .lastYear:
+            return "Last Year"
+        case .custom(let start, let end):
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        }
+    }
+}
+
+// MARK: - FilterChip
+
+/// Individual filter chip with colored dot and remove button
+struct FilterChip: View {
+    let text: String
+    let color: Color
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+
+            Text(text)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.xs)
+        .background(color.opacity(0.15))
+        .cornerRadius(AppTheme.CornerRadius.full)
     }
 }
 
@@ -1029,45 +1075,70 @@ struct SelectionActionBar: View {
 
             HStack(spacing: AppTheme.Spacing.xl) {
                 // Share button
-                Button(action: onShare) {
-                    VStack(spacing: AppTheme.Spacing.xs) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Share")
-                            .font(AppTheme.Typography.caption)
-                    }
-                }
-                .foregroundColor(selectedCount > 0 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
-                .disabled(selectedCount == 0)
+                ActionBarButton(
+                    icon: "square.and.arrow.up",
+                    label: "Share",
+                    isDisabled: selectedCount == 0,
+                    action: onShare
+                )
 
-                // Add to Portfolio button
-                Button(action: onAddToPortfolio) {
-                    VStack(spacing: AppTheme.Spacing.xs) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Portfolio")
-                            .font(AppTheme.Typography.caption)
-                    }
-                }
-                .foregroundColor(selectedCount > 0 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
-                .disabled(selectedCount == 0)
+                // Add to portfolio button
+                ActionBarButton(
+                    icon: "folder.badge.plus",
+                    label: "Add to Portfolio",
+                    isDisabled: selectedCount == 0,
+                    action: onAddToPortfolio
+                )
 
                 // Delete button
-                Button(action: onDelete) {
-                    VStack(spacing: AppTheme.Spacing.xs) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Delete")
-                            .font(AppTheme.Typography.caption)
-                    }
-                }
-                .foregroundColor(selectedCount > 0 ? AppTheme.Colors.error : AppTheme.Colors.textTertiary)
-                .disabled(selectedCount == 0)
+                ActionBarButton(
+                    icon: "trash",
+                    label: "Delete",
+                    isDisabled: selectedCount == 0,
+                    isDestructive: true,
+                    action: onDelete
+                )
             }
             .padding(.vertical, AppTheme.Spacing.md)
+            .padding(.horizontal, AppTheme.Spacing.lg)
             .frame(maxWidth: .infinity)
             .background(AppTheme.Colors.surface)
         }
+    }
+}
+
+// MARK: - ActionBarButton
+
+/// Individual button for the selection action bar
+struct ActionBarButton: View {
+    let icon: String
+    let label: String
+    var isDisabled: Bool = false
+    var isDestructive: Bool = false
+    let action: () -> Void
+
+    var foregroundColor: Color {
+        if isDisabled {
+            return AppTheme.Colors.textTertiary
+        } else if isDestructive {
+            return AppTheme.Colors.error
+        } else {
+            return AppTheme.Colors.primary
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: AppTheme.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+
+                Text(label)
+                    .font(AppTheme.Typography.caption2)
+            }
+            .foregroundColor(foregroundColor)
+        }
+        .disabled(isDisabled)
     }
 }
 
