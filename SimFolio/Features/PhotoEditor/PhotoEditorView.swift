@@ -31,6 +31,7 @@ struct PhotoEditorView: View {
     @State private var editorMode: EditorMode = .adjust
     @State private var showCancelConfirmation = false
     @State private var isSaving = false
+    @State private var showSaveError = false
     // Inline text editing state
     @State private var isEditingText = false
     @State private var pendingTextPosition: CGPoint?
@@ -93,6 +94,11 @@ struct PhotoEditorView: View {
             Button("Keep Editing", role: .cancel) { }
         } message: {
             Text("You have unsaved changes. Are you sure you want to discard them?")
+        }
+        .alert("Save Failed", isPresented: $showSaveError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Failed to process image edits. Please try again.")
         }
         .onChange(of: editorMode) { newMode in
             // When switching to transform mode with crop sub-mode, enter reposition mode
@@ -422,11 +428,13 @@ struct PhotoEditorView: View {
 
         isSaving = true
 
+        let editStateSnapshot = viewModel.editState
+
         // Process at full quality
         DispatchQueue.global(qos: .userInitiated).async {
             let processedImage = ImageProcessingService.shared.applyEdits(
                 to: originalImage,
-                editState: viewModel.editState
+                editState: editStateSnapshot
             )
 
             DispatchQueue.main.async {
@@ -435,13 +443,13 @@ struct PhotoEditorView: View {
                 if let processedImage = processedImage {
                     // Save edit state for persistence
                     PhotoEditPersistenceService.shared.saveEditState(
-                        viewModel.editState,
+                        editStateSnapshot,
                         for: asset.localIdentifier
                     )
                     onSave?(processedImage)
                     isPresented = false
                 } else {
-                    print("Error processing image")
+                    showSaveError = true
                 }
             }
         }

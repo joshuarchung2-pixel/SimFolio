@@ -205,6 +205,7 @@ struct CameraCaptureView: View {
         }
         .onDisappear {
             orientationManager.stopMonitoring()
+            cameraService.stopSession()
         }
         .sheet(isPresented: $showTagEditor) {
             QuickTagEditorSheet(captureState: captureState)
