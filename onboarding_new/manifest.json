@@ -1,0 +1,37 @@
+{
+  "name": "New Project",
+  "exportedAt": "2026-01-27T20:35:17.917Z",
+  "screenCount": 6,
+  "screens": [
+    {
+      "id": "generated-onboarding_welcome-1769545971123",
+      "name": "onboarding_welcome",
+      "file": "screens/onboarding_welcome.html"
+    },
+    {
+      "id": "generated-onboarding_smart_capture-1769545988174",
+      "name": "onboarding_smart_capture",
+      "file": "screens/onboarding_smart_capture.html"
+    },
+    {
+      "id": "generated-onboarding_requirements_track-1769545994592",
+      "name": "onboarding_requirements_track",
+      "file": "screens/onboarding_requirements_track.html"
+    },
+    {
+      "id": "skeleton-onboarding_photo_editing-1769545994763",
+      "name": "onboarding_photo_editing",
+      "file": "screens/onboarding_photo_editing.html"
+    },
+    {
+      "id": "generated-onboarding_export_ready-1769546031577",
+      "name": "onboarding_export_ready",
+      "file": "screens/onboarding_export_ready.html"
+    },
+    {
+      "id": "generated-onboarding_personalization-1769546048088",
+      "name": "onboarding_personalization",
+      "file": "screens/onboarding_personalization.html"
+    }
+  ]
+}
