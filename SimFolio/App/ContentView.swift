@@ -46,6 +46,7 @@ struct ContentView: View {
     @State private var globalToastMessage: String = ""
     @State private var globalToastType: DPToast.ToastType = .info
     @State private var showPostOnboardingPaywall: Bool = false
+    @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
 
     // MARK: - Persisted State
@@ -213,6 +214,14 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
         .onChange(of: router.selectedTab) { newTab in
+            // Manage camera lifecycle on tab switch
+            if previousTab == .capture && newTab != .capture {
+                cameraService.stopSession()
+            }
+            if newTab == .capture && previousTab != .capture {
+                cameraService.startSession()
+            }
+
             // Track screen views for analytics
             switch newTab {
             case .home:
@@ -226,6 +235,8 @@ struct ContentView: View {
             case .profile:
                 AnalyticsService.logScreenView("Profile", screenClass: "ProfileView")
             }
+
+            previousTab = newTab
         }
     }
 

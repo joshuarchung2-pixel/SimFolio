@@ -75,31 +75,35 @@ final class PhotoEditPersistenceService {
     /// Delete the edit state for a photo
     /// - Parameter assetId: The asset identifier
     func deleteEditState(for assetId: String) {
-        editStatesCache.removeValue(forKey: assetId)
+        cacheQueue.sync { _ = editStatesCache.removeValue(forKey: assetId) }
         persistEditStates()
     }
 
     /// Delete all edit states
     func deleteAllEditStates() {
-        editStatesCache.removeAll()
+        cacheQueue.sync { editStatesCache.removeAll() }
         persistEditStates()
     }
 
     /// Get the number of stored edit states
     var editStateCount: Int {
-        return editStatesCache.count
+        return cacheQueue.sync { editStatesCache.count }
     }
 
     /// Clean up edit states for deleted photos
     /// - Parameter existingAssetIds: Set of asset IDs that still exist
     func cleanupOrphanedEditStates(existingAssetIds: Set<String>) {
-        let orphanedIds = Set(editStatesCache.keys).subtracting(existingAssetIds)
+        let didRemove = cacheQueue.sync { () -> Bool in
+            let orphanedIds = Set(editStatesCache.keys).subtracting(existingAssetIds)
 
-        for id in orphanedIds {
-            editStatesCache.removeValue(forKey: id)
+            for id in orphanedIds {
+                editStatesCache.removeValue(forKey: id)
+            }
+
+            return !orphanedIds.isEmpty
         }
 
-        if !orphanedIds.isEmpty {
+        if didRemove {
             persistEditStates()
         }
     }
@@ -113,21 +117,24 @@ final class PhotoEditPersistenceService {
             return
         }
 
-        editStatesCache = decoded
+        cacheQueue.sync { editStatesCache = decoded }
     }
 
     /// Persist edit states to UserDefaults
     private func persistEditStates() {
-        // Limit the number of stored edits
-        if editStatesCache.count > maxStoredEdits {
-            // Remove oldest entries (this is a simple approach; could be improved with timestamps)
-            let keysToRemove = Array(editStatesCache.keys.prefix(editStatesCache.count - maxStoredEdits))
-            for key in keysToRemove {
-                editStatesCache.removeValue(forKey: key)
+        let snapshot = cacheQueue.sync { () -> [String: EditState] in
+            // Limit the number of stored edits
+            if editStatesCache.count > maxStoredEdits {
+                // Remove oldest entries (this is a simple approach; could be improved with timestamps)
+                let keysToRemove = Array(editStatesCache.keys.prefix(editStatesCache.count - maxStoredEdits))
+                for key in keysToRemove {
+                    editStatesCache.removeValue(forKey: key)
+                }
             }
+            return editStatesCache
         }
 
-        guard let encoded = try? JSONEncoder().encode(editStatesCache) else {
+        guard let encoded = try? JSONEncoder().encode(snapshot) else {
             print("Failed to encode edit states")
             return
         }

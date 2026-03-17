@@ -102,6 +102,8 @@ class MetadataManager: ObservableObject {
     /// Available angles for photos
     static let angles = ["Occlusal/Incisal", "Buccal/Facial", "Lingual", "Proximal", "Mesial", "Distal", "Other"]
 
+    private let notificationDebouncer = DebouncedSaveManager(delay: 2.0)
+
     // MARK: - Initialization
 
     private init() {
@@ -234,10 +236,11 @@ class MetadataManager: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: "assetMetadata")
         }
 
-        // Reschedule notifications when photos are tagged/untagged
-        // This updates completion counts which affects reminders
-        Task { @MainActor in
-            await NotificationManager.shared.rescheduleAllReminders()
+        // Debounce notification rescheduling to avoid storm on batch operations
+        Task {
+            await notificationDebouncer.scheduleSave {
+                await NotificationManager.shared.rescheduleAllReminders()
+            }
         }
     }
 

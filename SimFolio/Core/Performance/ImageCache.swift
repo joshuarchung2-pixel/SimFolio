@@ -95,22 +95,32 @@ actor ImageCache {
         options.isSynchronous = false
 
         return await withCheckedContinuation { continuation in
+            let lock = NSLock()
+            var hasResumed = false
+
             let requestID = imageManager.requestImage(
                 for: asset,
                 targetSize: targetSize,
                 contentMode: contentMode,
                 options: options
             ) { [weak self] image, info in
-                Task {
-                    if let image = image {
-                        await self?.setImage(image, forKey: cacheKey)
-                    }
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
+                let hasError = info?[PHImageErrorKey] != nil
 
-                    // Only return final image (not degraded)
-                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-                    if !isDegraded {
-                        continuation.resume(returning: image)
-                    }
+                // Atomically guard continuation resume (callback can fire multiple times)
+                lock.lock()
+                let shouldResume = !hasResumed && (!isDegraded || hasError || isCancelled)
+                if shouldResume { hasResumed = true }
+                lock.unlock()
+
+                if shouldResume {
+                    continuation.resume(returning: image)
+                }
+
+                // Cache the image asynchronously
+                if let image = image {
+                    Task { await self?.setImage(image, forKey: cacheKey) }
                 }
             }
 
