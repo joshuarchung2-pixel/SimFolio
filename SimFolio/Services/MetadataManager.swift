@@ -57,6 +57,7 @@
 
 import SwiftUI
 import Combine
+import Photos
 
 // MARK: - MetadataManager
 
@@ -130,6 +131,39 @@ class MetadataManager: ObservableObject {
 
         // Update legacy procedures array for backward compatibility
         procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
+
+        // Clean up orphaned data from photos deleted before bug fix
+        cleanupOrphanedData()
+    }
+
+    /// Remove metadata and edit states for photos that no longer exist in the photo library.
+    /// Runs on a background task to avoid blocking app launch.
+    private func cleanupOrphanedData() {
+        Task {
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            guard status == .authorized || status == .limited else { return }
+
+            let fetchResult = PHAsset.fetchAssets(with: nil)
+            var existingIds = Set<String>()
+            fetchResult.enumerateObjects { asset, _, _ in
+                existingIds.insert(asset.localIdentifier)
+            }
+
+            let orphanedMetadataIds = Set(assetMetadata.keys).subtracting(existingIds)
+            guard !orphanedMetadataIds.isEmpty else {
+                PhotoEditPersistenceService.shared.cleanupOrphanedEditStates(existingAssetIds: existingIds)
+                return
+            }
+
+            await MainActor.run {
+                for id in orphanedMetadataIds {
+                    assetMetadata.removeValue(forKey: id)
+                }
+                saveAssetMetadata()
+            }
+
+            PhotoEditPersistenceService.shared.cleanupOrphanedEditStates(existingAssetIds: existingIds)
+        }
     }
 
     // MARK: - Portfolio Persistence
