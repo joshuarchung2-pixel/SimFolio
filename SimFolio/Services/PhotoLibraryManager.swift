@@ -155,13 +155,14 @@ class PhotoLibraryManager: ObservableObject {
     ///   - asset: The PHAsset to load
     ///   - size: Target size for the thumbnail
     ///   - completion: Callback with the loaded image
-    func requestThumbnail(for asset: PHAsset, size: CGSize = CGSize(width: 200, height: 200), completion: @escaping (UIImage?) -> Void) {
+    @discardableResult
+    func requestThumbnail(for asset: PHAsset, size: CGSize = CGSize(width: 200, height: 200), completion: @escaping (UIImage?) -> Void) -> PHImageRequestID {
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
 
-        PHImageManager.default().requestImage(
+        return PHImageManager.default().requestImage(
             for: asset,
             targetSize: size,
             contentMode: .aspectFill,

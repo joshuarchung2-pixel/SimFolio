@@ -425,6 +425,30 @@ class MetadataManager: ObservableObject {
         }
     }
 
+    /// Get asset IDs matching a procedure, optionally prioritizing a specific tooth number
+    /// - Parameters:
+    ///   - procedure: Procedure type to match
+    ///   - prioritizingTooth: Optional tooth number to sort first
+    /// - Returns: Array of matching asset local identifiers
+    func getMatchingAssetIds(procedure: String, prioritizingTooth: Int? = nil) -> [String] {
+        let matching = assetMetadata.filter { $0.value.procedure == procedure }
+
+        guard let tooth = prioritizingTooth else {
+            return Array(matching.keys)
+        }
+
+        var withTooth: [String] = []
+        var withoutTooth: [String] = []
+        for (key, value) in matching {
+            if value.toothNumber == tooth {
+                withTooth.append(key)
+            } else {
+                withoutTooth.append(key)
+            }
+        }
+        return withTooth + withoutTooth
+    }
+
     /// Get metadata for an asset
     func getMetadata(for assetId: String) -> PhotoMetadata? {
         return assetMetadata[assetId]
@@ -783,6 +807,9 @@ class MetadataManager: ObservableObject {
         defaults.removeObject(forKey: "userSchool")
         defaults.removeObject(forKey: "userClassYear")
         defaults.removeObject(forKey: "profileImageData")
+
+        // Clear ghost reference map
+        defaults.removeObject(forKey: "ghostReferenceMap")
 
         // Reset capture settings
         defaults.removeObject(forKey: "showGridLines")

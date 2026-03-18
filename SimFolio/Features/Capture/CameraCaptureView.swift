@@ -11,6 +11,7 @@
 
 import SwiftUI
 import AVFoundation
+import Photos
 
 // MARK: - Camera Capture View
 
@@ -43,7 +44,21 @@ struct CameraCaptureView: View {
     @State private var showRequirementSatisfied: Bool = false
     @State private var previousRequiredCount: Int = 0
 
+    // Ghost overlay state
+    private static let ghostReferenceMapKey = "ghostReferenceMap"
+    @State private var ghostEnabled: Bool = false
+    @State private var ghostImage: UIImage? = nil
+    @State private var ghostAssetId: String? = nil
+    @State private var ghostOpacity: Double = 0.35
+    @State private var showGhostPicker: Bool = false
+    @State private var ghostImageRequestID: PHImageRequestID? = nil
+
     // MARK: - Computed Properties
+
+    /// Whether the ghost overlay is active and has an image to display
+    private var isGhostActive: Bool {
+        ghostEnabled && ghostImage != nil
+    }
 
     var flashModeIcon: String {
         switch flashMode {
@@ -138,6 +153,18 @@ struct CameraCaptureView: View {
                         .ignoresSafeArea()
                 }
 
+                // Ghost overlay
+                if ghostEnabled, let ghostImg = ghostImage {
+                    Image(uiImage: ghostImg)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .opacity(ghostOpacity)
+                        .allowsHitTesting(false)
+                        .ignoresSafeArea()
+                }
+
                 // Focus indicator (Apple-style)
                 if cameraService.showFocusIndicator, let normalizedPoint = cameraService.focusPoint {
                     let screenPoint = convertFocusToScreen(normalizedPoint, in: geometry.size)
@@ -202,6 +229,7 @@ struct CameraCaptureView: View {
             orientationManager.startMonitoring()
             cameraService.startSession()
             hapticFeedback.prepare()
+            loadGhostSelection()
         }
         .onDisappear {
             orientationManager.stopMonitoring()
@@ -210,6 +238,26 @@ struct CameraCaptureView: View {
         .sheet(isPresented: $showTagEditor) {
             QuickTagEditorSheet(captureState: captureState)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showGhostPicker) {
+            GhostPhotoPickerSheet(
+                procedure: captureState.selectedProcedure,
+                toothNumber: captureState.selectedToothNumber,
+                onSelect: { assetId in
+                    ghostAssetId = assetId
+                    saveGhostSelection()
+                    loadGhostImage(assetId: assetId)
+                },
+                onClear: {
+                    clearGhostSelection()
+                }
+            )
+        }
+        .onChange(of: captureState.selectedProcedure) { _ in
+            loadGhostSelection()
+        }
+        .onChange(of: captureState.selectedToothNumber) { _ in
+            loadGhostSelection()
         }
     }
 
@@ -228,6 +276,26 @@ struct CameraCaptureView: View {
             }
             .accessibilityLabel("Close")
             .accessibilityHint("Return to tag setup")
+
+            // Ghost overlay button
+            Image(systemName: isGhostActive ? "person.fill.viewfinder" : "person.viewfinder")
+                .font(.system(size: AppTheme.IconSize.sm, weight: .semibold))
+                .foregroundStyle(isGhostActive ? .cyan : .white)
+                .frame(width: 44, height: 44)
+                .background(Color.black.opacity(AppTheme.Opacity.heavy))
+                .clipShape(Circle())
+                .onTapGesture {
+                    if ghostImage != nil {
+                        ghostEnabled.toggle()
+                    } else {
+                        showGhostPicker = true
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.5) {
+                    showGhostPicker = true
+                }
+                .accessibilityLabel(isGhostActive ? "Ghost Overlay On" : "Ghost Overlay Off")
+                .accessibilityHint("Tap to toggle ghost overlay. Long press to change reference photo.")
 
             Spacer()
 
@@ -321,6 +389,24 @@ struct CameraCaptureView: View {
                     isSatisfied: false,
                     portfolioName: currentRequirement?.portfolioName
                 )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+
+            // Ghost opacity slider
+            if isGhostActive {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.6))
+
+                    Slider(value: $ghostOpacity, in: 0.2...0.6, step: 0.05)
+                        .tint(.cyan)
+
+                    Image(systemName: "eye")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .padding(.horizontal, AppTheme.Spacing.xl)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
@@ -596,6 +682,89 @@ struct CameraCaptureView: View {
             withAnimation(.easeOut(duration: 0.1)) {
                 showShutterFlash = false
             }
+        }
+    }
+
+    // MARK: - Ghost Overlay Helpers
+
+    /// Persistence key derived from current procedure + tooth selection
+    private var ghostPersistenceKey: String? {
+        guard let procedure = captureState.selectedProcedure else { return nil }
+        let tooth = captureState.selectedToothNumber ?? 0
+        return "\(procedure)-\(tooth)"
+    }
+
+    /// Reset ghost overlay state to default
+    private func resetGhostState() {
+        ghostEnabled = false
+        ghostImage = nil
+        ghostAssetId = nil
+    }
+
+    /// Save current ghost selection to UserDefaults
+    private func saveGhostSelection() {
+        guard let key = ghostPersistenceKey, let assetId = ghostAssetId else { return }
+        var map = UserDefaults.standard.dictionary(forKey: Self.ghostReferenceMapKey) as? [String: String] ?? [:]
+        map[key] = assetId
+        UserDefaults.standard.set(map, forKey: Self.ghostReferenceMapKey)
+    }
+
+    /// Load saved ghost selection for current procedure + tooth
+    private func loadGhostSelection() {
+        guard let key = ghostPersistenceKey else {
+            resetGhostState()
+            return
+        }
+
+        let map = UserDefaults.standard.dictionary(forKey: Self.ghostReferenceMapKey) as? [String: String] ?? [:]
+        if let savedId = map[key] {
+            ghostAssetId = savedId
+            loadGhostImage(assetId: savedId)
+        } else {
+            resetGhostState()
+        }
+    }
+
+    /// Load a ghost image from the photo library by asset ID
+    private func loadGhostImage(assetId: String) {
+        // Cancel any in-flight request
+        if let existing = ghostImageRequestID {
+            PHImageManager.default().cancelImageRequest(existing)
+            ghostImageRequestID = nil
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
+            guard let asset = result.firstObject else {
+                DispatchQueue.main.async { self.resetGhostState() }
+                return
+            }
+
+            let screenSize = UIScreen.main.bounds.size
+            let scale = UIScreen.main.scale
+            let targetSize = CGSize(width: screenSize.width * scale, height: screenSize.height * scale)
+
+            DispatchQueue.main.async {
+                let requestID = PhotoLibraryManager.shared.requestThumbnail(for: asset, size: targetSize) { image in
+                    guard self.ghostAssetId == assetId else { return }
+                    if let image = image {
+                        self.ghostImage = image
+                        self.ghostEnabled = true
+                    }
+                }
+                self.ghostImageRequestID = requestID
+            }
+        }
+    }
+
+    /// Clear ghost selection from state and persistence
+    private func clearGhostSelection() {
+        resetGhostState()
+
+        if let key = ghostPersistenceKey {
+            var map = UserDefaults.standard.dictionary(forKey: Self.ghostReferenceMapKey) as? [String: String] ?? [:]
+            map.removeValue(forKey: key)
+            UserDefaults.standard.set(map, forKey: Self.ghostReferenceMapKey)
         }
     }
 }
@@ -1410,6 +1579,161 @@ struct FlowLayout: Layout {
         }
 
         return (CGSize(width: maxWidth, height: totalHeight), positions)
+    }
+}
+
+// MARK: - Ghost Photo Picker Sheet
+
+/// Sheet for selecting a reference photo for the ghost overlay
+struct GhostPhotoPickerSheet: View {
+    let procedure: String?
+    let toothNumber: Int?
+    let onSelect: (String) -> Void
+    let onClear: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var thumbnails: [(id: String, image: UIImage)] = []
+    @State private var isLoading = true
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+
+    var body: some View {
+        NavigationView {
+            Group {
+                if procedure == nil {
+                    // No procedure selected
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        Image(systemName: "tag")
+                            .font(.system(size: 40))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                        Text("Select a procedure first")
+                            .font(AppTheme.Typography.headline)
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Text("Set a procedure tag to see matching photos for the ghost overlay.")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, AppTheme.Spacing.xl)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if thumbnails.isEmpty {
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 40))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                        Text("No matching photos")
+                            .font(AppTheme.Typography.headline)
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Text("Capture some photos with this procedure first.")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 2) {
+                            ForEach(thumbnails, id: \.id) { item in
+                                Button(action: {
+                                    onSelect(item.id)
+                                    dismiss()
+                                }) {
+                                    Image(uiImage: item.image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(minHeight: 120)
+                                        .clipped()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Ghost Reference")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Clear", role: .destructive) {
+                        onClear()
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .onAppear {
+            loadThumbnails()
+        }
+    }
+
+    private func loadThumbnails() {
+        guard let procedure = procedure else {
+            isLoading = false
+            return
+        }
+
+        let assetIds = MetadataManager.shared.getMatchingAssetIds(
+            procedure: procedure,
+            prioritizingTooth: toothNumber
+        )
+
+        guard !assetIds.isEmpty else {
+            isLoading = false
+            return
+        }
+
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: assetIds, options: nil)
+        var fetchedAssets: [PHAsset] = []
+        fetchResult.enumerateObjects { asset, _, _ in
+            fetchedAssets.append(asset)
+        }
+
+        // Reorder to match priority from getMatchingAssetIds
+        let assetMap = Dictionary(uniqueKeysWithValues: fetchedAssets.map { ($0.localIdentifier, $0) })
+        let orderedAssets = assetIds.compactMap { assetMap[$0] }
+
+        guard !orderedAssets.isEmpty else {
+            isLoading = false
+            return
+        }
+
+        let displayAssets = Array(orderedAssets.prefix(50))
+        let thumbnailSize = CGSize(width: 200, height: 200)
+        let group = DispatchGroup()
+        var loaded: [(id: String, image: UIImage)] = []
+        let lock = NSLock()
+
+        for asset in displayAssets {
+            group.enter()
+            PhotoLibraryManager.shared.requestThumbnail(for: asset, size: thumbnailSize) { image in
+                if let image = image {
+                    lock.lock()
+                    loaded.append((id: asset.localIdentifier, image: image))
+                    lock.unlock()
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            // Restore priority order
+            let idOrder = assetIds.enumerated().reduce(into: [String: Int]()) { $0[$1.element] = $1.offset }
+            self.thumbnails = loaded.sorted { (idOrder[$0.id] ?? Int.max) < (idOrder[$1.id] ?? Int.max) }
+            self.isLoading = false
+        }
     }
 }
 
