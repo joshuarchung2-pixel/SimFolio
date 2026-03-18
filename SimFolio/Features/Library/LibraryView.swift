@@ -2075,7 +2075,6 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showAddToPortfolio = false
     @State private var showPhotoEditor = false
-    @State private var showPremiumPaywall = false
     @State private var dragOffset: CGSize = .zero
     /// Edited image from photo editor (for immediate display)
     @State private var editedImage: UIImage?
@@ -2267,39 +2266,22 @@ struct PhotoDetailView: View {
 
             // Edit Photo button (dedicated button for quick access)
             Button(action: {
-                requirePremium(.photoEditing, showPaywall: $showPremiumPaywall) {
-                    showPhotoEditor = true
-                }
+                showPhotoEditor = true
             }) {
-                ZStack(alignment: .bottomTrailing) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: AppTheme.IconSize.md - 2, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.black.opacity(AppTheme.Opacity.heavy))
-                        .clipShape(Circle())
-
-                    if !SubscriptionManager.shared.isSubscribed {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white)
-                            .padding(3)
-                            .background(AppTheme.Colors.primary)
-                            .clipShape(Circle())
-                            .offset(x: 2, y: 2)
-                    }
-                }
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: AppTheme.IconSize.md - 2, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(AppTheme.Opacity.heavy))
+                    .clipShape(Circle())
             }
             .accessibilityLabel("Edit Photo")
-            .premiumGate(for: .photoEditing, showPaywall: $showPremiumPaywall)
 
             // Actions menu
             Menu {
                 // Edit Photo
                 Button(action: {
-                    requirePremium(.photoEditing, showPaywall: $showPremiumPaywall) {
-                        showPhotoEditor = true
-                    }
+                    showPhotoEditor = true
                 }) {
                     Label("Edit Photo", systemImage: "slider.horizontal.3")
                 }

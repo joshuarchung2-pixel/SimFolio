@@ -235,6 +235,7 @@ struct PaywallView: View {
                 freeTierBullet("\(FeatureGateService.freePortfolioLimit) portfolios")
                 freeTierBullet("Photo capture")
                 freeTierBullet("Tagging & library")
+                freeTierBullet("Basic photo editing (crop, rotate, brightness, contrast)")
             }
             .padding(.leading, AppTheme.Spacing.xs)
         }
@@ -266,7 +267,7 @@ struct PaywallView: View {
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            ForEach(PremiumFeature.allCases, id: \.self) { feature in
+            ForEach(PremiumFeature.allCases.filter(\.showInPaywall), id: \.self) { feature in
                 FeatureRow(
                     icon: feature.iconName,
                     iconColor: feature.iconColor,

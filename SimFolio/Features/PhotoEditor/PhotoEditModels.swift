@@ -321,6 +321,14 @@ enum AdjustmentType: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this adjustment requires premium subscription
+    var isPremium: Bool {
+        switch self {
+        case .brightness, .contrast: return false
+        default: return true
+        }
+    }
+
     /// Default value for this adjustment type
     var defaultValue: Double {
         switch self {
