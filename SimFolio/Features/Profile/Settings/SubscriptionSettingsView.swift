@@ -182,7 +182,7 @@ struct SubscriptionSettingsView: View {
     var premiumFeaturesSection: some View {
         if !subscriptionManager.isSubscribed {
             Section {
-                ForEach(PremiumFeature.allCases, id: \.self) { feature in
+                ForEach(PremiumFeature.allCases.filter(\.showInPaywall), id: \.self) { feature in
                     HStack(spacing: AppTheme.Spacing.sm) {
                         Image(systemName: feature.iconName)
                             .font(.system(size: 16))

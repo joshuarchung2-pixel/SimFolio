@@ -23,6 +23,20 @@ func requirePremium(_ feature: PremiumFeature, showPaywall: Binding<Bool>, actio
     }
 }
 
+// MARK: - Premium Lock Badge
+
+/// Small circular lock badge overlaid on premium-gated UI elements.
+struct PremiumLockBadge: View {
+    var body: some View {
+        Image(systemName: "lock.fill")
+            .font(.system(size: 8))
+            .foregroundStyle(.white)
+            .padding(2)
+            .background(AppTheme.Colors.primary)
+            .clipShape(Circle())
+    }
+}
+
 // MARK: - View Extension
 
 extension View {

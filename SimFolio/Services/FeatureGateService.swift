@@ -12,6 +12,7 @@ import SwiftUI
 enum PremiumFeature: String, CaseIterable {
     case unlimitedPortfolios
     case photoEditing
+    case advancedPhotoEditing
     case photoAnnotations
     case portfolioExport
     case dueDateReminders
@@ -22,6 +23,7 @@ enum PremiumFeature: String, CaseIterable {
         switch self {
         case .unlimitedPortfolios: return "Unlimited Portfolios"
         case .photoEditing: return "Photo Editing"
+        case .advancedPhotoEditing: return "Advanced Photo Editing"
         case .photoAnnotations: return "Photo Annotations"
         case .portfolioExport: return "Advanced Export"
         case .dueDateReminders: return "Due Date Reminders"
@@ -33,7 +35,8 @@ enum PremiumFeature: String, CaseIterable {
     var displayDescription: String {
         switch self {
         case .unlimitedPortfolios: return "Create as many portfolios as you need"
-        case .photoEditing: return "Crop, adjust, and enhance your photos"
+        case .photoEditing: return "Crop, rotate, and basic adjustments"
+        case .advancedPhotoEditing: return "Access all adjustment sliders and fine-tuning tools"
         case .photoAnnotations: return "Add markers, text, and other items"
         case .portfolioExport: return "Export as ZIP or individual files"
         case .dueDateReminders: return "Get notified before deadlines"
@@ -46,6 +49,7 @@ enum PremiumFeature: String, CaseIterable {
         switch self {
         case .unlimitedPortfolios: return "infinity"
         case .photoEditing: return "slider.horizontal.3"
+        case .advancedPhotoEditing: return "slider.horizontal.3"
         case .photoAnnotations: return "pencil.tip.crop.circle"
         case .portfolioExport: return "square.and.arrow.up.fill"
         case .dueDateReminders: return "bell.badge.fill"
@@ -54,10 +58,20 @@ enum PremiumFeature: String, CaseIterable {
         }
     }
 
+    /// Whether this feature should appear in premium feature lists (paywall, settings).
+    /// Features that have been made free should return false.
+    var showInPaywall: Bool {
+        switch self {
+        case .photoEditing: return false
+        default: return true
+        }
+    }
+
     var iconColor: Color {
         switch self {
         case .unlimitedPortfolios: return .blue
         case .photoEditing: return .purple
+        case .advancedPhotoEditing: return .purple
         case .photoAnnotations: return .orange
         case .portfolioExport: return .green
         case .dueDateReminders: return .red

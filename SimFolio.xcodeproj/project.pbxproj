@@ -11,6 +11,9 @@
 		57E341152F231A0D001109B6 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 57E341142F231A0D001109B6 /* RevenueCat */; };
 		57F1B0012F3A0001001109B6 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B0002F3A0001001109B6 /* FirebaseAnalytics */; };
 		57F1B0032F3A0001001109B6 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B0022F3A0001001109B6 /* FirebaseCrashlytics */; };
+		57F1B0052F3A0002001109B6 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B0062F3A0002001109B6 /* FirebaseAuth */; };
+		57F1B0072F3A0002001109B6 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B0082F3A0002001109B6 /* FirebaseFirestore */; };
+		57F1B0092F3A0002001109B6 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B00A2F3A0002001109B6 /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +50,9 @@
 				57E341152F231A0D001109B6 /* RevenueCat in Frameworks */,
 				57F1B0012F3A0001001109B6 /* FirebaseAnalytics in Frameworks */,
 				57F1B0032F3A0001001109B6 /* FirebaseCrashlytics in Frameworks */,
+				57F1B0052F3A0002001109B6 /* FirebaseAuth in Frameworks */,
+				57F1B0072F3A0002001109B6 /* FirebaseFirestore in Frameworks */,
+				57F1B0092F3A0002001109B6 /* FirebaseStorage in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,6 +108,9 @@
 				57E341142F231A0D001109B6 /* RevenueCat */,
 				57F1B0002F3A0001001109B6 /* FirebaseAnalytics */,
 				57F1B0022F3A0001001109B6 /* FirebaseCrashlytics */,
+				57F1B0062F3A0002001109B6 /* FirebaseAuth */,
+				57F1B0082F3A0002001109B6 /* FirebaseFirestore */,
+				57F1B00A2F3A0002001109B6 /* FirebaseStorage */,
 			);
 			productName = SimFolio;
 			productReference = 57E137512F0FAE870043415F /* SimFolio.app */;
@@ -342,7 +351,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -384,7 +393,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -458,6 +467,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 57F1AFFF2F3A0001001109B6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
+		};
+		57F1B0062F3A0002001109B6 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57F1AFFF2F3A0001001109B6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		57F1B0082F3A0002001109B6 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57F1AFFF2F3A0001001109B6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		57F1B00A2F3A0002001109B6 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57F1AFFF2F3A0001001109B6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

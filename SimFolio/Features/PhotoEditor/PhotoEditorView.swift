@@ -38,6 +38,7 @@ struct PhotoEditorView: View {
     @State private var pendingTextContent: String = ""
     // Track previous markup sub-mode for iOS 16 onChange compatibility
     @State private var previousMarkupSubMode: MarkupSubMode?
+    @State private var showPremiumPaywall = false
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Init
@@ -116,6 +117,7 @@ struct PhotoEditorView: View {
             }
             previousMarkupSubMode = newMode
         }
+        .premiumGate(for: .advancedPhotoEditing, showPaywall: $showPremiumPaywall)
     }
 
     // MARK: - Top Bar
@@ -243,14 +245,25 @@ struct PhotoEditorView: View {
     private var modePicker: some View {
         HStack(spacing: AppTheme.Spacing.lg) {
             ForEach(EditorMode.allCases) { mode in
+                let isLocked = mode == .markup && !FeatureGateService.isAvailable(.advancedPhotoEditing)
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        editorMode = mode
+                    if isLocked {
+                        showPremiumPaywall = true
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            editorMode = mode
+                        }
                     }
                 }) {
                     VStack(spacing: AppTheme.Spacing.xs) {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 22))
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: mode.icon)
+                                .font(.system(size: 22))
+                            if isLocked {
+                                PremiumLockBadge()
+                                    .offset(x: 6, y: -4)
+                            }
+                        }
                         Text(mode.rawValue)
                             .font(AppTheme.Typography.caption)
                     }
@@ -270,7 +283,7 @@ struct PhotoEditorView: View {
         case .transform:
             TransformControlsView(viewModel: viewModel)
         case .adjust:
-            AdjustControlsView(viewModel: viewModel)
+            AdjustControlsView(viewModel: viewModel, showPremiumPaywall: $showPremiumPaywall)
         case .markup:
             markupControlsView
         }
@@ -1271,6 +1284,7 @@ struct TransformControlsView: View {
 /// Controls for adjustment mode (sliders for various image adjustments)
 struct AdjustControlsView: View {
     @ObservedObject var viewModel: PhotoEditorViewModel
+    @Binding var showPremiumPaywall: Bool
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.sm) {
@@ -1278,12 +1292,18 @@ struct AdjustControlsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     ForEach(AdjustmentType.allCases) { type in
+                        let isLocked = type.isPremium && !FeatureGateService.isAvailable(.advancedPhotoEditing)
                         AdjustmentTypeButton(
                             type: type,
                             isSelected: viewModel.selectedAdjustment == type,
-                            hasChanges: hasChanges(for: type)
+                            hasChanges: hasChanges(for: type),
+                            isLocked: isLocked
                         ) {
-                            viewModel.selectedAdjustment = type
+                            if isLocked {
+                                showPremiumPaywall = true
+                            } else {
+                                viewModel.selectedAdjustment = type
+                            }
                         }
                     }
                 }
@@ -1366,6 +1386,7 @@ struct AdjustmentTypeButton: View {
     let type: AdjustmentType
     let isSelected: Bool
     let hasChanges: Bool
+    var isLocked: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -1382,6 +1403,12 @@ struct AdjustmentTypeButton: View {
                             .frame(width: 6, height: 6)
                             .offset(x: 10, y: -10)
                     }
+
+                    // Lock badge for premium adjustments
+                    if isLocked {
+                        PremiumLockBadge()
+                            .offset(x: 12, y: -12)
+                    }
                 }
                 .frame(width: 36, height: 36)
                 .background(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.1))
@@ -1392,6 +1419,7 @@ struct AdjustmentTypeButton: View {
                     .lineLimit(1)
             }
             .foregroundStyle(isSelected ? .white : (hasChanges ? AppTheme.Colors.primary : .gray))
+            .opacity(isLocked ? 0.6 : 1.0)
             .frame(width: 65)
         }
     }

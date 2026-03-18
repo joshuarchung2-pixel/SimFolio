@@ -24,6 +24,15 @@ import FirebaseCrashlytics
 #if canImport(FirebaseAnalytics)
 import FirebaseAnalytics
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
 
 // MARK: - App Entry Point
 
@@ -224,9 +233,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Configure Firebase (Analytics + Crashlytics)
+        // Configure Firebase (Analytics + Crashlytics + Auth + Firestore + Storage)
         #if canImport(FirebaseCore)
         FirebaseApp.configure()
+        #endif
+
+        // Configure Firestore settings
+        #if canImport(FirebaseFirestore)
+        let firestoreSettings = Firestore.firestore().settings
+        firestoreSettings.cacheSettings = PersistentCacheSettings(sizeBytes: 100 * 1024 * 1024 as NSNumber)
+        Firestore.firestore().settings = firestoreSettings
         #endif
 
         // Configure notification center delegate
