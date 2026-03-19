@@ -2196,7 +2196,7 @@ struct PhotoDetailView: View {
                 ZoomablePhotoView(
                     asset: photoAsset,
                     preloadedImage: index == currentIndex ? editedImage : nil,
-                    refreshTrigger: imageRefreshTrigger,
+                    refreshTrigger: index == currentIndex ? imageRefreshTrigger : 0,
                     isZoomed: index == currentIndex ? $isPhotoZoomed : nil
                 )
                 .tag(index)
@@ -2509,153 +2509,201 @@ struct PhotoDetailView: View {
 
 // MARK: - Zoomable Photo View
 
-/// Photo view with pinch-to-zoom and double-tap zoom support
-struct ZoomablePhotoView: View {
+/// Photo view with pinch-to-zoom and double-tap zoom support using UIScrollView
+struct ZoomablePhotoView: UIViewRepresentable {
     let asset: PHAsset
-    /// Optional preloaded image (e.g., from editor)
     var preloadedImage: UIImage?
-    /// Refresh counter to trigger image reload when changed
     var refreshTrigger: Int = 0
-    /// Binding to communicate zoom state to parent (for disabling page swipe when zoomed)
     var isZoomed: Binding<Bool>?
 
-    @State private var image: UIImage?
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isZoomed: isZoomed)
+    }
 
-    var body: some View {
-        GeometryReader { geometry in
-            Group {
-                if let image = image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .scaleEffect(scale)
-                        .offset(offset)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let delta = value / lastScale
-                                    lastScale = value
-                                    let newScale = scale * delta
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.minimumZoomScale = 1.0
+        scrollView.maximumZoomScale = 4.0
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.bouncesZoom = true
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.isScrollEnabled = false
+        scrollView.delegate = context.coordinator
+        scrollView.backgroundColor = .clear
 
-                                    if newScale >= 1.0 {
-                                        scale = min(newScale, 4.0)
-                                    } else {
-                                        // Rubber-band: diminishing resistance below 1.0
-                                        let overshoot = 1.0 - newScale
-                                        scale = 1.0 - overshoot * 0.3
-                                    }
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        scrollView.addSubview(imageView)
 
-                                    // Reset offset when at or below base scale
-                                    if scale <= 1.0 {
-                                        offset = .zero
-                                        lastOffset = .zero
-                                    }
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.color = .white
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: scrollView.frameLayoutGuide.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: scrollView.frameLayoutGuide.centerYAnchor)
+        ])
 
-                                    isZoomed?.wrappedValue = scale > 1.0
-                                }
-                                .onEnded { _ in
-                                    lastScale = 1.0
-                                    if scale <= 1.0 {
-                                        withAnimation(.dpSpring) {
-                                            scale = 1.0
-                                            offset = .zero
-                                        }
-                                        lastOffset = .zero
-                                        isZoomed?.wrappedValue = false
-                                    } else {
-                                        // Clamp offset to valid bounds at new scale
-                                        let clamped = clampOffset(offset, scale: scale, imageSize: image.size, containerSize: geometry.size)
-                                        if clamped != offset {
-                                            withAnimation(.dpSpringFast) {
-                                                offset = clamped
-                                            }
-                                            lastOffset = clamped
-                                        }
-                                        isZoomed?.wrappedValue = true
-                                    }
-                                }
-                        )
-                        .gesture(
-                            // Only enable pan gesture when zoomed in
-                            DragGesture(minimumDistance: scale > 1 ? 0 : 10000)
-                                .onChanged { value in
-                                    if scale > 1 {
-                                        let proposed = CGSize(
-                                            width: lastOffset.width + value.translation.width,
-                                            height: lastOffset.height + value.translation.height
-                                        )
-                                        offset = clampOffset(proposed, scale: scale, imageSize: image.size, containerSize: geometry.size)
-                                    }
-                                }
-                                .onEnded { _ in
-                                    lastOffset = offset
-                                }
-                        )
-                        .onTapGesture(count: 2) {
-                            withAnimation(.dpSpring) {
-                                if scale > 1 {
-                                    scale = 1
-                                    offset = .zero
-                                    lastOffset = .zero
-                                    isZoomed?.wrappedValue = false
-                                } else {
-                                    scale = 2
-                                    isZoomed?.wrappedValue = true
-                                }
-                            }
-                        }
-                } else {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+        context.coordinator.scrollView = scrollView
+        context.coordinator.imageView = imageView
+        context.coordinator.activityIndicator = spinner
+
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+
+        if let preloaded = preloadedImage {
+            context.coordinator.updateImage(preloaded)
+        } else {
+            spinner.startAnimating()
+            context.coordinator.loadImage(for: asset)
+        }
+
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.isZoomed = isZoomed
+
+        if let preloaded = preloadedImage, preloaded !== coordinator.currentImage {
+            coordinator.updateImage(preloaded)
+        }
+
+        if refreshTrigger != coordinator.lastRefreshTrigger {
+            coordinator.lastRefreshTrigger = refreshTrigger
+            coordinator.loadImage(for: asset)
+        }
+
+        if isZoomed == nil && scrollView.zoomScale > 1.0 {
+            scrollView.setZoomScale(1.0, animated: false)
+        }
+
+        coordinator.layoutImageIfNeeded()
+    }
+
+    class Coordinator: NSObject, UIScrollViewDelegate {
+        weak var scrollView: UIScrollView?
+        var imageView: UIImageView?
+        var activityIndicator: UIActivityIndicatorView?
+        var isZoomed: Binding<Bool>?
+        var currentImage: UIImage?
+        var lastRefreshTrigger: Int = 0
+        private var lastBounds: CGRect = .zero
+
+        init(isZoomed: Binding<Bool>?) {
+            self.isZoomed = isZoomed
+        }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            imageView
+        }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            centerImageInScrollView()
+            let zoomed = scrollView.zoomScale > 1.01
+            scrollView.isScrollEnabled = zoomed
+            isZoomed?.wrappedValue = zoomed
+        }
+
+        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            isZoomed?.wrappedValue = scale > 1.01
+        }
+
+        @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+            guard let scrollView = scrollView else { return }
+
+            if scrollView.zoomScale > 1.01 {
+                scrollView.setZoomScale(1.0, animated: true)
+            } else {
+                let location = gesture.location(in: imageView)
+                let zoomScale: CGFloat = 2.0
+                let width = scrollView.bounds.width / zoomScale
+                let height = scrollView.bounds.height / zoomScale
+                let rect = CGRect(
+                    x: location.x - width / 2,
+                    y: location.y - height / 2,
+                    width: width,
+                    height: height
+                )
+                scrollView.zoom(to: rect, animated: true)
+            }
+        }
+
+        func centerImageInScrollView() {
+            guard let scrollView = scrollView, let imageView = imageView else { return }
+
+            let boundsSize = scrollView.bounds.size
+            var frameToCenter = imageView.frame
+
+            if frameToCenter.size.width < boundsSize.width {
+                frameToCenter.origin.x = (boundsSize.width - frameToCenter.size.width) / 2
+            } else {
+                frameToCenter.origin.x = 0
+            }
+
+            if frameToCenter.size.height < boundsSize.height {
+                frameToCenter.origin.y = (boundsSize.height - frameToCenter.size.height) / 2
+            } else {
+                frameToCenter.origin.y = 0
+            }
+
+            imageView.frame = frameToCenter
+        }
+
+        func updateImage(_ image: UIImage) {
+            currentImage = image
+            imageView?.image = image
+            activityIndicator?.stopAnimating()
+
+            guard let scrollView = scrollView, let imageView = imageView else { return }
+
+            scrollView.setZoomScale(1.0, animated: false)
+            scrollView.isScrollEnabled = false
+            isZoomed?.wrappedValue = false
+
+            let boundsSize = scrollView.bounds.size
+            guard boundsSize.width > 0 && boundsSize.height > 0 else { return }
+
+            let imageSize = image.size
+            let widthRatio = boundsSize.width / imageSize.width
+            let heightRatio = boundsSize.height / imageSize.height
+            let fitRatio = min(widthRatio, heightRatio)
+
+            let fitSize = CGSize(
+                width: imageSize.width * fitRatio,
+                height: imageSize.height * fitRatio
+            )
+
+            imageView.frame = CGRect(origin: .zero, size: fitSize)
+            scrollView.contentSize = fitSize
+
+            centerImageInScrollView()
+            lastBounds = scrollView.bounds
+        }
+
+        func layoutImageIfNeeded() {
+            guard let scrollView = scrollView, let imageView = imageView,
+                  let image = currentImage else { return }
+            let bounds = scrollView.bounds
+            guard bounds != lastBounds, bounds.width > 0, bounds.height > 0 else { return }
+            lastBounds = bounds
+
+            let ratio = min(bounds.width / image.size.width, bounds.height / image.size.height)
+            let fitSize = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+            imageView.frame = CGRect(origin: .zero, size: fitSize)
+            scrollView.contentSize = fitSize
+            centerImageInScrollView()
+        }
+
+        func loadImage(for asset: PHAsset) {
+            PhotoLibraryManager.shared.requestEditedImage(for: asset) { [weak self] loadedImage in
+                if let image = loadedImage {
+                    self?.updateImage(image)
                 }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-        }
-        .onAppear {
-            if let preloaded = preloadedImage {
-                image = preloaded
-            } else {
-                loadImage()
-            }
-        }
-        .onChange(of: refreshTrigger) { _ in
-            loadImage()
-        }
-        .onChange(of: preloadedImage) { newImage in
-            if let newImage = newImage {
-                image = newImage
-            }
-        }
-    }
-
-    private func clampOffset(_ proposed: CGSize, scale: CGFloat, imageSize: CGSize, containerSize: CGSize) -> CGSize {
-        guard scale > 1.0 else { return .zero }
-
-        let imageAspect = imageSize.width / imageSize.height
-        let containerAspect = containerSize.width / containerSize.height
-        let displayedSize: CGSize
-        if imageAspect > containerAspect {
-            displayedSize = CGSize(width: containerSize.width, height: containerSize.width / imageAspect)
-        } else {
-            displayedSize = CGSize(width: containerSize.height * imageAspect, height: containerSize.height)
-        }
-
-        let maxX = max(0, (displayedSize.width * scale - containerSize.width) / 2)
-        let maxY = max(0, (displayedSize.height * scale - containerSize.height) / 2)
-
-        return CGSize(
-            width: min(max(proposed.width, -maxX), maxX),
-            height: min(max(proposed.height, -maxY), maxY)
-        )
-    }
-
-    func loadImage() {
-        PhotoLibraryManager.shared.requestEditedImage(for: asset) { loadedImage in
-            self.image = loadedImage
         }
     }
 }
