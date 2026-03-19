@@ -1392,27 +1392,27 @@ struct AdjustmentTypeButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: AppTheme.Spacing.xxs) {
-                ZStack {
-                    Image(systemName: type.icon)
-                        .font(.system(size: 18))
-
-                    // Indicator dot for modified adjustments
-                    if hasChanges && !isSelected {
-                        Circle()
-                            .fill(AppTheme.Colors.primary)
-                            .frame(width: 6, height: 6)
-                            .offset(x: 10, y: -10)
+                Image(systemName: type.icon)
+                    .font(.system(size: 18))
+                    .frame(width: 36, height: 36)
+                    .background(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.1))
+                    .clipShape(Circle())
+                    .overlay(alignment: .topTrailing) {
+                        // Indicator dot for modified adjustments
+                        if hasChanges && !isSelected {
+                            Circle()
+                                .fill(AppTheme.Colors.primary)
+                                .frame(width: 6, height: 6)
+                                .offset(x: 2, y: -2)
+                        }
                     }
-
-                    // Lock badge for premium adjustments
-                    if isLocked {
-                        PremiumLockBadge()
-                            .offset(x: 12, y: -12)
+                    .overlay(alignment: .topTrailing) {
+                        // Lock badge for premium adjustments
+                        if isLocked {
+                            PremiumLockBadge()
+                                .offset(x: 4, y: -4)
+                        }
                     }
-                }
-                .frame(width: 36, height: 36)
-                .background(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.1))
-                .clipShape(Circle())
 
                 Text(type.rawValue)
                     .font(AppTheme.Typography.caption2)

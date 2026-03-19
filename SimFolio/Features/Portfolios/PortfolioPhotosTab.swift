@@ -519,7 +519,7 @@ struct PortfolioPhotoDetailSheet: View {
                 // Swipeable photo viewer
                 TabView(selection: $currentIndex) {
                     ForEach(Array(allAssets.enumerated()), id: \.element.localIdentifier) { index, asset in
-                        PortfolioPhotoDetailImage(asset: asset)
+                        ZoomablePhotoView(asset: asset)
                             .tag(index)
                     }
                 }
@@ -672,132 +672,6 @@ struct PortfolioPhotoDetailSheet: View {
     }
 }
 
-// MARK: - PortfolioPhotoDetailImage
-
-/// Full-screen photo view with pinch-to-zoom and double-tap zoom
-struct PortfolioPhotoDetailImage: View {
-    let asset: PHAsset
-
-    @State private var image: UIImage? = nil
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-
-    var body: some View {
-        GeometryReader { geometry in
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let delta = value / lastScale
-                                lastScale = value
-                                let newScale = scale * delta
-
-                                if newScale >= 1.0 {
-                                    scale = min(newScale, 4.0)
-                                } else {
-                                    // Rubber-band: diminishing resistance below 1.0
-                                    let overshoot = 1.0 - newScale
-                                    scale = 1.0 - overshoot * 0.3
-                                }
-
-                                // Reset offset when at or below base scale
-                                if scale <= 1.0 {
-                                    offset = .zero
-                                    lastOffset = .zero
-                                }
-                            }
-                            .onEnded { _ in
-                                lastScale = 1.0
-                                if scale <= 1.0 {
-                                    withAnimation(.dpSpring) {
-                                        scale = 1.0
-                                        offset = .zero
-                                    }
-                                    lastOffset = .zero
-                                } else {
-                                    // Clamp offset to valid bounds at new scale
-                                    let clamped = clampOffset(offset, scale: scale, imageSize: image.size, containerSize: geometry.size)
-                                    if clamped != offset {
-                                        withAnimation(.dpSpringFast) {
-                                            offset = clamped
-                                        }
-                                        lastOffset = clamped
-                                    }
-                                }
-                            }
-                    )
-                    .simultaneousGesture(
-                        DragGesture()
-                            .onChanged { value in
-                                if scale > 1.0 {
-                                    let proposed = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                    offset = clampOffset(proposed, scale: scale, imageSize: image.size, containerSize: geometry.size)
-                                }
-                            }
-                            .onEnded { _ in
-                                lastOffset = offset
-                            }
-                    )
-                    .onTapGesture(count: 2) {
-                        withAnimation(.dpSpring) {
-                            if scale > 1.0 {
-                                scale = 1.0
-                                offset = .zero
-                                lastOffset = .zero
-                            } else {
-                                scale = 2.0
-                            }
-                        }
-                    }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-            } else {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-            }
-        }
-        .onAppear {
-            loadFullImage()
-        }
-    }
-
-    private func clampOffset(_ proposed: CGSize, scale: CGFloat, imageSize: CGSize, containerSize: CGSize) -> CGSize {
-        guard scale > 1.0 else { return .zero }
-
-        let imageAspect = imageSize.width / imageSize.height
-        let containerAspect = containerSize.width / containerSize.height
-        let displayedSize: CGSize
-        if imageAspect > containerAspect {
-            displayedSize = CGSize(width: containerSize.width, height: containerSize.width / imageAspect)
-        } else {
-            displayedSize = CGSize(width: containerSize.height * imageAspect, height: containerSize.height)
-        }
-
-        let maxX = max(0, (displayedSize.width * scale - containerSize.width) / 2)
-        let maxY = max(0, (displayedSize.height * scale - containerSize.height) / 2)
-
-        return CGSize(
-            width: min(max(proposed.width, -maxX), maxX),
-            height: min(max(proposed.height, -maxY), maxY)
-        )
-    }
-
-    private func loadFullImage() {
-        PhotoLibraryManager.shared.requestEditedImage(for: asset) { loadedImage in
-            self.image = loadedImage
-        }
-    }
-}
 
 // MARK: - Preview Provider
 

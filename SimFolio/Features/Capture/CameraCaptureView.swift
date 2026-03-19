@@ -278,7 +278,7 @@ struct CameraCaptureView: View {
             .accessibilityHint("Return to tag setup")
 
             // Ghost overlay button
-            Image(systemName: isGhostActive ? "person.fill.viewfinder" : "person.viewfinder")
+            Image(systemName: isGhostActive ? "rectangle.stack.fill" : "rectangle.stack")
                 .font(.system(size: AppTheme.IconSize.sm, weight: .semibold))
                 .foregroundStyle(isGhostActive ? .cyan : .white)
                 .frame(width: 44, height: 44)
