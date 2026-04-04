@@ -15,6 +15,11 @@ struct SubscriptionSettingsView: View {
     @State private var showRestoreAlert: Bool = false
     @State private var restoreAlertMessage: String = ""
 
+    /// Whether the user has full access (subscribed or all features unlocked)
+    private var hasFullAccess: Bool {
+        FeatureGateService.allFeaturesUnlocked || subscriptionManager.isSubscribed
+    }
+
     var body: some View {
         List {
             // Status Section
@@ -53,7 +58,7 @@ struct SubscriptionSettingsView: View {
                 // Crown icon
                 ZStack {
                     Circle()
-                        .fill(subscriptionManager.isSubscribed ?
+                        .fill(hasFullAccess ?
                               LinearGradient(
                                 colors: [.orange, .yellow],
                                 startPoint: .topLeading,
@@ -69,13 +74,13 @@ struct SubscriptionSettingsView: View {
 
                     Image(systemName: "crown.fill")
                         .font(.system(size: 36))
-                        .foregroundStyle(subscriptionManager.isSubscribed ? .white : AppTheme.Colors.textTertiary)
+                        .foregroundStyle(hasFullAccess ? .white : AppTheme.Colors.textTertiary)
                 }
                 .padding(.top, AppTheme.Spacing.sm)
 
                 // Status text
                 VStack(spacing: AppTheme.Spacing.xs) {
-                    Text(subscriptionManager.isSubscribed ? "Premium Active" : "Free Plan")
+                    Text(hasFullAccess ? "All Features Active" : "Free Plan")
                         .font(AppTheme.Typography.title3)
                         .fontWeight(.bold)
                         .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -98,7 +103,7 @@ struct SubscriptionSettingsView: View {
                                 .font(AppTheme.Typography.caption)
                                 .foregroundStyle(AppTheme.Colors.textTertiary)
                         }
-                    } else {
+                    } else if !FeatureGateService.allFeaturesUnlocked {
                         Text("Upgrade to unlock all features")
                             .font(AppTheme.Typography.caption)
                             .foregroundStyle(AppTheme.Colors.textSecondary)
@@ -131,8 +136,8 @@ struct SubscriptionSettingsView: View {
                             .foregroundStyle(AppTheme.Colors.textTertiary)
                     }
                 }
-            } else {
-                // Upgrade button for non-subscribed users
+            } else if !FeatureGateService.allFeaturesUnlocked {
+                // Upgrade button for non-subscribed users (hidden when all features unlocked)
                 Button {
                     showPaywall = true
                 } label: {
@@ -180,7 +185,7 @@ struct SubscriptionSettingsView: View {
 
     @ViewBuilder
     var premiumFeaturesSection: some View {
-        if !subscriptionManager.isSubscribed {
+        if !hasFullAccess {
             Section {
                 ForEach(PremiumFeature.allCases.filter(\.showInPaywall), id: \.self) { feature in
                     HStack(spacing: AppTheme.Spacing.sm) {
