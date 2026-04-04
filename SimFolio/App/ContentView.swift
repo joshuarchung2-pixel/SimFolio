@@ -366,13 +366,13 @@ struct ContentView: View {
             showToast(type: .success, message: "Welcome to SimFolio!")
             AccessibilityManager.shared.announce("Onboarding complete. Welcome to SimFolio.")
 
-            // Show post-onboarding paywall for non-subscribers
-            if !subscriptionManager.isSubscribed {
+            // Show post-onboarding paywall for non-subscribers (skip when all features unlocked)
+            if !FeatureGateService.allFeaturesUnlocked && !subscriptionManager.isSubscribed {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showPostOnboardingPaywall = true
                 }
             } else if !hasCompletedAppTour {
-                // Already subscribed (restored during onboarding) — go straight to tour
+                // Subscribed, or all features unlocked — go straight to tour
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showAppTour = true
                 }
