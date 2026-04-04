@@ -48,10 +48,12 @@ struct ContentView: View {
     @State private var showPostOnboardingPaywall: Bool = false
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
+    @State private var showFreeUnlockAnnouncement: Bool = false
 
     // MARK: - Persisted State
 
     @AppStorage("hasCompletedAppTour") private var hasCompletedAppTour = false
+    @AppStorage("hasSeenFreeUnlockAnnouncement") private var hasSeenFreeUnlockAnnouncement = false
 
     // MARK: - Environment
 
@@ -90,6 +92,11 @@ struct ContentView: View {
             OnboardingView(isPresented: $showOnboarding) {
                 onOnboardingComplete()
             }
+        }
+        .fullScreenCover(isPresented: $showFreeUnlockAnnouncement, onDismiss: {
+            hasSeenFreeUnlockAnnouncement = true
+        }) {
+            FreeUnlockAnnouncementView()
         }
         .fullScreenCover(isPresented: $showPostOnboardingPaywall, onDismiss: {
             // After paywall dismisses, show tour if not completed
@@ -339,6 +346,11 @@ struct ContentView: View {
                 if !hasCompletedOnboarding {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         showOnboarding = true
+                    }
+                } else if FeatureGateService.allFeaturesUnlocked && !hasSeenFreeUnlockAnnouncement {
+                    // One-time announcement for existing users that all features are now free
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showFreeUnlockAnnouncement = true
                     }
                 }
             }
