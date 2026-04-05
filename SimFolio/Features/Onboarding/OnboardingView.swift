@@ -826,6 +826,8 @@ struct OnboardingPersonalizationPageView: View {
 
     @FocusState private var isNameFieldFocused: Bool
     @FocusState private var isSchoolFieldFocused: Bool
+    @State private var showSchoolPicker = false
+    @State private var selectedSchoolId: String = ""
 
     // Graduation years (cached to avoid recomputation on layout passes)
     @State private var graduationYears: [Int] = {
@@ -909,20 +911,53 @@ struct OnboardingPersonalizationPageView: View {
                                     .foregroundStyle(.red)
                             }
 
-                            TextField("Enter your dental school", text: $userProfile.dentalSchoolAffiliation)
-                                .font(AppTheme.Typography.body)
+                            Button {
+                                isNameFieldFocused = false
+                                showSchoolPicker = true
+                            } label: {
+                                HStack {
+                                    Text(userProfile.dentalSchoolAffiliation.isEmpty
+                                         ? "Select your school"
+                                         : userProfile.dentalSchoolAffiliation)
+                                        .font(AppTheme.Typography.body)
+                                        .foregroundColor(userProfile.dentalSchoolAffiliation.isEmpty
+                                                         ? AppTheme.Colors.textTertiary
+                                                         : AppTheme.Colors.textPrimary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(AppTheme.Colors.textTertiary)
+                                }
                                 .padding(AppTheme.Spacing.md)
                                 .background(AppTheme.Colors.surface)
                                 .cornerRadius(AppTheme.CornerRadius.medium)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
-                                        .stroke(isSchoolFieldFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: isSchoolFieldFocused ? 2 : 1)
+                                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
                                 )
-                                .focused($isSchoolFieldFocused)
-                                .submitLabel(.done)
-                                .onSubmit { isSchoolFieldFocused = false }
+                            }
                         }
                         .id("schoolField")
+                        .sheet(isPresented: $showSchoolPicker) {
+                            NavigationView {
+                                SchoolPickerView { school in
+                                    userProfile.dentalSchoolAffiliation = school.name
+                                    selectedSchoolId = school.id
+                                    showSchoolPicker = false
+                                }
+                                .navigationTitle("Select School")
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar {
+                                    ToolbarItem(placement: .navigationBarLeading) {
+                                        Button("Cancel") {
+                                            showSchoolPicker = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // Graduation year wheel picker
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
