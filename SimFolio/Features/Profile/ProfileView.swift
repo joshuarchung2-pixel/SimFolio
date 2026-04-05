@@ -47,6 +47,7 @@ struct ProfileView: View {
     @State private var showAppearanceSettings: Bool = false
     @State private var showSubscriptionSettings: Bool = false
     @State private var showShareSheet: Bool = false
+    @State private var showSocialSettings: Bool = false
 
     // MARK: - Computed Properties
 
@@ -177,6 +178,7 @@ struct ProfileView: View {
                     // Settings sections
                     appearanceSection
                     subscriptionSection
+                    socialSection
                     portfolioSection
                     captureSection
                     notificationSection
@@ -233,6 +235,11 @@ struct ProfileView: View {
             .sheet(isPresented: $showSubscriptionSettings) {
                 SettingsSheetWrapper(title: "Subscription", isPresented: $showSubscriptionSettings) {
                     SubscriptionSettingsView()
+                }
+            }
+            .sheet(isPresented: $showSocialSettings) {
+                SettingsSheetWrapper(title: "Social Settings", isPresented: $showSocialSettings) {
+                    SocialSettingsView()
                 }
             }
             .sheet(isPresented: $showShareSheet) {
@@ -481,6 +488,20 @@ struct ProfileView: View {
         }
     }
 
+    @ViewBuilder
+    var socialSection: some View {
+        if AuthenticationService.shared.authState == .signedIn {
+            SettingsSection(title: "SOCIAL") {
+                SettingsRow(
+                    icon: "person.2",
+                    iconColor: AppTheme.Colors.primary,
+                    title: "Social Feed Settings",
+                    action: { showSocialSettings = true }
+                )
+            }
+        }
+    }
+
     var portfolioSection: some View {
         SettingsSection(title: "PORTFOLIOS") {
             SettingsRow(
@@ -559,6 +580,21 @@ struct ProfileView: View {
                 title: "Help & Support",
                 subtitle: "Get help and send feedback",
                 action: { showHelp = true }
+            )
+
+            Divider()
+                .padding(.leading, 56)
+
+            SettingsRow(
+                icon: "envelope",
+                iconColor: AppTheme.Colors.primary,
+                title: "Contact Support",
+                subtitle: "joshuarchung2@gmail.com",
+                action: {
+                    if let url = URL(string: "mailto:joshuarchung2@gmail.com") {
+                        UIApplication.shared.open(url)
+                    }
+                }
             )
 
             Divider()
