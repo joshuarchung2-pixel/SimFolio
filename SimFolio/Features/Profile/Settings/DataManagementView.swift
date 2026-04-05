@@ -23,6 +23,10 @@ struct DataManagementView: View {
     @State private var exportURL: URL?
     @State private var showingShareSheet = false
     @State private var analyticsEnabled: Bool = AnalyticsService.analyticsEnabled
+    @State private var showDeleteConfirmation = false
+    @State private var showSubscriptionWarning = false
+    @State private var isDeletingAccount = false
+    @State private var showDeletionComplete = false
 
     // MARK: - Computed Properties
 
@@ -57,10 +61,65 @@ struct DataManagementView: View {
 
             // Danger Zone Section
             dangerZoneSection
+
+            // Account Deletion Section
+            if AuthenticationService.shared.authState == .signedIn {
+                Section {
+                    Button(role: .destructive) {
+                        if SubscriptionManager.shared.isSubscribed {
+                            showSubscriptionWarning = true
+                        } else {
+                            showDeleteConfirmation = true
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "person.crop.circle.badge.xmark")
+                                .foregroundColor(.red)
+                            Text("Delete Account")
+                                .foregroundColor(.red)
+                            Spacer()
+                            if isDeletingAccount {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isDeletingAccount)
+                } header: {
+                    Text("Account")
+                } footer: {
+                    Text("Permanently delete your account and all associated data. This action cannot be undone.")
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Data Management")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Active Subscription", isPresented: $showSubscriptionWarning) {
+            Button("Manage Subscription") {
+                if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Delete Anyway", role: .destructive) {
+                showDeleteConfirmation = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You have an active subscription. Deleting your account won't cancel your subscription — you'll need to cancel it separately through Apple. Your billing will continue until you cancel.")
+        }
+        .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
+            Button("Delete Account", role: .destructive) {
+                Task { await performAccountDeletion() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your account and all associated data (posts, comments, photos) will be permanently deleted within 24-48 hours. This cannot be undone.")
+        }
+        .alert("Account Deleted", isPresented: $showDeletionComplete) {
+            Button("OK") {}
+        } message: {
+            Text("Your account and all associated data have been permanently deleted.")
+        }
         .alert("Clear All Metadata", isPresented: $showingClearConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
@@ -311,6 +370,20 @@ struct DataManagementView: View {
 
     private func resetApp() {
         metadataManager.resetAllData()
+    }
+
+    private func performAccountDeletion() async {
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await AuthenticationService.shared.deleteAccount()
+            UserProfileService.shared.clearProfile()
+            AnalyticsService.logEvent(.accountDeleted)
+            showDeletionComplete = true
+        } catch {
+            // Show error - could use existing error handling pattern
+        }
     }
 
     private var dateString: String {
