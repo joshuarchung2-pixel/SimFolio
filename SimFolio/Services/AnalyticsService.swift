@@ -68,6 +68,27 @@ enum AnalyticsEvent: String {
 
     // Errors
     case errorOccurred = "error_occurred"
+
+    // Social
+    case socialOptIn = "social_opt_in"
+    case socialOptOut = "social_opt_out"
+    case photoShared = "photo_shared"
+    case photoUnshared = "photo_unshared"
+    case feedViewed = "feed_viewed"
+    case postViewed = "post_viewed"
+    case commentAdded = "comment_added"
+    case commentDeleted = "comment_deleted"
+    case reactionAdded = "reaction_added"
+    case reactionRemoved = "reaction_removed"
+    case userReported = "user_reported"
+    case postReported = "post_reported"
+    case commentReported = "comment_reported"
+    case userBlocked = "user_blocked"
+    case userUnblocked = "user_unblocked"
+    case signInStarted = "sign_in_started"
+    case signInCompleted = "sign_in_completed"
+    case signInFailed = "sign_in_failed"
+    case accountDeleted = "account_deleted"
 }
 
 // MARK: - User Properties
@@ -81,6 +102,9 @@ enum AnalyticsUserProperty: String {
     case photoCount = "photo_count"
     case appTheme = "app_theme"
     case isPremium = "is_premium"
+    case socialEnabled = "social_enabled"
+    case sharedPhotoCount = "shared_photo_count"
+    case socialCommentCount = "social_comment_count"
 }
 
 // MARK: - Analytics Service
@@ -367,6 +391,22 @@ extension AnalyticsService {
         logEvent(.onboardingCompleted, parameters: [
             "duration_seconds": durationSeconds,
             "school_selected": schoolSelected
+        ])
+    }
+
+    /// Log photo shared to social feed
+    static func logPhotoShared(procedure: String, hasCaption: Bool) {
+        logEvent(.photoShared, parameters: [
+            "procedure": procedure,
+            "has_caption": hasCaption
+        ])
+    }
+
+    /// Log post viewed in social feed
+    static func logPostViewed(postId: String, procedure: String) {
+        logEvent(.postViewed, parameters: [
+            "post_id": postId,
+            "procedure": procedure
         ])
     }
 
