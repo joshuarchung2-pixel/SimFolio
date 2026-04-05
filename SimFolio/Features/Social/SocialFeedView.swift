@@ -287,14 +287,3 @@ struct SocialFeedView: View {
     }
 }
 
-// MARK: - Temporary Stubs
-// Remove when real implementations exist (Tasks 12 and 17)
-
-struct PostDetailView: View {
-    let post: SharedPost
-    var body: some View { Text("Post Detail") }
-}
-
-struct SocialOnboardingSheet: View {
-    var body: some View { Text("Social Onboarding") }
-}

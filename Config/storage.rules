@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================================
+    // User Photo Uploads
+    // ============================================================
+
+    match /users/{userId}/photos/{fileName} {
+      // Authenticated users can read any shared photo
+      allow read: if request.auth != null;
+
+      // Users can only upload to their own directory
+      // Max file size: 5MB
+      // Only allow image types
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      // Users can overwrite their own photos
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      // Users can delete their own photos
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // ============================================================
+    // User Thumbnails
+    // ============================================================
+
+    match /users/{userId}/thumbnails/{fileName} {
+      // Authenticated users can read any thumbnail
+      allow read: if request.auth != null;
+
+      // Users can only upload to their own directory
+      // Max file size: 1MB for thumbnails
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 1 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 1 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // ============================================================
+    // User Profile Images
+    // ============================================================
+
+    match /users/{userId}/profile/{fileName} {
+      // Anyone authenticated can read profile images
+      allow read: if request.auth != null;
+
+      // Users can only manage their own profile image
+      // Max file size: 2MB
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && request.resource.size < 2 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
