@@ -213,7 +213,7 @@
         <header>
             <div class="app-icon">&#x1F9B7;</div>
             <h1>SimFolio Privacy Policy</h1>
-            <p class="last-updated">Last Updated: February 3, 2026</p>
+            <p class="last-updated">Last Updated: April 4, 2026</p>
         </header>
 
         <main>
@@ -231,6 +231,9 @@
                     <li><strong>Profile Information:</strong> School name, graduation year, and display name (optional)</li>
                     <li><strong>Portfolio Data:</strong> Procedure types, photo tags, tooth numbers, and portfolio configurations you create</li>
                     <li><strong>Photo Metadata:</strong> Tags, ratings, and organizational data you assign to photos (photos remain in your device's photo library)</li>
+                    <li><strong>Account Information:</strong> Email address or Apple ID identifier used to create and authenticate your SimFolio account</li>
+                    <li><strong>Shared Photos:</strong> Clinical procedure photos you choose to share with classmates through the social feed</li>
+                    <li><strong>Social Content:</strong> Comments and reactions you post on shared photos</li>
                 </ul>
 
                 <h3>Information Collected Automatically</h3>
@@ -280,6 +283,35 @@
                 </ul>
                 <p>This data helps us identify and fix bugs to improve app stability. Crash data does not include personal information. For more information, see <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase Crashlytics Data Collection</a>.</p>
 
+                <h3>Firebase Authentication (Google)</h3>
+                <p>We use Firebase Authentication to manage user accounts for the social features. Firebase Authentication collects:</p>
+                <ul>
+                    <li>Email addresses or Apple ID identifiers used to sign in</li>
+                    <li>Account creation and last sign-in timestamps</li>
+                    <li>Unique user identifiers (UIDs) linked to your account</li>
+                </ul>
+                <p>This information is used solely to authenticate you and maintain your account. For more information, see <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase Authentication Data Security</a>.</p>
+
+                <h3>Firebase Firestore (Google)</h3>
+                <p>We use Firebase Firestore to store data that powers the social features. Firestore stores:</p>
+                <ul>
+                    <li><strong>User profiles:</strong> Display name and school affiliation</li>
+                    <li><strong>Posts:</strong> Photos you choose to share, including captions and procedure metadata</li>
+                    <li><strong>Comments:</strong> Text comments you write on shared posts</li>
+                    <li><strong>Reactions:</strong> Emoji reactions you add to posts</li>
+                    <li><strong>Reports:</strong> Content reports you submit for moderation</li>
+                    <li><strong>Block lists:</strong> Records of users you have blocked</li>
+                </ul>
+                <p>This data is necessary to provide the social feed and related features. For more information, see <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase Privacy and Security</a>.</p>
+
+                <h3>Firebase Storage (Google)</h3>
+                <p>We use Firebase Storage to store photos you upload for sharing. This includes:</p>
+                <ul>
+                    <li>Full-resolution photos you choose to share with classmates</li>
+                    <li>Compressed thumbnails generated for feed display</li>
+                </ul>
+                <p>Photos stored in Firebase Storage are accessible to other verified users at your school. Photos you have not chosen to share remain solely on your device. For more information, see <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase Privacy and Security</a>.</p>
+
                 <h3>RevenueCat</h3>
                 <p>We use RevenueCat to manage subscriptions and in-app purchases. RevenueCat collects:</p>
                 <ul>
@@ -294,6 +326,19 @@
                     <li><strong>App Store:</strong> Subscription purchases are processed through Apple's App Store. Apple handles all payment information according to their <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener">Privacy Policy</a>.</li>
                     <li><strong>Photo Library:</strong> Photos remain stored in your device's photo library. We only store metadata (tags, ratings) that you assign to photos.</li>
                 </ul>
+            </section>
+
+            <section>
+                <h2>Data Shared with Classmates</h2>
+                <p>When you participate in social features, certain information becomes visible to other verified users at your school:</p>
+                <ul>
+                    <li><strong>Display name:</strong> The name shown on your posts and comments</li>
+                    <li><strong>School affiliation:</strong> Your school is used to determine which feed you can access</li>
+                    <li><strong>Shared photos:</strong> Clinical procedure photos you explicitly choose to post</li>
+                    <li><strong>Comments:</strong> Text comments you write on posts in the shared feed</li>
+                    <li><strong>Reactions:</strong> Emoji reactions you add to posts</li>
+                </ul>
+                <p>Only users verified at the same school can see this content. We do not share your email address, device information, or any other account details with other users.</p>
             </section>
 
             <section>
@@ -344,8 +389,8 @@
                 <h2>Data Storage and Security</h2>
                 <ul>
                     <li><strong>Local Storage:</strong> Portfolio data, photo metadata, and preferences are stored locally on your device</li>
-                    <li><strong>Cloud Services:</strong> Analytics data is stored on Google's Firebase servers; subscription data is stored on RevenueCat's servers</li>
-                    <li><strong>Security:</strong> We use industry-standard encryption and security measures to protect your data</li>
+                    <li><strong>Cloud Services:</strong> Analytics data is stored on Google's Firebase servers; subscription data is stored on RevenueCat's servers; social feature data (profiles, posts, comments, reactions, and uploaded photos) is stored on Google's Firebase servers</li>
+                    <li><strong>Security:</strong> We use industry-standard encryption and security measures to protect your data. Firebase Storage and Firestore access is restricted by security rules that prevent unauthorized access to your data.</li>
                 </ul>
             </section>
 
@@ -397,9 +442,52 @@
                             <td>Until deleted</td>
                             <td>N/A</td>
                         </tr>
+                        <tr>
+                            <td>Account Credentials</td>
+                            <td>Authenticate users</td>
+                            <td>Firebase Authentication</td>
+                            <td>Until account deleted</td>
+                            <td>No**</td>
+                        </tr>
+                        <tr>
+                            <td>Social Profile</td>
+                            <td>Display name and school for social feed</td>
+                            <td>Firebase Firestore</td>
+                            <td>Until account deleted</td>
+                            <td>No**</td>
+                        </tr>
+                        <tr>
+                            <td>Shared Photos</td>
+                            <td>Peer sharing of clinical photos</td>
+                            <td>Firebase Storage</td>
+                            <td>Until post or account deleted</td>
+                            <td>No**</td>
+                        </tr>
+                        <tr>
+                            <td>Comments &amp; Reactions</td>
+                            <td>Social interaction on shared posts</td>
+                            <td>Firebase Firestore</td>
+                            <td>Until deleted or account deleted</td>
+                            <td>No**</td>
+                        </tr>
                     </tbody>
                 </table>
                 <p><em>*Subscription data is required to provide the service.</em></p>
+                <p><em>**Social and account data is required to provide the social features. You can delete all social data by deleting your account.</em></p>
+
+                <h3>Social Data Retention and Deletion</h3>
+                <p>When you delete your SimFolio account, we permanently remove all associated social data within 24–48 hours, including:</p>
+                <ul>
+                    <li>Your Firebase Authentication credentials</li>
+                    <li>Your Firestore user profile, posts, comments, reactions, reports, and block list entries</li>
+                    <li>All photos and thumbnails you uploaded to Firebase Storage</li>
+                </ul>
+                <p>This includes any content you shared with classmates — all shared content is permanently and irreversibly deleted when your account is removed.</p>
+            </section>
+
+            <section>
+                <h2>Image Moderation</h2>
+                <p>If automated image moderation is enabled, photos you upload for sharing may be screened by automated content moderation services before becoming visible to other users. This screening checks for content that violates our community guidelines. Moderation results are used solely to enforce our policies and are not used for advertising or shared with third parties.</p>
             </section>
 
             <section>
@@ -458,7 +546,7 @@
 
         <footer>
             <p>&copy; 2026 SimFolio. All rights reserved.</p>
-            <p>This privacy policy was last updated on February 3, 2026.</p>
+            <p>This privacy policy was last updated on April 4, 2026.</p>
         </footer>
     </div>
 </body>
