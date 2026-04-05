@@ -69,6 +69,11 @@ enum AnalyticsEvent: String {
     // Social Feed
     case feedViewed = "feed_viewed"
     case socialOptIn = "social_opt_in"
+    case postViewed = "post_viewed"
+    case commentAdded = "comment_added"
+    case commentDeleted = "comment_deleted"
+    case reactionAdded = "reaction_added"
+    case photoShared = "photo_shared"
 
     // Errors
     case errorOccurred = "error_occurred"
@@ -379,6 +384,14 @@ extension AnalyticsService {
         setUserProperty(String(portfolioCount), for: .portfolioCount)
         setUserProperty(String(photoCount), for: .photoCount)
         setUserProperty(isPremium ? "true" : "false", for: .isPremium)
+    }
+
+    /// Log post viewed in the social feed
+    static func logPostViewed(postId: String, procedure: String) {
+        logEvent(.postViewed, parameters: [
+            "post_id": postId,
+            "procedure": procedure
+        ])
     }
 }
 
