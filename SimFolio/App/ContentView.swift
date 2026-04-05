@@ -211,6 +211,13 @@ struct ContentView: View {
                 .navigationViewStyle(StackNavigationViewStyle())
                 .transition(.opacity)
 
+            case .feed:
+                NavigationView {
+                    SocialFeedView()
+                }
+                .navigationViewStyle(.stack)
+                .transition(.opacity)
+
             case .profile:
                 NavigationView {
                     ProfileView()
@@ -239,6 +246,8 @@ struct ContentView: View {
             case .library:
                 AnalyticsService.logScreenView("Library", screenClass: "LibraryView")
                 AnalyticsService.logEvent(.libraryOpened)
+            case .feed:
+                AnalyticsService.logScreenView("Social Feed", screenClass: "SocialFeedView")
             case .profile:
                 AnalyticsService.logScreenView("Profile", screenClass: "ProfileView")
             }
@@ -318,6 +327,9 @@ struct ContentView: View {
                 NotificationSettingsView()
             }
             .presentationDetents([.medium, .large])
+
+        case .signIn:
+            SignInView()
         }
     }
 

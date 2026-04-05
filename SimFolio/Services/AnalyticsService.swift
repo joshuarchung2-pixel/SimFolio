@@ -66,10 +66,9 @@ enum AnalyticsEvent: String {
     case appTourCompleted = "app_tour_completed"
     case appTourSkipped = "app_tour_skipped"
 
-    // Social
-    case commentAdded = "comment_added"
-    case commentDeleted = "comment_deleted"
-    case reactionAdded = "reaction_added"
+    // Social Feed
+    case feedViewed = "feed_viewed"
+    case socialOptIn = "social_opt_in"
 
     // Errors
     case errorOccurred = "error_occurred"

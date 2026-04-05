@@ -20,7 +20,8 @@ enum MainTab: Int, CaseIterable, Identifiable {
     case home = 0
     case capture = 1
     case library = 2
-    case profile = 3
+    case feed = 3
+    case profile = 4
 
     var id: Int { rawValue }
 
@@ -30,6 +31,7 @@ enum MainTab: Int, CaseIterable, Identifiable {
         case .home: return "Home"
         case .capture: return "Capture"
         case .library: return "Library"
+        case .feed: return "Feed"
         case .profile: return "Profile"
         }
     }
@@ -40,6 +42,7 @@ enum MainTab: Int, CaseIterable, Identifiable {
         case .home: return "house"
         case .capture: return "camera"
         case .library: return "photo.on.rectangle"
+        case .feed: return "bubble.left.and.text.bubble.right"
         case .profile: return "person"
         }
     }
@@ -50,13 +53,17 @@ enum MainTab: Int, CaseIterable, Identifiable {
         case .home: return "house.fill"
         case .capture: return "camera.fill"
         case .library: return "photo.on.rectangle.fill"
+        case .feed: return "bubble.left.and.text.bubble.right.fill"
         case .profile: return "person.fill"
         }
     }
 
     /// Accessibility hint when not selected
     var accessibilityHint: String {
-        "Double tap to switch to \(title)"
+        switch self {
+        case .feed: return "View your class feed"
+        default: return "Double tap to switch to \(title)"
+        }
     }
 }
 
@@ -342,6 +349,7 @@ class NavigationRouter: ObservableObject {
         case portfolioList
         case shareSheet(photoIds: [String])
         case notificationSettings
+        case signIn
 
         var id: String {
             switch self {
@@ -351,6 +359,7 @@ class NavigationRouter: ObservableObject {
             case .portfolioList: return "portfolioList"
             case .shareSheet(let ids): return "shareSheet-\(ids.joined())"
             case .notificationSettings: return "notificationSettings"
+            case .signIn: return "signIn"
             }
         }
     }
