@@ -12,7 +12,6 @@
 //
 // Contents (Part 2 - Progress & Feedback):
 // - DPProgressBar: Linear progress indicator with auto-coloring
-// - DPProgressRing: Circular progress indicator with label
 // - DPEmptyState: Empty state view with icon, title, message, action
 // - DPSectionHeader: List section header with optional action
 // - DPToast: Temporary feedback message with ToastManager
@@ -66,8 +65,10 @@ struct DPCard<Content: View>: View {
             .padding(padding)
             .background(backgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(.quaternary, lineWidth: 0.5))
-            .modifier(CardShadowModifier(style: shadowStyle))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
     }
 }
 
@@ -247,11 +248,7 @@ struct DPButton: View {
     }
 
     private var cornerRadius: CGFloat {
-        switch size {
-        case .small: return AppTheme.CornerRadius.small
-        case .medium: return AppTheme.CornerRadius.small
-        case .large: return AppTheme.CornerRadius.medium
-        }
+        return AppTheme.CornerRadius.medium
     }
 
     private var backgroundColor: Color {
@@ -263,7 +260,7 @@ struct DPButton: View {
         case .tertiary:
             return .clear
         case .destructive:
-            return AppTheme.Colors.error
+            return Color(hex: "C44040")
         }
     }
 
@@ -371,7 +368,7 @@ struct DPTagPill: View {
         HStack(spacing: AppTheme.Spacing.xs) {
             Text(text)
                 .font(font)
-                .foregroundStyle(color)
+                .foregroundStyle(isSelected ? color : AppTheme.Colors.textSecondary)
 
             if showRemoveButton {
                 Button(action: {
@@ -379,18 +376,18 @@ struct DPTagPill: View {
                 }) {
                     Image(systemName: "xmark")
                         .font(.system(size: removeIconSize, weight: .semibold))
-                        .foregroundStyle(color)
+                        .foregroundStyle(isSelected ? color : AppTheme.Colors.textSecondary)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .background(color.opacity(0.15))
+        .background(isSelected ? color.opacity(0.12) : AppTheme.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
-                .strokeBorder(isSelected ? color : .clear, lineWidth: 1.5)
+                .strokeBorder(isSelected ? color : AppTheme.Colors.divider, lineWidth: 1)
         )
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isPressed)
@@ -405,7 +402,6 @@ struct DPTagPill: View {
                 }
             }
         }
-        // Accessibility
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tagAccessibilityLabel)
         .accessibilityHint(tagAccessibilityHint)
@@ -513,7 +509,6 @@ struct DPIconButton: View {
                 .frame(width: size, height: size)
                 .background(backgroundColor)
                 .clipShape(Circle())
-                .modifier(CardShadowModifier(style: shadowStyle))
         }
         .buttonStyle(DPIconButtonStyle(isPressed: $isPressed))
         .scaleEffect(isPressed ? 0.92 : 1.0)
@@ -560,8 +555,8 @@ struct DPProgressBar: View {
     ///   - animate: Animate progress changes
     init(
         progress: Double,
-        height: CGFloat = 8,
-        backgroundColor: Color = AppTheme.Colors.surfaceSecondary,
+        height: CGFloat = 3,
+        backgroundColor: Color = AppTheme.Colors.divider,
         foregroundColor: Color? = nil,
         cornerRadius: CGFloat? = nil,
         showPercentageLabel: Bool = false,
@@ -613,10 +608,19 @@ struct DPProgressBar: View {
     }
 
     private var effectiveForegroundColor: Color {
-        if let color = foregroundColor {
-            return color
+        if let foregroundColor = foregroundColor {
+            return foregroundColor
         }
-        return Self.autoColor(for: progress)
+        switch progress {
+        case 0..<0.25:
+            return Color(hex: "C47070")
+        case 0.25..<0.50:
+            return Color(hex: "C49A5C")
+        case 0.50..<0.75:
+            return Color(hex: "C49A5C")
+        default:
+            return AppTheme.Colors.primary
+        }
     }
 
     /// Get auto-color based on progress level
@@ -624,135 +628,14 @@ struct DPProgressBar: View {
     /// - Returns: Color based on progress thresholds
     static func autoColor(for progress: Double) -> Color {
         switch progress {
-        case ..<0.25:
-            return AppTheme.Colors.error
-        case ..<0.50:
-            return Color(hex: "F97316") // Orange
-        case ..<0.75:
-            return AppTheme.Colors.warning
+        case 0..<0.25:
+            return Color(hex: "C47070")
+        case 0.25..<0.50:
+            return Color(hex: "C49A5C")
+        case 0.50..<0.75:
+            return Color(hex: "C49A5C")
         default:
-            return AppTheme.Colors.success
-        }
-    }
-}
-
-// MARK: - DPProgressRing
-
-/// Circular progress indicator with centered label
-struct DPProgressRing: View {
-    let progress: Double
-    var size: CGFloat
-    var lineWidth: CGFloat
-    var backgroundColor: Color
-    var foregroundColor: Color?
-    var showLabel: Bool
-    var labelStyle: LabelStyle
-
-    /// Label style options for the progress ring
-    enum LabelStyle {
-        /// Show percentage (e.g., "75%")
-        case percentage
-        /// Show fraction (e.g., "3/4")
-        case fraction(current: Int, total: Int)
-        /// Show custom text
-        case custom(String)
-    }
-
-    /// Create a circular progress ring
-    /// - Parameters:
-    ///   - progress: Progress value from 0.0 to 1.0
-    ///   - size: Diameter of the ring (default 60pt)
-    ///   - lineWidth: Width of the ring stroke (default 6pt)
-    ///   - backgroundColor: Background track color
-    ///   - foregroundColor: Progress color (nil = auto-color based on progress)
-    ///   - showLabel: Show label in center
-    ///   - labelStyle: Style of the label
-    init(
-        progress: Double,
-        size: CGFloat = 60,
-        lineWidth: CGFloat = 6,
-        backgroundColor: Color = AppTheme.Colors.surfaceSecondary,
-        foregroundColor: Color? = nil,
-        showLabel: Bool = true,
-        labelStyle: LabelStyle = .percentage
-    ) {
-        self.progress = min(max(progress, 0), 1)
-        self.size = size
-        self.lineWidth = lineWidth
-        self.backgroundColor = backgroundColor
-        self.foregroundColor = foregroundColor
-        self.showLabel = showLabel
-        self.labelStyle = labelStyle
-    }
-
-    var body: some View {
-        ZStack {
-            // Background circle
-            Circle()
-                .stroke(backgroundColor, lineWidth: lineWidth)
-
-            // Progress arc
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    effectiveForegroundColor,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.3), value: progress)
-
-            // Label
-            if showLabel {
-                Text(labelText)
-                    .font(labelFont)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(width: size, height: size)
-        // Accessibility
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ringAccessibilityLabel)
-        .accessibilityValue("\(Int(progress * 100)) percent")
-    }
-
-    // MARK: - Accessibility
-
-    private var ringAccessibilityLabel: String {
-        switch labelStyle {
-        case .percentage:
-            return "Progress"
-        case .fraction(_, let total):
-            return "Progress, \(total) total"
-        case .custom(let text):
-            return "\(text) progress"
-        }
-    }
-
-    private var effectiveForegroundColor: Color {
-        foregroundColor ?? DPProgressBar.autoColor(for: progress)
-    }
-
-    private var labelText: String {
-        switch labelStyle {
-        case .percentage:
-            return "\(Int(progress * 100))%"
-        case .fraction(let current, let total):
-            return "\(current)/\(total)"
-        case .custom(let text):
-            return text
-        }
-    }
-
-    private var labelFont: Font {
-        if size < 50 {
-            return AppTheme.Typography.caption2
-        } else if size < 80 {
-            return AppTheme.Typography.footnote
-        } else {
-            return AppTheme.Typography.subheadline
+            return AppTheme.Colors.primary
         }
     }
 }
@@ -791,12 +674,15 @@ struct DPEmptyState: View {
     var body: some View {
         VStack(spacing: AppTheme.Spacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 50, weight: .light))
+                .font(.system(size: 32, weight: .light))
                 .foregroundStyle(AppTheme.Colors.textTertiary)
+                .frame(width: 64, height: 64)
+                .background(AppTheme.Colors.accentLight)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
 
             VStack(spacing: AppTheme.Spacing.xs) {
                 Text(title)
-                    .font(AppTheme.Typography.headline)
+                    .font(.system(.title3, design: .serif).weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
@@ -849,8 +735,10 @@ struct DPSectionHeader: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 Text(title)
-                    .font(AppTheme.Typography.headline)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .font(AppTheme.Typography.sectionLabel)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .textCase(.uppercase)
+                    .tracking(0.8)
 
                 if let subtitle = subtitle {
                     Text(subtitle)
@@ -863,13 +751,9 @@ struct DPSectionHeader: View {
 
             if let actionTitle = actionTitle, let action = action {
                 Button(action: action) {
-                    HStack(spacing: AppTheme.Spacing.xxs) {
-                        Text(actionTitle)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundStyle(AppTheme.Colors.primary)
+                    Text(actionTitle)
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundStyle(AppTheme.Colors.primary)
                 }
             }
         }
@@ -946,8 +830,11 @@ struct DPToast: View {
         .padding(.vertical, AppTheme.Spacing.sm)
         .padding(.horizontal, AppTheme.Spacing.md)
         .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
-        .shadowMedium()
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+        )
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -1551,36 +1438,6 @@ struct Components_Previews: PreviewProvider {
                         DPProgressBar(progress: 0.85)
                         DPProgressBar(progress: 0.5, showPercentageLabel: true)
                         DPProgressBar(progress: 0.7, foregroundColor: AppTheme.Colors.primary)
-                    }
-                }
-
-                Divider()
-
-                // MARK: DPProgressRing Preview
-                Group {
-                    Text("DPProgressRing")
-                        .font(AppTheme.Typography.title3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    HStack(spacing: AppTheme.Spacing.lg) {
-                        DPProgressRing(progress: 0.25, size: 50)
-                        DPProgressRing(progress: 0.50, size: 60)
-                        DPProgressRing(progress: 0.75, size: 70)
-                        DPProgressRing(progress: 1.0, size: 80)
-                    }
-
-                    HStack(spacing: AppTheme.Spacing.lg) {
-                        DPProgressRing(
-                            progress: 0.75,
-                            size: 70,
-                            labelStyle: .fraction(current: 3, total: 4)
-                        )
-                        DPProgressRing(
-                            progress: 0.5,
-                            size: 70,
-                            foregroundColor: AppTheme.Colors.primary,
-                            labelStyle: .custom("50")
-                        )
                     }
                 }
 
