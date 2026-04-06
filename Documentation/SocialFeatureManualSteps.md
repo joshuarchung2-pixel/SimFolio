@@ -8,23 +8,23 @@ These steps cannot be automated and require human action in external systems. Co
 
 ## Firebase Console (https://console.firebase.google.com)
 
-- [ ] **1. Enable Authentication Providers**
+- [x] **1. Enable Authentication Providers** *(done 2026-04-04)*
   - Go to Authentication > Sign-in method
   - Enable **Sign in with Apple**
     - Requires Apple Developer configuration first (see step 6)
   - Enable **Email/Password**
 
-- [ ] **2. Deploy Firestore Security Rules**
+- [x] **2. Deploy Firestore Security Rules** *(done 2026-04-04)*
   - Go to Firestore Database > Rules
   - Copy contents of `Config/firestore.rules` and paste into the editor
   - Click "Publish"
 
-- [ ] **3. Deploy Storage Security Rules**
+- [x] **3. Deploy Storage Security Rules** *(done 2026-04-05)*
   - Go to Storage > Rules
   - Copy contents of `Config/storage.rules` and paste into the editor
   - Click "Publish"
 
-- [ ] **4. Create Firestore Indexes**
+- [x] **4. Create Firestore Indexes** *(done 2026-04-05)*
   - Go to Firestore Database > Indexes > Composite
   - Create index #1:
     - Collection: `posts`
@@ -36,7 +36,7 @@ These steps cannot be automated and require human action in external systems. Co
     - Query scope: Collection
   - Wait for indexes to finish building (can take a few minutes)
 
-- [ ] **5. Set Up Report Alerts**
+- [ ] **5. Set Up Report Alerts** *(TODO — skipped for now, set up email alerts before App Store submission)*
   - Option A: Use Firebase Extensions > "Send Email" triggered on new docs in `reports` collection
   - Option B: Manually check the `reports` collection in Firebase Console daily
   - Goal: Be notified within 24 hours when content is reported (App Store compliance)
@@ -45,7 +45,7 @@ These steps cannot be automated and require human action in external systems. Co
 
 ## Apple Developer Portal (https://developer.apple.com)
 
-- [ ] **6. Configure Sign in with Apple**
+- [x] **6. Configure Sign in with Apple** *(done 2026-04-05)*
   - Go to Certificates, Identifiers & Profiles > Identifiers
   - Select your App ID (`com.joshuachung.simfolio`)
   - Enable "Sign in with Apple" capability
@@ -58,7 +58,7 @@ These steps cannot be automated and require human action in external systems. Co
       - Add return URL: `https://simfolio-XXXXX.firebaseapp.com/__/auth/handler`
       - (Replace XXXXX with your actual Firebase project ID)
 
-- [ ] **7. Update Provisioning Profile**
+- [x] **7. Update Provisioning Profile** *(skipped — using automatic signing)*
   - Regenerate provisioning profiles after enabling the capability
   - Download and install the updated profile in Xcode
 
@@ -66,13 +66,13 @@ These steps cannot be automated and require human action in external systems. Co
 
 ## Xcode
 
-- [ ] **8. Add Sign in with Apple Capability**
+- [x] **8. Add Sign in with Apple Capability** *(done 2026-04-05)*
   - Open SimFolio.xcodeproj
   - Select the SimFolio target > Signing & Capabilities
   - Click "+ Capability" > search "Sign in with Apple" > add it
   - This adds the entitlement to your app
 
-- [ ] **9. Build the Project**
+- [x] **9. Build the Project** *(done 2026-04-05 — fixed missing Combine imports, DPButton/DPTagPill label mismatches, redundant Identifiable conformance)*
   - Clean build folder (Cmd+Shift+K)
   - Build (Cmd+B)
   - All SourceKit "Cannot find" errors should resolve after the first successful build
@@ -83,13 +83,13 @@ These steps cannot be automated and require human action in external systems. Co
 
 ## App Store Connect (https://appstoreconnect.apple.com)
 
-- [ ] **10. Update Age Rating Questionnaire**
+- [x] **10. Update Age Rating Questionnaire** *(done 2026-04-05 — UGC marked Yes)*
   - Go to your app > App Information > Age Rating
   - Answer **"Yes"** to: "Does your app contain user-generated content?"
   - Review all other questions — answers may need updating
   - Save — age rating will likely increase to 12+ or higher
 
-- [ ] **11. Update App Privacy Labels**
+- [x] **11. Update App Privacy Labels** *(done 2026-04-05)*
   - Go to your app > App Privacy
   - Add new data types collected:
     - **Contact Info > Email Address** — linked to identity, App Functionality, not tracking

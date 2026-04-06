@@ -4,6 +4,7 @@
 // Handles user reporting of posts/comments and user blocking via Firestore.
 
 import Foundation
+import Combine
 import FirebaseFirestore
 import FirebaseAuth
 
@@ -36,7 +37,7 @@ class ModerationService: ObservableObject {
 
         // Increment report count on the post and auto-hide if >= 3
         let postRef = db.collection("posts").document(postId)
-        try await db.runTransaction { transaction, errorPointer in
+        _ = try await db.runTransaction { transaction, errorPointer in
             let postDoc: DocumentSnapshot
             do {
                 postDoc = try transaction.getDocument(postRef)

@@ -74,12 +74,12 @@ struct SharePhotoSheet: View {
                     if let procedure = metadata.procedure {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: AppTheme.Spacing.sm) {
-                                DPTagPill(text: procedure, color: AppTheme.procedureColor(for: procedure))
+                                DPTagPill( procedure, color: AppTheme.procedureColor(for: procedure))
                                 if let stage = metadata.stage {
-                                    DPTagPill(text: stage, color: AppTheme.Colors.secondary)
+                                    DPTagPill( stage, color: AppTheme.Colors.secondary)
                                 }
                                 if let angle = metadata.angle {
-                                    DPTagPill(text: angle, color: AppTheme.Colors.secondary)
+                                    DPTagPill( angle, color: AppTheme.Colors.secondary)
                                 }
                             }
                             .padding(.horizontal, AppTheme.Spacing.md)
@@ -88,7 +88,7 @@ struct SharePhotoSheet: View {
 
                     // Share button
                     DPButton(
-                        title: "Share to Class Feed",
+                        "Share to Class Feed",
                         style: .primary,
                         size: .large,
                         isFullWidth: true,
@@ -99,7 +99,7 @@ struct SharePhotoSheet: View {
                     }
                     .padding(.horizontal, AppTheme.Spacing.md)
 
-                    DPButton(title: "Cancel", style: .secondary, size: .large, isFullWidth: true) {
+                    DPButton("Cancel", style: .secondary, size: .large, isFullWidth: true) {
                         dismiss()
                     }
                     .padding(.horizontal, AppTheme.Spacing.md)

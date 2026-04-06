@@ -25,7 +25,7 @@ struct BlockConfirmationView: View {
 
             VStack(spacing: AppTheme.Spacing.sm) {
                 DPButton(
-                    title: "Block",
+                    "Block",
                     style: .destructive,
                     size: .large,
                     isFullWidth: true,
@@ -41,7 +41,7 @@ struct BlockConfirmationView: View {
                 }
 
                 DPButton(
-                    title: "Cancel",
+                    "Cancel",
                     style: .secondary,
                     size: .large,
                     isFullWidth: true

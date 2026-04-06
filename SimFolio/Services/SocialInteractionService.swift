@@ -6,6 +6,7 @@
 // All writes that mutate post-level counters run inside Firestore transactions.
 
 import Foundation
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -47,7 +48,7 @@ class SocialInteractionService: ObservableObject {
 
         // Write comment and increment count atomically
         let postRef = db.collection("posts").document(postId)
-        try await db.runTransaction { transaction, errorPointer in
+        _ = try await db.runTransaction { transaction, errorPointer in
             transaction.setData(commentData, forDocument: commentRef)
             transaction.updateData(["commentCount": FieldValue.increment(Int64(1))], forDocument: postRef)
             return nil
@@ -71,7 +72,7 @@ class SocialInteractionService: ObservableObject {
         let postRef = db.collection("posts").document(postId)
         let commentRef = postRef.collection("comments").document(commentId)
 
-        try await db.runTransaction { transaction, errorPointer in
+        _ = try await db.runTransaction { transaction, errorPointer in
             transaction.deleteDocument(commentRef)
             transaction.updateData(["commentCount": FieldValue.increment(Int64(-1))], forDocument: postRef)
             return nil
@@ -107,7 +108,7 @@ class SocialInteractionService: ObservableObject {
         let postRef = db.collection("posts").document(postId)
         let reactionRef = postRef.collection("reactions").document(userId)
 
-        try await db.runTransaction { transaction, errorPointer in
+        _ = try await db.runTransaction { transaction, errorPointer in
             let reactionDoc: DocumentSnapshot
             do {
                 reactionDoc = try transaction.getDocument(reactionRef)

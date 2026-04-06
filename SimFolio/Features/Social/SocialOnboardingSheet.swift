@@ -68,7 +68,7 @@ struct SocialOnboardingSheet: View {
 
                     // Get Started button
                     DPButton(
-                        title: "Get Started",
+                        "Get Started",
                         style: .primary,
                         size: .large,
                         isFullWidth: true,

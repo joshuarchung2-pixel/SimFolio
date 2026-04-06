@@ -88,7 +88,7 @@ struct SignInView: View {
                             .textContentType(isSignUp ? .newPassword : .password)
 
                         DPButton(
-                            title: isSignUp ? "Create Account" : "Sign In",
+                            isSignUp ? "Create Account" : "Sign In",
                             style: .primary,
                             size: .large,
                             isFullWidth: true,

@@ -112,17 +112,17 @@ struct PostDetailView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: AppTheme.Spacing.sm) {
                             DPTagPill(
-                                text: post.procedure,
+                                post.procedure,
                                 color: AppTheme.procedureColor(for: post.procedure)
                             )
                             if let stage = post.stage {
-                                DPTagPill(text: stage, color: AppTheme.Colors.secondary)
+                                DPTagPill( stage, color: AppTheme.Colors.secondary)
                             }
                             if let angle = post.angle {
-                                DPTagPill(text: angle, color: AppTheme.Colors.secondary)
+                                DPTagPill( angle, color: AppTheme.Colors.secondary)
                             }
                             if let tooth = post.toothNumber {
-                                DPTagPill(text: "#\(tooth)", color: AppTheme.Colors.secondary)
+                                DPTagPill( "#\(tooth)", color: AppTheme.Colors.secondary)
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.md)

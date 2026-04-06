@@ -59,7 +59,7 @@ struct SocialFeedView: View {
                 .font(AppTheme.Typography.body)
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-            DPButton(title: "Sign In", style: .primary, size: .large) {
+            DPButton( "Sign In", style: .primary, size: .large) {
                 showSignIn = true
             }
             .frame(width: 200)
@@ -83,7 +83,7 @@ struct SocialFeedView: View {
                 .font(AppTheme.Typography.body)
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-            DPButton(title: "Get Started", style: .primary, size: .large) {
+            DPButton( "Get Started", style: .primary, size: .large) {
                 showSocialOnboarding = true
             }
             .frame(width: 200)

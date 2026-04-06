@@ -52,7 +52,7 @@ struct ReportSheet: View {
                 // Submit button
                 VStack {
                     DPButton(
-                        title: "Submit Report",
+                        "Submit Report",
                         style: .destructive,
                         size: .large,
                         isFullWidth: true,

@@ -123,6 +123,3 @@ struct CommentListView: View {
         } catch {}
     }
 }
-
-// Make Comment work with .sheet(item:)
-extension Comment: @retroactive Identifiable {}

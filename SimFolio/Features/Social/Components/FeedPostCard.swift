@@ -33,7 +33,7 @@ struct FeedPostCard: View {
 
                         // Procedure tag
                         DPTagPill(
-                            text: post.procedure,
+                            post.procedure,
                             color: AppTheme.procedureColor(for: post.procedure)
                         )
                     }
