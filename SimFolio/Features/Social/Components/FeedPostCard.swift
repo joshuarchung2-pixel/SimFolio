@@ -6,109 +6,111 @@ struct FeedPostCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            DPCard {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    // Author row
-                    HStack {
-                        // Author avatar circle with initial
-                        Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.15))
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Text(String(post.authorName.prefix(1)).uppercased())
-                                    .font(AppTheme.Typography.headline)
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(post.authorName)
-                                .font(AppTheme.Typography.subheadline)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                            Text(post.displayDate)
-                                .font(AppTheme.Typography.caption)
-                                .foregroundColor(AppTheme.Colors.textTertiary)
-                        }
-
-                        Spacer()
-
-                        // Procedure tag
-                        DPTagPill(
-                            post.procedure,
-                            color: AppTheme.procedureColor(for: post.procedure)
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                // Author row
+                HStack {
+                    // Author avatar circle with initial
+                    Circle()
+                        .fill(AppTheme.procedureBackgroundColor(for: post.procedure))
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            Text(String(post.authorName.prefix(1)).uppercased())
+                                .font(AppTheme.Typography.headline)
+                                .foregroundStyle(AppTheme.procedureColor(for: post.procedure))
                         )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(post.authorName)
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Text(post.displayDate)
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
                     }
 
-                    // Thumbnail
-                    AsyncImage(url: URL(string: post.thumbnailURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(maxHeight: 250)
-                                .clipped()
-                                .cornerRadius(AppTheme.CornerRadius.small)
-                        case .failure:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surfaceSecondary)
-                                .frame(height: 200)
-                                .cornerRadius(AppTheme.CornerRadius.small)
-                                .overlay(
-                                    Image(systemName: "photo")
-                                        .foregroundColor(AppTheme.Colors.textTertiary)
-                                )
-                        default:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surfaceSecondary)
-                                .frame(height: 200)
-                                .cornerRadius(AppTheme.CornerRadius.small)
-                                .overlay(ProgressView())
-                        }
-                    }
+                    Spacer()
 
-                    // Caption
-                    if let caption = post.caption, !caption.isEmpty {
-                        Text(caption)
-                            .font(AppTheme.Typography.body)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(2)
-                    }
+                    // Procedure badge top-right
+                    Text(post.procedure)
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppTheme.procedureColor(for: post.procedure))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(AppTheme.procedureBackgroundColor(for: post.procedure))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(AppTheme.procedureBorderColor(for: post.procedure), lineWidth: 1)
+                        )
+                }
 
-                    // Bottom bar: reactions + comments
-                    HStack {
-                        // Reaction summary
-                        if post.totalReactions > 0 {
-                            HStack(spacing: 4) {
-                                // Show top 3 reaction emojis
-                                let topReactions = post.reactionCounts
-                                    .filter { $0.value > 0 }
-                                    .sorted { $0.value > $1.value }
-                                    .prefix(3)
-                                ForEach(Array(topReactions), id: \.key) { emoji, _ in
-                                    Text(emoji)
-                                        .font(.caption)
-                                }
-                                Text("\(post.totalReactions)")
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Comment count
-                        if post.commentCount > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "bubble.right")
-                                    .font(.caption)
-                                Text("\(post.commentCount)")
-                                    .font(AppTheme.Typography.caption)
-                            }
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
+                // Thumbnail
+                AsyncImage(url: URL(string: post.thumbnailURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxHeight: 250)
+                            .clipped()
+                            .cornerRadius(AppTheme.CornerRadius.small)
+                    case .failure:
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .frame(height: 200)
+                            .cornerRadius(AppTheme.CornerRadius.small)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                            )
+                    default:
+                        Rectangle()
+                            .fill(AppTheme.Colors.surfaceSecondary)
+                            .frame(height: 200)
+                            .cornerRadius(AppTheme.CornerRadius.small)
+                            .overlay(ProgressView())
                     }
                 }
+
+                // Caption
+                if let caption = post.caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Bottom bar: heart + comment count only
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
+                        Text("\(post.totalReactions)")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.right")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
+                        Text("\(post.commentCount)")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+
+                    Spacer()
+                }
             }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }

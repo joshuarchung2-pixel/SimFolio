@@ -53,17 +53,22 @@ struct SocialFeedView: View {
     private var signedOutView: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Spacer()
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 64))
-                .foregroundColor(AppTheme.Colors.primary.opacity(0.6))
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.Colors.accentLight)
+                    .frame(width: 64, height: 64)
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(AppTheme.Colors.primary)
+            }
             Text("Sign in to see your class feed")
-                .font(AppTheme.Typography.title2)
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(.title3, design: .serif).weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
             Text("Share simulation photos and connect with classmates")
                 .font(AppTheme.Typography.body)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-            DPButton( "Sign In", style: .primary, size: .large) {
+            DPButton("Sign In", style: .primary, size: .large) {
                 showSignIn = true
             }
             .frame(width: 200)
@@ -77,17 +82,22 @@ struct SocialFeedView: View {
     private var optInPromptView: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Spacer()
-            Image(systemName: "bubble.left.and.text.bubble.right.fill")
-                .font(.system(size: 64))
-                .foregroundColor(AppTheme.Colors.primary.opacity(0.6))
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.Colors.accentLight)
+                    .frame(width: 64, height: 64)
+                Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(AppTheme.Colors.primary)
+            }
             Text("Join the Class Feed")
-                .font(AppTheme.Typography.title2)
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(.title3, design: .serif).weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
             Text("Share your simulation work and see what your classmates are working on")
                 .font(AppTheme.Typography.body)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-            DPButton( "Get Started", style: .primary, size: .large) {
+            DPButton("Get Started", style: .primary, size: .large) {
                 showSocialOnboarding = true
             }
             .frame(width: 200)
@@ -101,6 +111,16 @@ struct SocialFeedView: View {
     private var feedContentView: some View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.md) {
+                // Serif heading
+                HStack {
+                    Text("Feed")
+                        .font(.system(.title2, design: .serif).weight(.bold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.top, AppTheme.Spacing.sm)
+
                 // New posts banner
                 if showNewPostsBanner {
                     Button {
@@ -111,14 +131,19 @@ struct SocialFeedView: View {
                             Image(systemName: "arrow.up")
                             Text("New posts available")
                         }
-                        .font(AppTheme.Typography.subheadline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, AppTheme.Spacing.md)
-                        .padding(.vertical, AppTheme.Spacing.sm)
-                        .background(AppTheme.Colors.primary)
-                        .cornerRadius(AppTheme.CornerRadius.full)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .background(AppTheme.Colors.accentLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(AppTheme.Colors.primary.opacity(0.2), lineWidth: 1)
+                        )
                     }
-                    .padding(.top, AppTheme.Spacing.sm)
+                    .padding(.horizontal, AppTheme.Spacing.md)
                 }
 
                 // Filter chips
@@ -182,13 +207,27 @@ struct SocialFeedView: View {
 
     private func filterChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.xs)
-                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surfaceSecondary)
-                .cornerRadius(AppTheme.CornerRadius.full)
+            if isSelected {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(AppTheme.Colors.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+                    )
+            }
         }
     }
 
