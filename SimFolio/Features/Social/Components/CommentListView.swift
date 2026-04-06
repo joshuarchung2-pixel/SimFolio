@@ -4,6 +4,7 @@ import FirebaseAuth
 
 struct CommentListView: View {
     let postId: String
+    @Binding var newComment: Comment?
 
     @ObservedObject private var interactionService = SocialInteractionService.shared
     @ObservedObject private var moderationService = ModerationService.shared
@@ -45,6 +46,12 @@ struct CommentListView: View {
         }
         .task {
             await loadComments()
+        }
+        .onChange(of: newComment) { comment in
+            if let comment = comment {
+                comments.append(comment)
+                newComment = nil
+            }
         }
         .sheet(item: $showReport) { comment in
             ReportSheet(

@@ -24,6 +24,8 @@ struct SocialFeedView: View {
         Group {
             if authService.authState == .signedOut {
                 signedOutView
+            } else if profileService.isLoading || profileService.userProfile == nil {
+                ProgressView()
             } else if profileService.userProfile?.socialOptIn != true {
                 optInPromptView
             } else {
@@ -37,7 +39,9 @@ struct SocialFeedView: View {
         .sheet(isPresented: $showSocialOnboarding) {
             SocialOnboardingSheet()
         }
-        .sheet(item: $selectedPost) { post in
+        .sheet(item: $selectedPost, onDismiss: {
+            Task { await loadFeed(refresh: true) }
+        }) { post in
             NavigationView {
                 PostDetailView(post: post)
             }

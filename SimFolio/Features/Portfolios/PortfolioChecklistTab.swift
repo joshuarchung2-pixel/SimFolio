@@ -266,15 +266,6 @@ struct RequirementChecklistCard: View {
 
                 Spacer()
 
-                // Progress ring
-                DPProgressRing(
-                    progress: progress,
-                    size: 36,
-                    lineWidth: 4,
-                    foregroundColor: isComplete ? AppTheme.Colors.success : nil,
-                    showLabel: false
-                )
-
                 // Fraction text
                 Text("\(stats.fulfilled)/\(stats.total)")
                     .font(AppTheme.Typography.subheadline)

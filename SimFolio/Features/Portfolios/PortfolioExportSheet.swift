@@ -231,33 +231,25 @@ struct PortfolioExportSheet: View {
 
     var summaryCard: some View {
         DPCard {
-            HStack(spacing: AppTheme.Spacing.md) {
-                // Progress ring
-                DPProgressRing(
-                    progress: progress,
-                    size: 60,
-                    lineWidth: 6,
-                    showLabel: true,
-                    labelStyle: .percentage
-                )
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                Text(portfolio.name)
+                    .font(AppTheme.Typography.headline)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                    Text(portfolio.name)
-                        .font(AppTheme.Typography.headline)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("\(photoCount) photo\(photoCount == 1 ? "" : "s") to export")
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
 
-                    Text("\(photoCount) photo\(photoCount == 1 ? "" : "s") to export")
-                        .font(AppTheme.Typography.subheadline)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                    if photoCount == 0 {
-                        Text("No photos match this portfolio's requirements")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(AppTheme.Colors.warning)
-                    }
+                if photoCount == 0 {
+                    Text("No photos match this portfolio's requirements")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.warning)
                 }
 
-                Spacer()
+                DPProgressBar(progress: progress)
+                Text("\(Int(progress * 100))%")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)

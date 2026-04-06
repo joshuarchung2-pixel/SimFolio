@@ -13,6 +13,7 @@ struct PostDetailView: View {
     @State private var showReport = false
     @State private var showBlock = false
     @State private var showDeleteConfirmation = false
+    @State private var newComment: Comment?
 
     private var isOwnPost: Bool {
         post.userId == Auth.auth().currentUser?.uid
@@ -145,7 +146,7 @@ struct PostDetailView: View {
                         .padding(.horizontal, AppTheme.Spacing.md)
 
                     // Comments
-                    CommentListView(postId: post.id ?? "")
+                    CommentListView(postId: post.id ?? "", newComment: $newComment)
                         .padding(.horizontal, AppTheme.Spacing.md)
 
                     // Spacer for input bar
@@ -154,7 +155,8 @@ struct PostDetailView: View {
             }
 
             // Comment input
-            CommentInputBar(postId: post.id ?? "") { newComment in
+            CommentInputBar(postId: post.id ?? "") { comment in
+                newComment = comment
                 currentCommentCount += 1
             }
         }

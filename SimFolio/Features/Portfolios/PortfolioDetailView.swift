@@ -316,15 +316,17 @@ struct PortfolioOverviewTab: View {
     var progressCard: some View {
         DPCard(padding: AppTheme.Spacing.lg) {
             VStack(spacing: AppTheme.Spacing.lg) {
-                // Large progress ring
-                DPProgressRing(
-                    progress: progress,
-                    size: 120,
-                    lineWidth: 10,
-                    foregroundColor: isComplete ? AppTheme.Colors.success : nil,
-                    showLabel: true,
-                    labelStyle: .percentage
-                )
+                // Progress bar with percentage
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    HStack {
+                        Text("\(Int(progress * 100))% Complete")
+                            .font(AppTheme.Typography.headline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(isComplete ? AppTheme.Colors.success : AppTheme.Colors.textPrimary)
+                        Spacer()
+                    }
+                    DPProgressBar(progress: progress)
+                }
 
                 // Stats row
                 HStack(spacing: AppTheme.Spacing.xl) {
@@ -564,15 +566,6 @@ struct RequirementSummaryRow: View {
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
             Spacer()
-
-            // Progress ring (small)
-            DPProgressRing(
-                progress: progress,
-                size: 32,
-                lineWidth: 3,
-                foregroundColor: isComplete ? AppTheme.Colors.success : nil,
-                showLabel: false
-            )
 
             // Fraction text
             Text("\(stats.fulfilled)/\(stats.total)")

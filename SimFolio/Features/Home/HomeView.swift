@@ -1119,28 +1119,20 @@ struct FullPortfolioCard: View {
             router.navigateToPortfolio(id: portfolio.id)
         }) {
             VStack(spacing: AppTheme.Spacing.md) {
-                // Progress ring on left, stats on right
+                // Progress bar on top, stats below
                 HStack {
-                    // Progress ring with custom label
-                    ZStack {
-                        DPProgressRing(
-                            progress: progress,
-                            size: 100,
-                            lineWidth: 8,
-                            foregroundColor: isComplete ? AppTheme.Colors.success : nil,
-                            showLabel: false
-                        )
-
-                        // Custom two-line label
-                        VStack(spacing: 2) {
+                    // Progress bar with percentage label
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                        HStack(alignment: .firstTextBaseline) {
                             Text("\(Int(progress * 100))%")
                                 .font(AppTheme.Typography.title2)
                                 .fontWeight(.bold)
-                                .foregroundStyle(AppTheme.Colors.textPrimary)
+                                .foregroundStyle(isComplete ? AppTheme.Colors.success : AppTheme.Colors.textPrimary)
                             Text("complete")
                                 .font(AppTheme.Typography.caption)
                                 .foregroundStyle(AppTheme.Colors.textPrimary)
                         }
+                        DPProgressBar(progress: progress)
                     }
 
                     Spacer()
@@ -1403,21 +1395,11 @@ struct ExpandableRequirementRow: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // Progress ring with count inside
-                ZStack {
-                    DPProgressRing(
-                        progress: progress,
-                        size: 40,
-                        lineWidth: 4,
-                        foregroundColor: isComplete ? AppTheme.Colors.success : nil,
-                        showLabel: false
-                    )
-
-                    // Count inside the ring
-                    Text("\(stats.fulfilled)/\(stats.total)")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(isComplete ? AppTheme.Colors.success : AppTheme.Colors.textSecondary)
-                }
+                // Progress fraction
+                Text("\(stats.fulfilled)/\(stats.total)")
+                    .font(AppTheme.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(isComplete ? AppTheme.Colors.success : AppTheme.Colors.textSecondary)
 
                 // Quick capture camera button
                 Button(action: {
