@@ -24,15 +24,18 @@ struct SocialFeedView: View {
         Group {
             if authService.authState == .signedOut {
                 signedOutView
-            } else if profileService.isLoading || profileService.userProfile == nil {
+            } else if profileService.isLoading {
                 ProgressView()
+            } else if profileService.userProfile == nil {
+                signedOutView
             } else if profileService.userProfile?.socialOptIn != true {
                 optInPromptView
             } else {
                 feedContentView
             }
         }
-        .navigationTitle("Class Feed")
+        .navigationTitle("Feed")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showSignIn) {
             SignInView()
         }
@@ -111,16 +114,6 @@ struct SocialFeedView: View {
     private var feedContentView: some View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.md) {
-                // Serif heading
-                HStack {
-                    Text("Feed")
-                        .font(.system(.title2, design: .serif).weight(.bold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                    Spacer()
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.top, AppTheme.Spacing.sm)
-
                 // New posts banner
                 if showNewPostsBanner {
                     Button {
