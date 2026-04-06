@@ -626,14 +626,13 @@ struct RequirementEditorSheet: View {
                     Button("Cancel") {
                         isPresented = false
                     }
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(existingRequirement != nil ? "Save" : "Add") {
+                    DPButton(existingRequirement != nil ? "Save" : "Add", style: .primary, size: .small, isDisabled: !isValid) {
                         saveRequirement()
                     }
-                    .fontWeight(.semibold)
-                    .disabled(!isValid)
                 }
             }
             .onAppear {
@@ -666,9 +665,10 @@ struct RequirementEditorSheet: View {
 
     var procedureSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            Text("Procedure")
-                .font(AppTheme.Typography.headline)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
+            Text("PROCEDURE")
+                .font(AppTheme.Typography.sectionLabel)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .tracking(0.8)
 
             PortfolioFlowLayout(spacing: AppTheme.Spacing.sm) {
                 ForEach(availableProcedures, id: \.self) { procedure in
@@ -712,9 +712,10 @@ struct RequirementEditorSheet: View {
     var stagesSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             HStack {
-                Text("Stages")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("STAGES")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .tracking(0.8)
 
                 Spacer()
 
@@ -733,7 +734,7 @@ struct RequirementEditorSheet: View {
                 }
             }
 
-            HStack(spacing: AppTheme.Spacing.sm) {
+            PortfolioFlowLayout(spacing: AppTheme.Spacing.sm) {
                 ForEach(availableStages, id: \.self) { stage in
                     StageChip(
                         stage: stage,
@@ -761,8 +762,12 @@ struct RequirementEditorSheet: View {
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .padding(.horizontal, AppTheme.Spacing.sm)
                     .padding(.vertical, AppTheme.Spacing.xs)
-                    .background(AppTheme.Colors.surfaceSecondary)
-                    .cornerRadius(AppTheme.CornerRadius.full)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+                    )
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -775,9 +780,10 @@ struct RequirementEditorSheet: View {
     var anglesSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             HStack {
-                Text("Angles")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("ANGLES")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .tracking(0.8)
 
                 Spacer()
 
@@ -821,55 +827,60 @@ struct RequirementEditorSheet: View {
 
     var photosPerAngleSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            Text("Photos Per Angle")
-                .font(AppTheme.Typography.headline)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
+            Text("PHOTOS PER ANGLE")
+                .font(AppTheme.Typography.sectionLabel)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .tracking(0.8)
 
-            DPCard(padding: AppTheme.Spacing.md) {
-                HStack {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                        Text("Required photos")
-                            .font(AppTheme.Typography.subheadline)
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Required photos")
+                        .font(AppTheme.Typography.headline)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Per stage/angle combination")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
 
-                        Text("Per stage/angle combination")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    }
+                Spacer()
 
-                    Spacer()
-
-                    HStack(spacing: AppTheme.Spacing.md) {
-                        Button(action: {
-                            if photosPerAngle > 1 {
-                                photosPerAngle -= 1
-                            }
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(photosPerAngle > 1 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                HStack(spacing: AppTheme.Spacing.md) {
+                    Button(action: {
+                        if photosPerAngle > 1 {
+                            photosPerAngle -= 1
                         }
-                        .disabled(photosPerAngle <= 1)
-
-                        Text("\(photosPerAngle)")
-                            .font(AppTheme.Typography.title2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
-                            .frame(minWidth: 30)
-
-                        Button(action: {
-                            if photosPerAngle < 10 {
-                                photosPerAngle += 1
-                            }
-                        }) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(photosPerAngle < 10 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
-                        }
-                        .disabled(photosPerAngle >= 10)
+                    }) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(photosPerAngle > 1 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
                     }
+                    .disabled(photosPerAngle <= 1)
+
+                    Text("\(photosPerAngle)")
+                        .font(AppTheme.Typography.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(minWidth: 30)
+
+                    Button(action: {
+                        if photosPerAngle < 10 {
+                            photosPerAngle += 1
+                        }
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(photosPerAngle < 10 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                    }
+                    .disabled(photosPerAngle >= 10)
                 }
             }
+            .padding(AppTheme.Spacing.md)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
         }
         .padding(.horizontal, AppTheme.Spacing.md)
     }
@@ -985,27 +996,22 @@ struct ProcedureChip: View {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Circle()
                     .fill(procedureColor)
-                    .frame(width: 12, height: 12)
+                    .frame(width: 8, height: 8)
 
                 Text(procedure)
                     .font(AppTheme.Typography.subheadline)
-                    .fontWeight(isSelected ? .semibold : .regular)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                }
+                    .fontWeight(.regular)
             }
-            .foregroundStyle(isSelected ? procedureColor : AppTheme.Colors.textPrimary)
+            .foregroundStyle(isSelected ? AppTheme.procedureColor(for: procedure) : AppTheme.Colors.textSecondary)
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(isSelected ? procedureColor.opacity(0.15) : AppTheme.Colors.surface)
+                Capsule()
+                    .fill(isSelected ? AppTheme.procedureBackgroundColor(for: procedure) : AppTheme.Colors.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .stroke(isSelected ? procedureColor : AppTheme.Colors.surfaceSecondary, lineWidth: 1.5)
+                Capsule()
+                    .strokeBorder(isSelected ? AppTheme.procedureBorderColor(for: procedure) : AppTheme.Colors.divider, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1036,24 +1042,18 @@ struct StageChip: View {
 
                 Text(stage)
                     .font(AppTheme.Typography.subheadline)
-                    .fontWeight(isSelected ? .semibold : .regular)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                }
+                    .fontWeight(.regular)
             }
-            .foregroundStyle(isSelected ? stageColor : AppTheme.Colors.textPrimary)
+            .foregroundStyle(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
-            .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(isSelected ? stageColor.opacity(0.15) : AppTheme.Colors.surface)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? AppTheme.Colors.accentLight : AppTheme.Colors.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .stroke(isSelected ? stageColor : AppTheme.Colors.surfaceSecondary, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1093,23 +1093,18 @@ struct AngleChip: View {
 
                 Text(angle)
                     .font(AppTheme.Typography.caption)
-                    .fontWeight(isSelected ? .semibold : .regular)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                }
+                    .fontWeight(.regular)
             }
-            .foregroundStyle(isSelected ? angleColor : AppTheme.Colors.textPrimary)
+            .foregroundStyle(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
             .padding(.horizontal, AppTheme.Spacing.sm)
             .padding(.vertical, AppTheme.Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(isSelected ? angleColor.opacity(0.15) : AppTheme.Colors.surface)
+                Capsule()
+                    .fill(isSelected ? AppTheme.Colors.accentLight : AppTheme.Colors.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .stroke(isSelected ? angleColor : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+                Capsule()
+                    .strokeBorder(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
