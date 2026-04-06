@@ -20,7 +20,9 @@ struct SocialSettingsView: View {
                         }
                     }
             } header: {
-                Text("Social Features")
+                Text("SOCIAL FEATURES")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .tracking(0.8)
             } footer: {
                 Text("When enabled, you can share photos and see your classmates' posts.")
             }
@@ -43,7 +45,9 @@ struct SocialSettingsView: View {
                     Task { try? await profileService.setCommentSetting(newValue) }
                 }
             } header: {
-                Text("Privacy")
+                Text("PRIVACY")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .tracking(0.8)
             }
 
             if !moderationService.blockedUserIds.isEmpty {
@@ -63,7 +67,9 @@ struct SocialSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Blocked Users")
+                    Text("BLOCKED USERS")
+                        .font(AppTheme.Typography.sectionLabel)
+                        .tracking(0.8)
                 }
             }
         }

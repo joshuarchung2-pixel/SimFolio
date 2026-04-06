@@ -137,8 +137,7 @@ struct ProfileView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(spacing: AppTheme.Spacing.lg) {
                     // Header + optional get-started card
                     VStack(spacing: AppTheme.Spacing.sm) {
@@ -166,59 +165,58 @@ struct ProfileView: View {
                 .padding(.horizontal, AppTheme.Spacing.md)
                 .padding(.top, AppTheme.Spacing.sm)
             }
-            .scrollContentBackground(.hidden)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showEditProfile) {
-                EditProfileSheet(isPresented: $showEditProfile)
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.Colors.background)
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileSheet(isPresented: $showEditProfile)
+        }
+        .sheet(isPresented: $showPortfolioList) {
+            PortfolioListSheet()
+        }
+        .sheet(isPresented: $showProcedureManagement) {
+            ProcedureManagementView(isPresented: $showProcedureManagement)
+        }
+        .sheet(isPresented: $showCaptureSettings) {
+            SettingsSheetWrapper(title: "Capture Settings", isPresented: $showCaptureSettings) {
+                CaptureSettingsView()
             }
-            .sheet(isPresented: $showPortfolioList) {
-                PortfolioListSheet()
+        }
+        .sheet(isPresented: $showNotificationSettings) {
+            SettingsSheetWrapper(title: "Notifications", isPresented: $showNotificationSettings) {
+                NotificationSettingsView()
             }
-            .sheet(isPresented: $showProcedureManagement) {
-                ProcedureManagementView(isPresented: $showProcedureManagement)
+        }
+        .sheet(isPresented: $showDataManagement) {
+            SettingsSheetWrapper(title: "Data Management", isPresented: $showDataManagement) {
+                DataManagementView()
             }
-            .sheet(isPresented: $showCaptureSettings) {
-                SettingsSheetWrapper(title: "Capture Settings", isPresented: $showCaptureSettings) {
-                    CaptureSettingsView()
-                }
+        }
+        .sheet(isPresented: $showAbout) {
+            SettingsSheetWrapper(title: "About", isPresented: $showAbout) {
+                AboutView()
             }
-            .sheet(isPresented: $showNotificationSettings) {
-                SettingsSheetWrapper(title: "Notifications", isPresented: $showNotificationSettings) {
-                    NotificationSettingsView()
-                }
+        }
+        .sheet(isPresented: $showAppearanceSettings) {
+            SettingsSheetWrapper(title: "Appearance", isPresented: $showAppearanceSettings) {
+                AppearanceSettingsView()
             }
-            .sheet(isPresented: $showDataManagement) {
-                SettingsSheetWrapper(title: "Data Management", isPresented: $showDataManagement) {
-                    DataManagementView()
-                }
+        }
+        .sheet(isPresented: $showSubscriptionSettings) {
+            SettingsSheetWrapper(title: "Subscription", isPresented: $showSubscriptionSettings) {
+                SubscriptionSettingsView()
             }
-            .sheet(isPresented: $showAbout) {
-                SettingsSheetWrapper(title: "About", isPresented: $showAbout) {
-                    AboutView()
-                }
+        }
+        .sheet(isPresented: $showSocialSettings) {
+            SettingsSheetWrapper(title: "Social Settings", isPresented: $showSocialSettings) {
+                SocialSettingsView()
             }
-            .sheet(isPresented: $showAppearanceSettings) {
-                SettingsSheetWrapper(title: "Appearance", isPresented: $showAppearanceSettings) {
-                    AppearanceSettingsView()
-                }
-            }
-            .sheet(isPresented: $showSubscriptionSettings) {
-                SettingsSheetWrapper(title: "Subscription", isPresented: $showSubscriptionSettings) {
-                    SubscriptionSettingsView()
-                }
-            }
-            .sheet(isPresented: $showSocialSettings) {
-                SettingsSheetWrapper(title: "Social Settings", isPresented: $showSocialSettings) {
-                    SocialSettingsView()
-                }
-            }
-            .sheet(isPresented: $showShareSheet) {
-                let appURL = URL(string: "https://apps.apple.com/app/simfolio/id6746268638")!
-                let shareText = "Check out SimFolio \u{2014} it makes managing your dental portfolio so much easier!"
-                ActivityViewSheet(activityItems: [shareText, appURL])
-            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            let appURL = URL(string: "https://apps.apple.com/app/simfolio/id6746268638")!
+            let shareText = "Check out SimFolio \u{2014} it makes managing your dental portfolio so much easier!"
+            ActivityViewSheet(activityItems: [shareText, appURL])
         }
         .onAppear {
             ensureUserCreatedDate()
