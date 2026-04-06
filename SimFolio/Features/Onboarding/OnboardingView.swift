@@ -477,18 +477,9 @@ struct OnboardingWelcomePageView: View {
 
             // Hero visual area
             ZStack {
-                // Gradient background
+                // Background
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.Colors.primary.opacity(0.15),
-                                AppTheme.Colors.primary.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(AppTheme.Colors.surface)
                     .frame(height: OnboardingLayout.visualAreaHeight)
 
                 VStack(spacing: AppTheme.Spacing.lg) {
@@ -498,7 +489,6 @@ struct OnboardingWelcomePageView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: OnboardingLayout.appIconSize, height: OnboardingLayout.appIconSize)
                         .clipShape(RoundedRectangle(cornerRadius: OnboardingLayout.appIconCornerRadius))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 20, x: 0, y: 10)
 
                     // Decorative elements
                     HStack(spacing: AppTheme.Spacing.md) {
@@ -1084,17 +1074,10 @@ struct OnboardingPermissionPageView: View {
                     .frame(width: OnboardingLayout.iconOuterSize, height: OnboardingLayout.iconOuterSize)
                     .scaleEffect(animateGranted ? 1.15 : 1.0)
 
-                // Inner gradient circle
+                // Inner circle
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [page.iconColor, page.iconColor.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(page.iconColor)
                     .frame(width: OnboardingLayout.iconInnerSize, height: OnboardingLayout.iconInnerSize)
-                    .shadow(color: page.iconColor.opacity(animateGranted ? 0.8 : 0.4), radius: animateGranted ? 20 : 12, x: 0, y: 6)
                     .scaleEffect(animateGranted ? 1.1 : 1.0)
 
                 // Icon
