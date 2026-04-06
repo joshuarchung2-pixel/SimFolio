@@ -1,20 +1,14 @@
 // ProfileView.swift
 // SimFolio - User Profile and Settings Hub
 //
-// This view serves as the main settings hub with user profile information,
-// comprehensive statistics, and navigation to all settings screens.
-//
-// Features:
-// - Profile header card with gradient avatar (initials)
-// - Stats grid showing photos, portfolios, completion, ratings
-// - Procedure breakdown with progress bars
-// - Settings sections for portfolios, capture, notifications, data, about
-// - Navigation to all settings subviews
+// Redesigned for Clarity direction:
+// - Inline avatar + name header (no gradient, simple teal-tinted circle)
+// - Horizontal stats row with dividers (3 stats: photos, portfolios, completion)
+// - iOS-native grouped list-style settings sections
+// - Removed procedure breakdown section and average rating stat
 //
 // Contents:
 // - ProfileView: Main profile/settings screen
-// - EnhancedStatCard: Stat card with icon, value, label, detail
-// - ProcedureBreakdownRow: Row showing procedure count and progress
 // - SettingsSection: Grouped settings container
 // - SettingsRow: Individual settings row with icon and chevron
 // - PortfolioListSheet: Sheet wrapper for PortfolioListView
@@ -91,32 +85,8 @@ struct ProfileView: View {
         return Double(totalFulfilled) / Double(totalRequired)
     }
 
-    var averageRating: Double {
-        var totalRating = 0
-        var ratedCount = 0
-
-        for (_, metadata) in metadataManager.assetMetadata {
-            if let rating = metadata.rating, rating > 0 {
-                totalRating += rating
-                ratedCount += 1
-            }
-        }
-
-        return ratedCount > 0 ? Double(totalRating) / Double(ratedCount) : 0
-    }
-
-    var procedureBreakdown: [(procedure: String, count: Int)] {
-        var counts: [String: Int] = [:]
-
-        for (_, metadata) in metadataManager.assetMetadata {
-            if let procedure = metadata.procedure {
-                counts[procedure, default: 0] += 1
-            }
-        }
-
-        return counts
-            .map { (procedure: $0.key, count: $0.value) }
-            .sorted { $0.count > $1.count }
+    var completionPercentage: Int {
+        Int(overallCompletionRate * 100)
     }
 
     // MARK: - User Info
@@ -143,6 +113,18 @@ struct ProfileView: View {
         return "DS"
     }
 
+    /// Combined school + class year line, e.g. "UCSF · Class of 2027"
+    var schoolInfo: String {
+        if !userSchool.isEmpty && !userClassYear.isEmpty {
+            return "\(userSchool) · Class of \(userClassYear)"
+        } else if !userSchool.isEmpty {
+            return userSchool
+        } else if !userClassYear.isEmpty {
+            return "Class of \(userClassYear)"
+        }
+        return ""
+    }
+
     var memberSince: String {
         if let date = UserDefaults.standard.object(forKey: "userCreatedDate") as? Date {
             let formatter = DateFormatter()
@@ -158,46 +140,36 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.lg) {
-                    // Profile header card and stats grouped with tighter spacing
+                    // Header + optional get-started card
                     VStack(spacing: AppTheme.Spacing.sm) {
-                        profileHeaderCard
+                        profileHeader
 
-                        // Get Started card for new users
                         if isNewUser {
                             getStartedCard
                         }
 
-                        statsGrid
-                    }
-
-                    // Procedure breakdown (if photos exist)
-                    if !procedureBreakdown.isEmpty {
-                        procedureBreakdownSection
+                        statsRow
                     }
 
                     // Settings sections
                     appearanceSection
                     subscriptionSection
                     socialSection
-                    portfolioSection
-                    captureSection
-                    notificationSection
-                    dataSection
-                    aboutSection
+                    mainSettingsSection
+                    aboutSignOutSection
 
                     // App version footer
                     appVersionFooter
 
                     Spacer(minLength: 100)
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.top, AppTheme.Spacing.sm)
             }
             .scrollContentBackground(.hidden)
             .background(AppTheme.Colors.background)
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showEditProfile) {
                 EditProfileSheet(isPresented: $showEditProfile)
             }
@@ -253,67 +225,134 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Profile Header Card
+    // MARK: - Profile Header
 
-    var profileHeaderCard: some View {
-        DPCard {
-            VStack(spacing: AppTheme.Spacing.md) {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    // Avatar with gradient initials (no photo support)
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 80, height: 80)
+    var profileHeader: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                // Avatar — simple teal-tinted circle with initials
+                Text(userInitials)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.primary)
+                    .frame(width: 52, height: 52)
+                    .background(AppTheme.Colors.accentLight)
+                    .clipShape(Circle())
 
-                        Text(userInitials)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(.white)
+                // Name + school
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(userName)
+                        .font(.system(.title3, design: .serif).weight(.bold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                    if !schoolInfo.isEmpty {
+                        Text(schoolInfo)
+                            .font(AppTheme.Typography.footnote)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
-                    .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
-
-                    // User info
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                        Text(userName)
-                            .font(AppTheme.Typography.title3)
-                            .fontWeight(.bold)
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                        if !userSchool.isEmpty {
-                            Text(userSchool)
-                                .font(AppTheme.Typography.subheadline)
-                                .foregroundStyle(AppTheme.Colors.textSecondary)
-                        }
-
-                        HStack(spacing: AppTheme.Spacing.sm) {
-                            if !userClassYear.isEmpty {
-                                Label("Class of \(userClassYear)", systemImage: "graduationcap")
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundStyle(AppTheme.Colors.textTertiary)
-                            }
-                        }
-
-                        if !memberSince.isEmpty {
-                            Text(memberSince)
-                                .font(AppTheme.Typography.caption2)
-                                .foregroundStyle(AppTheme.Colors.textTertiary)
-                        }
-                    }
-
-                    Spacer()
                 }
+
+                Spacer()
 
                 // Edit profile button
                 Button(action: { showEditProfile = true }) {
-                    HStack {
-                        Image(systemName: "pencil")
+                    Text("Edit")
+                        .font(AppTheme.Typography.footnote)
+                        .fontWeight(.medium)
+                        .foregroundStyle(AppTheme.Colors.primary)
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Stats Row
+
+    var statsRow: some View {
+        HStack(spacing: 0) {
+            statItem(value: "\(photoCount)", label: "Photos")
+            Divider().frame(height: 32)
+            statItem(value: "\(portfolioCount)", label: "Portfolios")
+            Divider().frame(height: 32)
+            statItem(
+                value: "\(completionPercentage)%",
+                label: "Complete",
+                valueColor: AppTheme.Colors.primary
+            )
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+        )
+    }
+
+    private func statItem(value: String, label: String, valueColor: Color = AppTheme.Colors.textPrimary) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(valueColor)
+            Text(label)
+                .font(AppTheme.Typography.caption)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Get Started Card
+
+    var getStartedCard: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            Image(systemName: "hand.wave.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(AppTheme.Colors.primary)
+
+            Text("Welcome to SimFolio!")
+                .font(AppTheme.Typography.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+
+            Text("Start by capturing your first dental photo or creating a portfolio.")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: AppTheme.Spacing.md) {
+                Button {
+                    router.selectedTab = .capture
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.xs) {
+                        Image(systemName: "camera.fill")
                             .font(.system(size: 14))
-                        Text("Edit Profile")
+                        Text("Capture Photo")
+                            .font(AppTheme.Typography.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .background(AppTheme.Colors.primary)
+                    .cornerRadius(AppTheme.CornerRadius.small)
+                }
+
+                Button {
+                    showPortfolioList = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.xs) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 14))
+                        Text("Create Portfolio")
                             .font(AppTheme.Typography.subheadline)
                             .fontWeight(.medium)
                     }
@@ -325,298 +364,81 @@ struct ProfileView: View {
                 }
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.md)
-    }
-
-    // MARK: - Stats Grid
-
-    var statsGrid: some View {
-        VStack(spacing: AppTheme.Spacing.sm) {
-            HStack(spacing: AppTheme.Spacing.sm) {
-                EnhancedStatCard(
-                    icon: "photo.fill",
-                    iconColor: AppTheme.Colors.primary,
-                    value: "\(photoCount)",
-                    label: "Total Photos",
-                    detail: "\(taggedPhotoCount) tagged"
-                )
-
-                EnhancedStatCard(
-                    icon: "folder.fill",
-                    iconColor: .orange,
-                    value: "\(portfolioCount)",
-                    label: "Portfolios",
-                    detail: "\(activePortfolioCount) active"
-                )
-            }
-
-            HStack(spacing: AppTheme.Spacing.sm) {
-                EnhancedStatCard(
-                    icon: "chart.pie.fill",
-                    iconColor: AppTheme.Colors.success,
-                    value: "\(Int(overallCompletionRate * 100))%",
-                    label: "Completion",
-                    detail: "Overall progress"
-                )
-
-                EnhancedStatCard(
-                    icon: "star.fill",
-                    iconColor: .yellow,
-                    value: averageRating > 0 ? String(format: "%.1f", averageRating) : "—",
-                    label: "Avg Rating",
-                    detail: averageRating > 0 ? "Out of 5 stars" : "No ratings yet"
-                )
-            }
-        }
-        .padding(.horizontal, AppTheme.Spacing.md)
-    }
-
-    // MARK: - Get Started Card
-
-    var getStartedCard: some View {
-        DPCard {
-            VStack(spacing: AppTheme.Spacing.md) {
-                Image(systemName: "hand.wave.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(AppTheme.Colors.primary)
-
-                Text("Welcome to SimFolio!")
-                    .font(AppTheme.Typography.title3)
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                Text("Start by capturing your first dental photo or creating a portfolio.")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-
-                HStack(spacing: AppTheme.Spacing.md) {
-                    Button {
-                        router.selectedTab = .capture
-                    } label: {
-                        HStack(spacing: AppTheme.Spacing.xs) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 14))
-                            Text("Capture Photo")
-                                .font(AppTheme.Typography.subheadline)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Spacing.sm)
-                        .background(AppTheme.Colors.primary)
-                        .cornerRadius(AppTheme.CornerRadius.small)
-                    }
-
-                    Button {
-                        showPortfolioList = true
-                    } label: {
-                        HStack(spacing: AppTheme.Spacing.xs) {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 14))
-                            Text("Create Portfolio")
-                                .font(AppTheme.Typography.subheadline)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(AppTheme.Colors.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Spacing.sm)
-                        .background(AppTheme.Colors.primary.opacity(0.1))
-                        .cornerRadius(AppTheme.CornerRadius.small)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, AppTheme.Spacing.md)
-    }
-
-    // MARK: - Procedure Breakdown Section
-
-    var procedureBreakdownSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            Text("PHOTO BREAKDOWN")
-                .font(AppTheme.Typography.caption)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .padding(.horizontal, AppTheme.Spacing.md)
-
-            DPCard(padding: AppTheme.Spacing.md) {
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    ForEach(procedureBreakdown.prefix(5), id: \.procedure) { item in
-                        ProcedureBreakdownRow(
-                            procedure: item.procedure,
-                            count: item.count,
-                            total: taggedPhotoCount
-                        )
-                    }
-
-                    if procedureBreakdown.count > 5 {
-                        Text("+ \(procedureBreakdown.count - 5) more procedures")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(AppTheme.Colors.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, AppTheme.Spacing.xs)
-                    }
-                }
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+        )
     }
 
     // MARK: - Settings Sections
 
     var appearanceSection: some View {
-        SettingsSection(title: "APPEARANCE") {
-            SettingsRow(
-                icon: "circle.lefthalf.filled",
-                iconColor: .purple,
-                title: "Appearance",
-                subtitle: "Dark mode, light mode, or system",
-                action: { showAppearanceSettings = true }
-            )
+        settingsGroup(title: "APPEARANCE") {
+            settingsRow("Appearance") { showAppearanceSettings = true }
         }
     }
 
     var subscriptionSection: some View {
-        SettingsSection(title: "SUBSCRIPTION") {
-            SettingsRow(
-                icon: "crown.fill",
-                iconColor: .orange,
-                title: subscriptionManager.isSubscribed ? "Premium" : "Upgrade to Premium",
-                subtitle: subscriptionManager.subscriptionStatusSummary,
-                action: { showSubscriptionSettings = true }
-            )
+        settingsGroup(title: "SUBSCRIPTION") {
+            settingsRow(subscriptionManager.isSubscribed ? "Premium" : "Upgrade to Premium") {
+                showSubscriptionSettings = true
+            }
         }
     }
 
     @ViewBuilder
     var socialSection: some View {
         if AuthenticationService.shared.authState == .signedIn {
-            SettingsSection(title: "SOCIAL") {
-                SettingsRow(
-                    icon: "person.2",
-                    iconColor: AppTheme.Colors.primary,
-                    title: "Social Feed Settings",
-                    action: { showSocialSettings = true }
-                )
+            settingsGroup(title: "SOCIAL") {
+                settingsRow("Social Feed Settings") { showSocialSettings = true }
             }
         }
     }
 
-    var portfolioSection: some View {
-        SettingsSection(title: "PORTFOLIOS") {
-            SettingsRow(
-                icon: "folder.fill",
-                iconColor: .orange,
-                title: "Manage Portfolios",
-                subtitle: portfolioCount > 0 ? "\(portfolioCount) portfolio\(portfolioCount == 1 ? "" : "s")" : "Create and track portfolios",
-                action: { showPortfolioList = true }
-            )
+    var mainSettingsSection: some View {
+        settingsGroup(title: "SETTINGS") {
+            settingsRow("Portfolios") { showPortfolioList = true }
+            Divider().padding(.leading, AppTheme.Spacing.md)
+            settingsRow("Capture Settings") { showCaptureSettings = true }
+            Divider().padding(.leading, AppTheme.Spacing.md)
+            settingsRow("Manage Procedures") { showProcedureManagement = true }
+            Divider().padding(.leading, AppTheme.Spacing.md)
+            settingsRow("Notifications") { showNotificationSettings = true }
+            Divider().padding(.leading, AppTheme.Spacing.md)
+            settingsRow("Data Management") { showDataManagement = true }
         }
     }
 
-    var captureSection: some View {
-        SettingsSection(title: "CAPTURE") {
-            SettingsRow(
-                icon: "camera.fill",
-                iconColor: AppTheme.Colors.primary,
-                title: "Capture Settings",
-                subtitle: "Camera and save options",
-                action: { showCaptureSettings = true }
-            )
+    var aboutSignOutSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text("ABOUT")
+                .font(AppTheme.Typography.sectionLabel)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .tracking(0.8)
 
-            Divider()
-                .padding(.leading, 56)
-
-            SettingsRow(
-                icon: "tag.fill",
-                iconColor: .purple,
-                title: "Manage Procedures",
-                subtitle: "Customize procedure list and colors",
-                action: { showProcedureManagement = true }
-            )
-        }
-    }
-
-    var notificationSection: some View {
-        SettingsSection(title: "NOTIFICATIONS") {
-            SettingsRow(
-                icon: "bell.fill",
-                iconColor: .red,
-                title: "Notifications",
-                subtitle: "Due date and reminder settings",
-                action: { showNotificationSettings = true }
-            )
-        }
-    }
-
-    var dataSection: some View {
-        SettingsSection(title: "DATA & STORAGE") {
-            SettingsRow(
-                icon: "externaldrive.fill",
-                iconColor: .gray,
-                title: "Data Management",
-                subtitle: "Export, backup, and storage",
-                action: { showDataManagement = true }
-            )
-        }
-    }
-
-    var aboutSection: some View {
-        SettingsSection(title: "ABOUT") {
-            SettingsRow(
-                icon: "info.circle.fill",
-                iconColor: AppTheme.Colors.primary,
-                title: "About SimFolio",
-                subtitle: "Version \(appVersion)",
-                action: { showAbout = true }
-            )
-
-            Divider()
-                .padding(.leading, 56)
-
-            SettingsRow(
-                icon: "questionmark.circle.fill",
-                iconColor: AppTheme.Colors.success,
-                title: "Help & Support",
-                subtitle: "Get help and send feedback",
-                action: { showHelp = true }
-            )
-
-            Divider()
-                .padding(.leading, 56)
-
-            SettingsRow(
-                icon: "envelope",
-                iconColor: AppTheme.Colors.primary,
-                title: "Contact Support",
-                subtitle: "joshuarchung2@gmail.com",
-                action: {
+            VStack(spacing: 0) {
+                settingsRow("About SimFolio") { showAbout = true }
+                Divider().padding(.leading, AppTheme.Spacing.md)
+                settingsRow("Help & Support") { showHelp = true }
+                Divider().padding(.leading, AppTheme.Spacing.md)
+                settingsRow("Contact Support") {
                     if let url = URL(string: "mailto:joshuarchung2@gmail.com") {
                         UIApplication.shared.open(url)
                     }
                 }
-            )
-
-            Divider()
-                .padding(.leading, 56)
-
-            SettingsRow(
-                icon: "star.fill",
-                iconColor: .yellow,
-                title: "Rate This App",
-                subtitle: "Love SimFolio? Leave a review!",
-                action: { requestAppStoreReview() }
-            )
-
-            Divider()
-                .padding(.leading, 56)
-
-            SettingsRow(
-                icon: "square.and.arrow.up.fill",
-                iconColor: AppTheme.Colors.primary,
-                title: "Share SimFolio",
-                subtitle: "Tell your classmates about it",
-                action: { showShareSheet = true }
+                Divider().padding(.leading, AppTheme.Spacing.md)
+                settingsRow("Rate This App") { requestAppStoreReview() }
+                Divider().padding(.leading, AppTheme.Spacing.md)
+                settingsRow("Share SimFolio") { showShareSheet = true }
+            }
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
             )
         }
     }
@@ -627,7 +449,7 @@ struct ProfileView: View {
                 .font(AppTheme.Typography.caption)
                 .foregroundStyle(AppTheme.Colors.textTertiary)
 
-            Text("Made with ❤️ for professionals")
+            Text("Made with love for professionals")
                 .font(AppTheme.Typography.caption2)
                 .foregroundStyle(AppTheme.Colors.textTertiary)
         }
@@ -636,6 +458,50 @@ struct ProfileView: View {
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0"
+    }
+
+    // MARK: - Reusable Helpers
+
+    /// Grouped settings section with header label and card container
+    private func settingsGroup<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text(title)
+                .font(AppTheme.Typography.sectionLabel)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .tracking(0.8)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
+        }
+    }
+
+    /// Standard settings row — title + chevron
+    private func settingsRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SettingsRowButtonStyle())
     }
 
     // MARK: - Helper Functions
@@ -652,106 +518,9 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - EnhancedStatCard
-
-/// Enhanced stat card with icon, value, label, and detail text
-struct EnhancedStatCard: View {
-    let icon: String
-    let iconColor: Color
-    let value: String
-    let label: String
-    var detail: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(iconColor)
-
-                Spacer()
-            }
-
-            Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(AppTheme.Typography.caption)
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                if let detail = detail {
-                    Text(detail)
-                        .font(AppTheme.Typography.caption2)
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppTheme.Spacing.md)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(AppTheme.CornerRadius.medium)
-    }
-}
-
-// MARK: - ProcedureBreakdownRow
-
-/// Row showing procedure name, count, and progress bar
-struct ProcedureBreakdownRow: View {
-    let procedure: String
-    let count: Int
-    let total: Int
-
-    var percentage: Double {
-        guard total > 0 else { return 0 }
-        return Double(count) / Double(total)
-    }
-
-    var procedureColor: Color {
-        MetadataManager.shared.procedureColor(for: procedure)
-    }
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            // Procedure color indicator
-            Circle()
-                .fill(procedureColor)
-                .frame(width: 10, height: 10)
-
-            // Procedure name
-            Text(procedure)
-                .font(AppTheme.Typography.subheadline)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-
-            Spacer()
-
-            // Count
-            Text("\(count)")
-                .font(AppTheme.Typography.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(AppTheme.Colors.surfaceSecondary)
-                        .frame(height: 4)
-
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(procedureColor)
-                        .frame(width: geometry.size.width * percentage, height: 4)
-                }
-            }
-            .frame(width: 60, height: 4)
-        }
-    }
-}
-
 // MARK: - SettingsSection
 
-/// Container for grouped settings rows with header
+/// Container for grouped settings rows with header (legacy support for external callers)
 struct SettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
@@ -759,17 +528,19 @@ struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Text(title)
-                .font(AppTheme.Typography.caption)
-                .fontWeight(.medium)
+                .font(AppTheme.Typography.sectionLabel)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
-                .padding(.horizontal, AppTheme.Spacing.md)
+                .tracking(0.8)
 
             VStack(spacing: 0) {
                 content()
             }
             .background(AppTheme.Colors.surface)
-            .cornerRadius(AppTheme.CornerRadius.medium)
-            .padding(.horizontal, AppTheme.Spacing.md)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
         }
     }
 }
@@ -902,31 +673,6 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
             .environmentObject(NavigationRouter())
-    }
-}
-
-struct EnhancedStatCard_Previews: PreviewProvider {
-    static var previews: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
-            EnhancedStatCard(
-                icon: "photo.fill",
-                iconColor: AppTheme.Colors.primary,
-                value: "156",
-                label: "Total Photos",
-                detail: "42 tagged"
-            )
-
-            EnhancedStatCard(
-                icon: "folder.fill",
-                iconColor: .orange,
-                value: "5",
-                label: "Portfolios",
-                detail: "2 active"
-            )
-        }
-        .padding()
-        .background(AppTheme.Colors.background)
-        .previewLayout(.sizeThatFits)
     }
 }
 
