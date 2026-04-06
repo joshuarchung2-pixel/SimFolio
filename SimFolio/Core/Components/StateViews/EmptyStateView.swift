@@ -41,8 +41,7 @@ struct EmptyStateView: View {
             // Text
             VStack(spacing: AppTheme.Spacing.sm) {
                 Text(title)
-                    .font(AppTheme.Typography.title3)
-                    .fontWeight(.semibold)
+                    .font(.system(.title3, design: .serif).weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
@@ -95,7 +94,7 @@ extension EmptyStateView {
             message: "Create a portfolio to start tracking your requirements.",
             actionTitle: action != nil ? "Create Portfolio" : nil,
             action: action,
-            iconColor: .orange
+            iconColor: AppTheme.Colors.primary
         )
     }
 
@@ -115,7 +114,7 @@ extension EmptyStateView {
             icon: "tag.slash",
             title: "No Tagged Photos",
             message: "Photos you tag will appear here for easy organization.",
-            iconColor: .purple
+            iconColor: AppTheme.Colors.primary
         )
     }
 
@@ -125,7 +124,7 @@ extension EmptyStateView {
             icon: "star.slash",
             title: "No Favorites",
             message: "Mark photos as favorites to quickly find your best work.",
-            iconColor: .yellow
+            iconColor: AppTheme.Colors.primary
         )
     }
 
