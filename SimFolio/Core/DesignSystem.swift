@@ -128,10 +128,10 @@ struct AppTheme {
 
     // MARK: - Typography
 
-    /// Typography system using Nexa for headings and system font for body
+    /// Typography system using New York serif for headings and SF Pro system font for body
     struct Typography {
 
-        // MARK: Headings - Nexa Bold
+        // MARK: Headings - New York Serif
         // Use these for titles, section headers, and prominent text
 
         /// Large title - serif bold

@@ -1,5 +1,8 @@
 # SimFolio .gitignore
 
+# Superpowers brainstorming artifacts
+.superpowers/
+
 # Xcode
 #
 # gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
@@ -40,7 +43,8 @@ fastlane/test_output
 # Code Injection
 iOSInjectionProject/
 
-# MCP configuration
+# Claude Code
+.claude/
 .mcp.json
 
 # macOS

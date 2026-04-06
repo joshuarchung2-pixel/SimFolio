@@ -22,12 +22,14 @@ SimFolio helps dental students manage their clinical photography portfolios by:
 
 The app uses a centralized design system in `Core/DesignSystem.swift`:
 
-- **Colors**: Access via `AppTheme.Colors.primary`, `.secondary`, `.background`, etc.
-- **Typography**: Nexa font for headings (`AppTheme.Typography.title`), system font for body
+- **Colors**: Warm palette with `#FAFAF8` background and `#2B7A5F` teal accent. Access via `AppTheme.Colors.primary` (teal), `.secondary`, `.background`, `.surface`, `.textPrimary`, `.textSecondary`, `.textTertiary`, `.divider`, `.accentLight`, `.accentDark`
+- **Typography**: New York serif for headings (`AppTheme.Typography.title`, `.title2`, `.title3`, `.largeTitle`), SF Pro system font for body. Section labels use `AppTheme.Typography.sectionLabel` with `.tracking(0.8)` and `.textCase(.uppercase)`
 - **Spacing**: 4pt grid system (`AppTheme.Spacing.sm`, `.md`, `.lg`)
 - **Corner Radius**: `AppTheme.CornerRadius.small`, `.medium`, `.large`
-- **Shadows**: `.shadowSmall()`, `.shadowMedium()`, `.shadowLarge()` view modifiers
-- **Procedure Colors**: `AppTheme.procedureColor(for: "Class 1")` returns consistent colors
+- **Procedure Colors**: `AppTheme.procedureColor(for: "Class 1")` returns consistent text colors; `procedureBackgroundColor(for:)` and `procedureBorderColor(for:)` for card backgrounds and borders
+- **Cards**: Use 1px `divider` borders for elevation instead of shadows
+- **Tag pills**: Color-only selection state (no checkmarks, no border weight change)
+- **Navigation**: Standard iOS `TabView` (not a custom tab bar component)
 
 Shorthand aliases available: `Theme`, `ThemeColors`, `ThemeTypography`, `ThemeSpacing`
 
@@ -133,21 +135,29 @@ The app supports launch arguments for UI testing:
 - `SimFolioTests/` - Unit tests (models, services, accessibility, photo editor)
 - `SimFolioUITests/` - UI tests (onboarding, capture, library, portfolio, profile, photo editor flows)
 
-## XcodeBuildMCP Tools
+## Building & Testing
 
-This project uses XcodeBuildMCP for Xcode build automation:
+Build and test using `xcodebuild` via Bash. The primary scheme is `SimFolio`.
 
-### Building
-Use `mcp__xcodebuildmcp__build_sim_name_proj` to build the project for a simulator.
+### Build for simulator
+```bash
+xcodebuild -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' build 2>&1 | tail -20
+```
 
-### Testing
-Use `mcp__xcodebuildmcp__test_sim_name_proj` to run tests on a simulator.
+### Run unit tests
+```bash
+xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
+```
 
-### Cleaning
-Use `mcp__xcodebuildmcp__clean` to clean the build folder.
+### Run UI tests
+```bash
+xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioUITests 2>&1 | tail -40
+```
 
-### Logs
-Use `mcp__xcodebuildmcp__capture_logs` to capture device/simulator logs.
+### Clean build
+```bash
+xcodebuild clean -project SimFolio.xcodeproj -scheme SimFolio
+```
 
 ## Code Style Guidelines
 

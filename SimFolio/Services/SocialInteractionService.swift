@@ -84,7 +84,6 @@ class SocialInteractionService: ObservableObject {
     /// Get paginated comments for a post, ordered by createdAt ascending.
     func getComments(postId: String, limit: Int = 20, afterDocument: DocumentSnapshot? = nil) async throws -> ([Comment], DocumentSnapshot?) {
         var query = db.collection("posts").document(postId).collection("comments")
-            .whereField("isHidden", isEqualTo: false)
             .order(by: "createdAt", descending: false)
             .limit(to: limit)
 
@@ -94,6 +93,7 @@ class SocialInteractionService: ObservableObject {
 
         let snapshot = try await query.getDocuments()
         let comments = snapshot.documents.compactMap { try? $0.data(as: Comment.self) }
+            .filter { !$0.isHidden }
         return (comments, snapshot.documents.last)
     }
 

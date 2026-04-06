@@ -100,7 +100,7 @@ These steps cannot be automated and require human action in external systems. Co
   - Keep existing declarations (Usage Data, Diagnostics, etc.)
   - Save and submit
 
-- [ ] **12. Create Demo Account for App Review**
+- [x] **12. Create Demo Account for App Review** *(done 2026-04-06 via seed script)*
   - In the live Firebase project:
     - Create a test user via Firebase Console > Authentication > Add User
     - Email: `appreview@simfolio-test.com` (or similar)
@@ -122,7 +122,7 @@ These steps cannot be automated and require human action in external systems. Co
     }
     ```
 
-- [ ] **13. Add Demo Credentials to App Review Notes**
+- [x] **13. Add Demo Credentials to App Review Notes** *(done 2026-04-06 — credentials: appreview@simfolio-test.com / SimFolio-Review-2026!)*
   - Go to your app version > App Review Information
   - Sign-in required: Yes
   - Demo Account:
@@ -145,7 +145,7 @@ These steps cannot be automated and require human action in external systems. Co
 
 ## Content Seeding
 
-- [ ] **14. Seed Demo School Feed**
+- [x] **14. Seed Demo School Feed** *(done 2026-04-06 via seed script — 4 posts, 3 test users at UCSF)*
   - Create 2-3 additional test accounts at the same school (UCSF)
   - Using each account, share 2-4 simulation photos to the feed with:
     - Various procedures (Class 1, Class 2, Crown)

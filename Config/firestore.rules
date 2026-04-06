@@ -68,11 +68,17 @@ service cloud.firestore {
                     && request.resource.data.isHidden == false
                     && request.resource.data.reportCount == 0;
 
-      // Users can only update their own posts (caption edit)
+      // Post owner can edit their own post (caption, etc.)
       // Cannot change userId, isSimulation, or reset reportCount
       allow update: if isOwner(resource.data.userId)
                     && request.resource.data.userId == resource.data.userId
                     && request.resource.data.isSimulation == resource.data.isSimulation;
+
+      // Any authenticated user can update counters (commentCount, reactionCounts, reportCount)
+      // This is needed because comments/reactions/reports run transactions that increment these fields
+      allow update: if isAuthenticated()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['commentCount', 'reactionCounts', 'reportCount', 'isHidden']);
 
       // Users can only delete their own posts
       allow delete: if isOwner(resource.data.userId);
