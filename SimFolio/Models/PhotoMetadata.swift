@@ -2,7 +2,7 @@
 // Photo metadata model
 //
 // Stores all tagging information for a captured photo.
-// Persisted in MetadataManager.assetMetadata keyed by PHAsset.localIdentifier.
+// Persisted in MetadataManager.assetMetadata keyed by PhotoRecord.id.uuidString.
 //
 // Properties:
 // - procedure: Optional procedure type (e.g., "Class 1", "Crown")

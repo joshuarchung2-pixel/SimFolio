@@ -30,8 +30,11 @@ struct ContentView: View {
 
     // MARK: - Observed Objects
 
-    @ObservedObject private var photoLibrary = PhotoLibraryManager.shared
     @ObservedObject private var photoStorage = PhotoStorageService.shared
+
+    /// Legacy photo library reference -- kept for migration support only.
+    /// Not @ObservedObject because no view depends on its state.
+    private let photoLibrary = PhotoLibraryManager.shared
     @ObservedObject private var metadataManager = MetadataManager.shared
     @ObservedObject private var accessibilityManager = AccessibilityManager.shared
 
@@ -474,9 +477,6 @@ struct ContentView: View {
     }
 
     private func onAppBecameActive() {
-        // Refresh photo library
-        photoLibrary.fetchAssets()
-
         // Resume camera if on capture tab
         if router.selectedTab == .capture {
             cameraService.startSession()
