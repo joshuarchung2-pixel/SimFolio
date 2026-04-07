@@ -2,7 +2,7 @@
 // SimFolio - Onboarding Flow
 //
 // This file contains the onboarding experience for new users.
-// A 9-page flow with visual-rich screens, personalization, and permission requests.
+// A 10-page flow with visual-rich screens, personalization, sign-in, and permission requests.
 //
 // Contents:
 // - OnboardingPageType: Enum for different page types
@@ -55,6 +55,7 @@ enum OnboardingPageType: Equatable {
     case photoEditing
     case exportReady
     case personalization
+    case signIn
     case permission(PermissionType)
 }
 
@@ -115,7 +116,7 @@ enum PermissionType {
 // MARK: - OnboardingView
 
 /// Main onboarding container view
-/// Presents a 9-page onboarding experience for new users
+/// Presents a 10-page onboarding experience for new users
 struct OnboardingView: View {
     @Binding var isPresented: Bool
     var onComplete: () -> Void
@@ -130,6 +131,9 @@ struct OnboardingView: View {
 
     // User profile state
     @State private var userProfile = UserOnboardingProfile()
+
+    // Sign-in sheet
+    @State private var showSignInSheet = false
 
     // Analytics tracking
     @State private var onboardingStartTime: Date = Date()
@@ -179,7 +183,14 @@ struct OnboardingView: View {
             subtitle: "Tell us about yourself to customize SimFolio for you."
         ),
 
-        // Page 7: Camera Permission
+        // Page 7: Sign In
+        OnboardingPage(
+            pageType: .signIn,
+            title: "Back Up Your Portfolio",
+            subtitle: "Create a free account to keep your data safe and never lose your work."
+        ),
+
+        // Page 8: Camera Permission
         OnboardingPage(
             pageType: .permission(.camera),
             title: "Camera Access",
@@ -188,7 +199,7 @@ struct OnboardingView: View {
             iconColor: .blue
         ),
 
-        // Page 8: Photos Permission
+        // Page 9: Photos Permission
         OnboardingPage(
             pageType: .permission(.photos),
             title: "Photo Library",
@@ -197,7 +208,7 @@ struct OnboardingView: View {
             iconColor: .purple
         ),
 
-        // Page 9: Notifications Permission
+        // Page 10: Notifications Permission
         OnboardingPage(
             pageType: .permission(.notifications),
             title: "Stay on Track",
@@ -220,7 +231,7 @@ struct OnboardingView: View {
         let page = pages[currentPage]
 
         switch page.pageType {
-        case .welcome, .smartCapture, .requirementsTrack, .photoEditing, .exportReady:
+        case .welcome, .smartCapture, .requirementsTrack, .photoEditing, .exportReady, .signIn:
             return true
         case .personalization:
             // All personalization fields are required
@@ -268,7 +279,8 @@ struct OnboardingView: View {
                             cameraGranted: $cameraPermissionGranted,
                             photosGranted: $photosPermissionGranted,
                             notificationsGranted: $notificationsPermissionGranted,
-                            onContinue: page.isPermissionPage ? { nextPage() } : nil
+                            showSignInSheet: $showSignInSheet,
+                            onContinue: (page.isPermissionPage || page.pageType == .signIn) ? { nextPage() } : nil
                         )
                         .tag(index)
                     }
@@ -339,6 +351,12 @@ struct OnboardingView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             isKeyboardVisible = false
+        }
+        .sheet(isPresented: $showSignInSheet) {
+            SignInView(context: .generic, onSignIn: {
+                saveUserProfile()
+                Task { try? await UserProfileService.shared.linkOnboardingData() }
+            })
         }
     }
 
@@ -437,6 +455,7 @@ struct OnboardingPageView: View {
     @Binding var cameraGranted: Bool
     @Binding var photosGranted: Bool
     @Binding var notificationsGranted: Bool
+    @Binding var showSignInSheet: Bool
     var onContinue: (() -> Void)?
 
     var body: some View {
@@ -453,6 +472,11 @@ struct OnboardingPageView: View {
             OnboardingExportPageView(page: page)
         case .personalization:
             OnboardingPersonalizationPageView(page: page, userProfile: $userProfile)
+        case .signIn:
+            OnboardingSignInPageView(
+                onShowSignIn: { showSignInSheet = true },
+                onContinue: onContinue
+            )
         case .permission:
             OnboardingPermissionPageView(
                 page: page,
@@ -990,6 +1014,73 @@ struct OnboardingPersonalizationPageView: View {
                     userProfile.graduationYear = graduationYears[0]
                 }
             }
+    }
+}
+
+// MARK: - Sign In Page
+
+/// Sign-in / account creation page (optional — skippable)
+struct OnboardingSignInPageView: View {
+    var onShowSignIn: (() -> Void)?
+    var onContinue: (() -> Void)?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.xl) {
+                Spacer(minLength: AppTheme.Spacing.lg)
+
+                // Icon + title + subtitle
+                VStack(spacing: AppTheme.Spacing.md) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.1))
+                            .frame(width: 80, height: 80)
+
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 36))
+                            .foregroundStyle(Color.blue)
+                    }
+
+                    Text("Back Up Your Portfolio")
+                        .font(AppTheme.Typography.title)
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Create a free account to keep your data safe and never lose your work.")
+                        .font(AppTheme.Typography.body)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Action content
+                VStack(spacing: AppTheme.Spacing.md) {
+                    DPButton(
+                        "Create Account",
+                        icon: "person.crop.circle.badge.plus",
+                        style: .primary,
+                        size: .large,
+                        isFullWidth: true
+                    ) {
+                        onShowSignIn?()
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+
+                    Button {
+                        onContinue?()
+                    } label: {
+                        Text("Skip for now")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+                }
+
+                Spacer(minLength: 140)
+            }
+        }
     }
 }
 
