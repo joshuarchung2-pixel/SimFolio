@@ -1,7 +1,15 @@
 import SwiftUI
 import AuthenticationServices
 
+enum SignInContext {
+    case generic
+    case socialFeed
+}
+
 struct SignInView: View {
+    var context: SignInContext = .generic
+    var onSignIn: (() -> Void)? = nil
+
     @ObservedObject private var authService = AuthenticationService.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -21,15 +29,15 @@ struct SignInView: View {
                 VStack(spacing: AppTheme.Spacing.lg) {
                     // Header
                     VStack(spacing: AppTheme.Spacing.sm) {
-                        Image(systemName: "person.2.fill")
+                        Image(systemName: context == .socialFeed ? "person.2.fill" : "person.crop.circle.badge.plus")
                             .font(.system(size: 60))
                             .foregroundColor(AppTheme.Colors.primary)
 
-                        Text("Join Your Class Feed")
+                        Text(context == .socialFeed ? "Join Your Class Feed" : "Back Up Your Portfolio")
                             .font(AppTheme.Typography.title)
                             .foregroundColor(AppTheme.Colors.textPrimary)
 
-                        Text("Sign in to share simulation photos with your classmates")
+                        Text(context == .socialFeed ? "Sign in to share simulation photos with your classmates" : "Create a free account to keep your data safe")
                             .font(AppTheme.Typography.body)
                             .foregroundColor(AppTheme.Colors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -50,6 +58,7 @@ struct SignInView: View {
                                     isLoading = true
                                     do {
                                         try await authService.signInWithApple(authorization: authorization)
+                                        onSignIn?()
                                         dismiss()
                                     } catch {
                                         errorMessage = error.localizedDescription
@@ -102,6 +111,7 @@ struct SignInView: View {
                                     } else {
                                         try await authService.signIn(email: email, password: password)
                                     }
+                                    onSignIn?()
                                     dismiss()
                                 } catch {
                                     errorMessage = error.localizedDescription
