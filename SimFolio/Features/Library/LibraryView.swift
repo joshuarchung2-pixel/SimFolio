@@ -2174,7 +2174,7 @@ struct PhotoDetailView: View {
         }
         .fullScreenCover(isPresented: $showPhotoEditor) {
             PhotoEditorView(
-                recordId: currentRecord.id.uuidString,
+                photoId: currentRecord.id,
                 isPresented: $showPhotoEditor,
                 onSave: { processedImage in
                     // Immediately display the edited image
