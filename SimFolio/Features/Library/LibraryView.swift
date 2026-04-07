@@ -9,7 +9,6 @@
 // - Improved photo detail view with metadata editing
 
 import SwiftUI
-import Photos
 import Combine
 import UniformTypeIdentifiers
 import UIKit
@@ -2503,27 +2502,14 @@ struct PhotoDetailView: View {
 
 /// Photo view with pinch-to-zoom and double-tap zoom support using UIScrollView
 struct ZoomablePhotoView: UIViewRepresentable {
-    /// PhotoRecord for app-owned photos (preferred)
-    let record: PhotoRecord?
-    /// Legacy PHAsset support (for views not yet migrated)
-    let asset: PHAsset?
+    /// PhotoRecord for app-owned photos
+    let record: PhotoRecord
     var preloadedImage: UIImage?
     var refreshTrigger: Int = 0
     var isZoomed: Binding<Bool>?
 
-    /// Init with PhotoRecord (preferred)
     init(record: PhotoRecord, preloadedImage: UIImage? = nil, refreshTrigger: Int = 0, isZoomed: Binding<Bool>? = nil) {
         self.record = record
-        self.asset = nil
-        self.preloadedImage = preloadedImage
-        self.refreshTrigger = refreshTrigger
-        self.isZoomed = isZoomed
-    }
-
-    /// Legacy init with PHAsset (for backward compatibility until Task 8 migrates Portfolio views)
-    init(asset: PHAsset, preloadedImage: UIImage? = nil, refreshTrigger: Int = 0, isZoomed: Binding<Bool>? = nil) {
-        self.record = nil
-        self.asset = asset
         self.preloadedImage = preloadedImage
         self.refreshTrigger = refreshTrigger
         self.isZoomed = isZoomed
@@ -2571,11 +2557,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
             context.coordinator.updateImage(preloaded)
         } else {
             spinner.startAnimating()
-            if let record = record {
-                context.coordinator.loadImage(for: record)
-            } else if let asset = asset {
-                context.coordinator.loadImageFromAsset(asset)
-            }
+            context.coordinator.loadImage(for: record)
         }
 
         return scrollView
@@ -2591,11 +2573,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
 
         if refreshTrigger != coordinator.lastRefreshTrigger {
             coordinator.lastRefreshTrigger = refreshTrigger
-            if let record = record {
-                coordinator.loadImage(for: record)
-            } else if let asset = asset {
-                coordinator.loadImageFromAsset(asset)
-            }
+            coordinator.loadImage(for: record)
         }
 
         if isZoomed == nil && scrollView.zoomScale > 1.0 {
@@ -2722,15 +2700,6 @@ struct ZoomablePhotoView: UIViewRepresentable {
         func loadImage(for record: PhotoRecord) {
             if let loadedImage = PhotoStorageService.shared.loadImage(id: record.id) {
                 self.updateImage(loadedImage)
-            }
-        }
-
-        /// Legacy method for loading from PHAsset (backward compat for Portfolio views)
-        func loadImageFromAsset(_ asset: PHAsset) {
-            PhotoLibraryManager.shared.requestEditedImage(for: asset) { [weak self] loadedImage in
-                if let image = loadedImage {
-                    self?.updateImage(image)
-                }
             }
         }
     }

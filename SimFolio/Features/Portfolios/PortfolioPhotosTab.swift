@@ -13,7 +13,6 @@
 // - Share functionality
 
 import SwiftUI
-import Photos
 
 // MARK: - PhotosGroupBy
 
@@ -39,18 +38,18 @@ struct PortfolioPhotosTab: View {
     let portfolio: Portfolio
 
     @ObservedObject var metadataManager = MetadataManager.shared
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
 
     @State private var groupBy: PhotosGroupBy = .byRequirement
-    @State private var selectedAsset: PHAsset? = nil
+    @State private var selectedRecord: PhotoRecord? = nil
     @State private var showPhotoDetail: Bool = false
 
     // MARK: - Computed Properties
 
-    /// All assets that match any requirement in this portfolio
-    var matchingAssets: [PHAsset] {
-        library.assets.filter { asset in
-            guard let metadata = metadataManager.getMetadata(for: asset.localIdentifier) else {
+    /// All records that match any requirement in this portfolio
+    var matchingRecords: [PhotoRecord] {
+        photoStorage.records.filter { record in
+            guard let metadata = metadataManager.getMetadata(for: record.id.uuidString) else {
                 return false
             }
 
@@ -72,40 +71,40 @@ struct PortfolioPhotosTab: View {
         }
     }
 
-    /// Assets grouped by requirement (procedure)
-    var assetsByRequirement: [(requirement: PortfolioRequirement, assets: [PHAsset])] {
+    /// Records grouped by requirement (procedure)
+    var recordsByRequirement: [(requirement: PortfolioRequirement, records: [PhotoRecord])] {
         portfolio.requirements.compactMap { requirement in
-            let assets = matchingAssets.filter { asset in
-                guard let metadata = metadataManager.getMetadata(for: asset.localIdentifier) else {
+            let records = matchingRecords.filter { record in
+                guard let metadata = metadataManager.getMetadata(for: record.id.uuidString) else {
                     return false
                 }
                 return metadata.procedure == requirement.procedure
             }
 
-            if assets.isEmpty {
+            if records.isEmpty {
                 return nil
             }
-            return (requirement, assets)
+            return (requirement, records)
         }
     }
 
-    /// Assets grouped by date
-    var assetsByDate: [(date: Date, assets: [PHAsset])] {
+    /// Records grouped by date
+    var recordsByDate: [(date: Date, records: [PhotoRecord])] {
         let calendar = Calendar.current
 
-        // Group assets by day
-        let grouped = Dictionary(grouping: matchingAssets) { asset in
-            calendar.startOfDay(for: asset.creationDate ?? Date())
+        // Group records by day
+        let grouped = Dictionary(grouping: matchingRecords) { record in
+            calendar.startOfDay(for: record.createdDate)
         }
 
         // Sort by date descending (newest first)
         return grouped
-            .map { (date: $0.key, assets: $0.value) }
+            .map { (date: $0.key, records: $0.value) }
             .sorted { $0.date > $1.date }
     }
 
     var photoCount: Int {
-        matchingAssets.count
+        matchingRecords.count
     }
 
     // MARK: - Body
@@ -116,7 +115,7 @@ struct PortfolioPhotosTab: View {
             groupByPicker
 
             // Content
-            if matchingAssets.isEmpty {
+            if matchingRecords.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -139,10 +138,10 @@ struct PortfolioPhotosTab: View {
             }
         }
         .sheet(isPresented: $showPhotoDetail) {
-            if let asset = selectedAsset {
+            if let record = selectedRecord {
                 PortfolioPhotoDetailSheet(
-                    asset: asset,
-                    allAssets: matchingAssets,
+                    record: record,
+                    allRecords: matchingRecords,
                     isPresented: $showPhotoDetail
                 )
             }
@@ -226,12 +225,12 @@ struct PortfolioPhotosTab: View {
 
     var requirementGroupedContent: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
-            ForEach(assetsByRequirement, id: \.requirement.id) { group in
+            ForEach(recordsByRequirement, id: \.requirement.id) { group in
                 RequirementPhotoSection(
                     requirement: group.requirement,
-                    assets: group.assets,
-                    onPhotoTapped: { asset in
-                        selectedAsset = asset
+                    records: group.records,
+                    onPhotoTapped: { record in
+                        selectedRecord = record
                         showPhotoDetail = true
                     }
                 )
@@ -241,12 +240,12 @@ struct PortfolioPhotosTab: View {
 
     var dateGroupedContent: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
-            ForEach(assetsByDate, id: \.date) { group in
+            ForEach(recordsByDate, id: \.date) { group in
                 DatePhotoSection(
                     date: group.date,
-                    assets: group.assets,
-                    onPhotoTapped: { asset in
-                        selectedAsset = asset
+                    records: group.records,
+                    onPhotoTapped: { record in
+                        selectedRecord = record
                         showPhotoDetail = true
                     }
                 )
@@ -260,10 +259,8 @@ struct PortfolioPhotosTab: View {
 /// Section showing photos for a specific requirement/procedure
 struct RequirementPhotoSection: View {
     let requirement: PortfolioRequirement
-    let assets: [PHAsset]
-    let onPhotoTapped: (PHAsset) -> Void
-
-    @ObservedObject var metadataManager = MetadataManager.shared
+    let records: [PhotoRecord]
+    let onPhotoTapped: (PhotoRecord) -> Void
 
     var procedureColor: Color {
         AppTheme.procedureColor(for: requirement.procedure)
@@ -281,7 +278,7 @@ struct RequirementPhotoSection: View {
                     .font(AppTheme.Typography.headline)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                Text("(\(assets.count))")
+                Text("(\(records.count))")
                     .font(AppTheme.Typography.subheadline)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
@@ -291,7 +288,7 @@ struct RequirementPhotoSection: View {
 
             // Photo grid
             PortfolioPhotoGrid(
-                assets: assets,
+                records: records,
                 onPhotoTapped: onPhotoTapped
             )
             .padding(.horizontal, AppTheme.Spacing.md)
@@ -304,8 +301,8 @@ struct RequirementPhotoSection: View {
 /// Section showing photos for a specific date
 struct DatePhotoSection: View {
     let date: Date
-    let assets: [PHAsset]
-    let onPhotoTapped: (PHAsset) -> Void
+    let records: [PhotoRecord]
+    let onPhotoTapped: (PhotoRecord) -> Void
 
     var formattedDate: String {
         let calendar = Calendar.current
@@ -330,7 +327,7 @@ struct DatePhotoSection: View {
                     .font(AppTheme.Typography.headline)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                Text("(\(assets.count))")
+                Text("(\(records.count))")
                     .font(AppTheme.Typography.subheadline)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
@@ -340,7 +337,7 @@ struct DatePhotoSection: View {
 
             // Photo grid
             PortfolioPhotoGrid(
-                assets: assets,
+                records: records,
                 onPhotoTapped: onPhotoTapped
             )
             .padding(.horizontal, AppTheme.Spacing.md)
@@ -352,8 +349,8 @@ struct DatePhotoSection: View {
 
 /// Grid layout for portfolio photos
 struct PortfolioPhotoGrid: View {
-    let assets: [PHAsset]
-    let onPhotoTapped: (PHAsset) -> Void
+    let records: [PhotoRecord]
+    let onPhotoTapped: (PhotoRecord) -> Void
 
     private let columns = [
         GridItem(.flexible(), spacing: 2),
@@ -363,11 +360,11 @@ struct PortfolioPhotoGrid: View {
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(assets, id: \.localIdentifier) { asset in
+            ForEach(records, id: \.id) { record in
                 PortfolioPhotoThumbnail(
-                    asset: asset,
+                    record: record,
                     onTap: {
-                        onPhotoTapped(asset)
+                        onPhotoTapped(record)
                     }
                 )
             }
@@ -379,14 +376,14 @@ struct PortfolioPhotoGrid: View {
 
 /// Thumbnail view for a portfolio photo with metadata badge
 struct PortfolioPhotoThumbnail: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     let onTap: () -> Void
 
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var image: UIImage? = nil
 
     var metadata: PhotoMetadata? {
-        metadataManager.getMetadata(for: asset.localIdentifier)
+        metadataManager.getMetadata(for: record.id.uuidString)
     }
 
     /// Short label showing stage initial and angle abbreviation
@@ -452,18 +449,16 @@ struct PortfolioPhotoThumbnail: View {
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 loadThumbnail()
             }
         }
     }
 
     private func loadThumbnail() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 200, height: 200)) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 
     private func angleAbbreviation(_ angle: String) -> String {
@@ -496,19 +491,19 @@ struct PhotoThumbnailButtonStyle: ButtonStyle {
 
 /// Full-screen photo detail view with swipe navigation
 struct PortfolioPhotoDetailSheet: View {
-    let asset: PHAsset
-    let allAssets: [PHAsset]
+    let record: PhotoRecord
+    let allRecords: [PhotoRecord]
     @Binding var isPresented: Bool
 
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var currentIndex: Int = 0
 
-    var currentAsset: PHAsset {
-        allAssets[currentIndex]
+    var currentRecord: PhotoRecord {
+        allRecords[currentIndex]
     }
 
     var metadata: PhotoMetadata? {
-        metadataManager.getMetadata(for: currentAsset.localIdentifier)
+        metadataManager.getMetadata(for: currentRecord.id.uuidString)
     }
 
     var body: some View {
@@ -518,8 +513,8 @@ struct PortfolioPhotoDetailSheet: View {
 
                 // Swipeable photo viewer
                 TabView(selection: $currentIndex) {
-                    ForEach(Array(allAssets.enumerated()), id: \.element.localIdentifier) { index, asset in
-                        ZoomablePhotoView(asset: asset)
+                    ForEach(Array(allRecords.enumerated()), id: \.element.id) { index, rec in
+                        ZoomablePhotoView(record: rec)
                             .tag(index)
                     }
                 }
@@ -540,7 +535,7 @@ struct PortfolioPhotoDetailSheet: View {
 
                         Spacer()
 
-                        Text("\(currentIndex + 1) / \(allAssets.count)")
+                        Text("\(currentIndex + 1) / \(allRecords.count)")
                             .font(AppTheme.Typography.subheadline)
                             .foregroundStyle(.white)
 
@@ -570,8 +565,8 @@ struct PortfolioPhotoDetailSheet: View {
             .navigationBarHidden(true)
         }
         .onAppear {
-            // Set initial index to the selected asset
-            if let index = allAssets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier }) {
+            // Set initial index to the selected record
+            if let index = allRecords.firstIndex(where: { $0.id == record.id }) {
                 currentIndex = index
             }
         }
@@ -630,11 +625,9 @@ struct PortfolioPhotoDetailSheet: View {
 
                 Spacer()
 
-                if let date = currentAsset.creationDate {
-                    Text(formatDate(date))
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                }
+                Text(formatDate(currentRecord.createdDate))
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
             }
         }
         .padding(AppTheme.Spacing.md)
@@ -654,20 +647,18 @@ struct PortfolioPhotoDetailSheet: View {
     }
 
     func sharePhoto() {
-        // Load full image with edits applied and share
-        PhotoLibraryManager.shared.requestEditedImage(for: currentAsset) { image in
-            guard let image = image else { return }
+        // Load full image from app storage and share
+        guard let image = PhotoStorageService.shared.loadImage(id: currentRecord.id) else { return }
 
-            let activityVC = UIActivityViewController(
-                activityItems: [image],
-                applicationActivities: nil
-            )
+        let activityVC = UIActivityViewController(
+            activityItems: [image],
+            applicationActivities: nil
+        )
 
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController {
-                rootVC.present(activityVC, animated: true)
-            }
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
         }
     }
 }
