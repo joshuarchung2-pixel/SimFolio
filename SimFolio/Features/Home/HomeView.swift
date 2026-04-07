@@ -25,7 +25,7 @@ struct HomeView: View {
 
     /// Check if there are any photos to display
     private var hasPhotos: Bool {
-        !library.assets.isEmpty
+        !PhotoStorageService.shared.records.isEmpty
     }
 
     var body: some View {
@@ -381,7 +381,7 @@ struct PhotoSlideshowEmptyContent: View {
 
 /// Stats card that scrolls with content
 struct PhotoStatsCardSection: View {
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var storageService = PhotoStorageService.shared
     @ObservedObject var metadataManager = MetadataManager.shared
 
     /// Calculate total outstanding requirements across all portfolios
@@ -396,8 +396,8 @@ struct PhotoStatsCardSection: View {
 
     /// Calculate average rating of all rated photos
     var averageRating: Double {
-        let allRatings = library.assets.compactMap { asset -> Int? in
-            let rating = metadataManager.getRating(for: asset.localIdentifier)
+        let allRatings = storageService.records.compactMap { record -> Int? in
+            let rating = metadataManager.getRating(for: record.id.uuidString)
             return (rating ?? 0) > 0 ? rating : nil
         }
         guard !allRatings.isEmpty else { return 0 }
@@ -406,10 +406,36 @@ struct PhotoStatsCardSection: View {
 
     var body: some View {
         PhotoStatsCard(
-            totalPhotos: library.assets.count,
+            totalPhotos: storageService.records.count,
             outstandingRequirements: outstandingRequirements,
             averageRating: averageRating
         )
+    }
+}
+
+// MARK: - Recent Thumbnail View
+
+/// Thumbnail view for a single photo loaded from app storage
+struct RecentThumbnailView: View {
+    let record: PhotoRecord
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(AppTheme.Colors.surfaceSecondary)
+            }
+        }
+        .onAppear { loadThumbnail() }
+    }
+
+    private func loadThumbnail() {
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 }
 
