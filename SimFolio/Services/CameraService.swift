@@ -8,6 +8,7 @@ import UIKit
 import SwiftUI
 import Combine
 import CoreImage
+import CoreMedia
 
 // MARK: - CameraService
 
@@ -74,6 +75,8 @@ class CameraService: NSObject, ObservableObject {
     private var currentDevice: AVCaptureDevice?
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     private var focusIndicatorTimer: Timer?
+    private var focusObservation: NSKeyValueObservation?
+    private var focusRevertTimer: Timer?
 
     // MARK: - Orientation Capture Properties
 
@@ -173,10 +176,42 @@ class CameraService: NSObject, ObservableObject {
                 return
             }
 
+            // Select optimal device format for highest photo quality
+            do {
+                try device.lockForConfiguration()
+                if let bestFormat = device.formats
+                    .filter({ $0.isHighPhotoQualitySupported })
+                    .max(by: {
+                        CMVideoFormatDescriptionGetDimensions($0.formatDescription).width <
+                        CMVideoFormatDescriptionGetDimensions($1.formatDescription).width
+                    }) {
+                    device.activeFormat = bestFormat
+                }
+                device.unlockForConfiguration()
+            } catch {
+                #if DEBUG
+                print("Error selecting device format: \(error)")
+                #endif
+            }
+
             // Add photo output
             if self.session.canAddOutput(self.output) {
                 self.session.addOutput(self.output)
                 self.output.isHighResolutionCaptureEnabled = true
+                self.output.maxPhotoQualityPrioritization = .quality
+            }
+
+            // Enable responsive capture and deferred delivery (iOS 17+)
+            if #available(iOS 17.0, *) {
+                if self.output.isResponsiveCaptureSupported {
+                    self.output.isResponsiveCaptureEnabled = true
+                }
+                if self.output.isFastCapturePrioritizationSupported {
+                    self.output.isFastCapturePrioritizationEnabled = true
+                }
+                if self.output.isAutoDeferredPhotoDeliverySupported {
+                    self.output.isAutoDeferredPhotoDeliveryEnabled = true
+                }
             }
 
             self.session.commitConfiguration()
@@ -227,6 +262,12 @@ class CameraService: NSObject, ObservableObject {
     func setFocusPoint(_ point: CGPoint) {
         guard let device = currentDevice else { return }
 
+        // Cancel any pending revert from a previous tap
+        focusRevertTimer?.invalidate()
+        focusRevertTimer = nil
+        focusObservation?.invalidate()
+        focusObservation = nil
+
         do {
             try device.lockForConfiguration()
 
@@ -243,6 +284,17 @@ class CameraService: NSObject, ObservableObject {
             }
 
             device.unlockForConfiguration()
+
+            // Observe focus completion to revert to continuous AF
+            focusObservation = device.observe(\.isAdjustingFocus, options: [.old, .new]) { [weak self] _, change in
+                guard let self = self else { return }
+                // Focus achieved: isAdjustingFocus transitioned true → false
+                if change.oldValue == true && change.newValue == false {
+                    self.focusObservation?.invalidate()
+                    self.focusObservation = nil
+                    self.scheduleFocusRevert(for: device)
+                }
+            }
 
             // Update UI state
             DispatchQueue.main.async {
@@ -261,6 +313,31 @@ class CameraService: NSObject, ObservableObject {
             #if DEBUG
             print("Focus error: \(error)")
             #endif
+        }
+    }
+
+    /// Schedule a revert to continuous auto focus/exposure after a tap-to-focus
+    private func scheduleFocusRevert(for device: AVCaptureDevice) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.focusRevertTimer?.invalidate()
+            self.focusRevertTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+                guard let self = self, !self.isAEAFLocked else { return }
+                do {
+                    try device.lockForConfiguration()
+                    if device.isFocusModeSupported(.continuousAutoFocus) {
+                        device.focusMode = .continuousAutoFocus
+                    }
+                    if device.isExposureModeSupported(.continuousAutoExposure) {
+                        device.exposureMode = .continuousAutoExposure
+                    }
+                    device.unlockForConfiguration()
+                } catch {
+                    #if DEBUG
+                    print("Error reverting to continuous AF: \(error)")
+                    #endif
+                }
+            }
         }
     }
 
@@ -290,6 +367,11 @@ class CameraService: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 self.isAEAFLocked = true
                 self.cancelFocusIndicatorTimer()
+                // Cancel any pending revert to continuous AF
+                self.focusRevertTimer?.invalidate()
+                self.focusRevertTimer = nil
+                self.focusObservation?.invalidate()
+                self.focusObservation = nil
                 // Keep focus indicator visible while locked
             }
 
@@ -438,6 +520,9 @@ class CameraService: NSObject, ObservableObject {
 
         let settings = AVCapturePhotoSettings()
 
+        // Prioritize quality for best ISP processing (Deep Fusion / Photonic Engine)
+        settings.photoQualityPrioritization = .quality
+
         // Configure flash
         if output.supportedFlashModes.contains(flashMode) {
             settings.flashMode = flashMode
@@ -529,11 +614,43 @@ class CameraService: NSObject, ObservableObject {
                     return
                 }
 
+                // Select optimal device format for highest photo quality
+                do {
+                    try device.lockForConfiguration()
+                    if let bestFormat = device.formats
+                        .filter({ $0.isHighPhotoQualitySupported })
+                        .max(by: {
+                            CMVideoFormatDescriptionGetDimensions($0.formatDescription).width <
+                            CMVideoFormatDescriptionGetDimensions($1.formatDescription).width
+                        }) {
+                        device.activeFormat = bestFormat
+                    }
+                    device.unlockForConfiguration()
+                } catch {
+                    #if DEBUG
+                    print("Error selecting device format: \(error)")
+                    #endif
+                }
+
                 // Add photo output if not already added
                 if !self.session.outputs.contains(self.output) {
                     if self.session.canAddOutput(self.output) {
                         self.session.addOutput(self.output)
                         self.output.isHighResolutionCaptureEnabled = true
+                        self.output.maxPhotoQualityPrioritization = .quality
+                    }
+                }
+
+                // Enable responsive capture and deferred delivery (iOS 17+)
+                if #available(iOS 17.0, *) {
+                    if self.output.isResponsiveCaptureSupported {
+                        self.output.isResponsiveCaptureEnabled = true
+                    }
+                    if self.output.isFastCapturePrioritizationSupported {
+                        self.output.isFastCapturePrioritizationEnabled = true
+                    }
+                    if self.output.isAutoDeferredPhotoDeliverySupported {
+                        self.output.isAutoDeferredPhotoDeliveryEnabled = true
                     }
                 }
 
@@ -578,28 +695,23 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
             return
         }
 
-        guard let imageData = photo.fileDataRepresentation(),
-              let ciImage = CIImage(data: imageData) else {
+        guard let imageData = photo.fileDataRepresentation() else {
             #if DEBUG
-            print("Failed to create CIImage from photo data")
+            print("Failed to get photo data representation")
             #endif
             return
         }
 
-        // Physically rotate pixels based on device orientation at capture time
-        // This ensures the image displays correctly regardless of metadata support
-        let orientedImage = ciImage.oriented(pendingCaptureOrientation)
-
-        // Render to CGImage (this bakes in the rotation)
-        guard let cgImage = ciContext.createCGImage(orientedImage, from: orientedImage.extent) else {
+        // Apply orientation via metadata instead of CIImage pixel rotation
+        // This preserves the full ISP-processed image quality
+        let uiOrientation = UIImage.Orientation(pendingCaptureOrientation)
+        guard let cgImage = UIImage(data: imageData)?.cgImage else {
             #if DEBUG
-            print("Failed to render oriented image")
+            print("Failed to create CGImage from photo data")
             #endif
             return
         }
-
-        // Create UIImage with .up orientation (pixels are already correctly rotated)
-        let finalImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+        let finalImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: uiOrientation)
 
         DispatchQueue.main.async {
             self.capturedImage = finalImage
@@ -665,6 +777,23 @@ struct CameraPreview: UIViewRepresentable {
         DispatchQueue.main.async {
             uiView.setNeedsLayout()
             uiView.layoutIfNeeded()
+        }
+    }
+}
+
+// MARK: - CGImagePropertyOrientation → UIImage.Orientation
+
+extension UIImage.Orientation {
+    init(_ cgOrientation: CGImagePropertyOrientation) {
+        switch cgOrientation {
+        case .up:            self = .up
+        case .upMirrored:    self = .upMirrored
+        case .down:          self = .down
+        case .downMirrored:  self = .downMirrored
+        case .left:          self = .left
+        case .leftMirrored:  self = .leftMirrored
+        case .right:         self = .right
+        case .rightMirrored: self = .rightMirrored
         }
     }
 }
