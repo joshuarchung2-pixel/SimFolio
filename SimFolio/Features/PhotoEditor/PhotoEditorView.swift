@@ -50,6 +50,14 @@ struct PhotoEditorView: View {
         self._viewModel = StateObject(wrappedValue: PhotoEditorViewModel(assetId: asset.localIdentifier))
     }
 
+    /// Convenience init for app-owned photo records (used during photo storage migration)
+    init(recordId: String, isPresented: Binding<Bool>, onSave: ((UIImage) -> Void)? = nil) {
+        self.asset = PHAsset()
+        self._isPresented = isPresented
+        self.onSave = onSave
+        self._viewModel = StateObject(wrappedValue: PhotoEditorViewModel(assetId: recordId))
+    }
+
     // MARK: - Body
 
     var body: some View {

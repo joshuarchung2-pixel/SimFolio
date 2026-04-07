@@ -290,7 +290,7 @@ struct ContentView: View {
             // Photo detail with ID lookup
             PhotoDetailSheet(
                 photoId: id,
-                allAssets: photoLibrary.assets,
+                allRecords: PhotoStorageService.shared.records,
                 onDismiss: { router.dismissSheet() },
                 onPhotoTagged: { _ in
                     router.dismissSheet()

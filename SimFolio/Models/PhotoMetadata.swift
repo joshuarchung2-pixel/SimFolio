@@ -31,6 +31,7 @@ struct PhotoMetadata: Codable, Equatable {
     var stage: String?  // "Preparation" or "Restoration"
     var angle: String?  // "Occlusal/Incisal", "Buccal/Facial", etc.
     var rating: Int?    // 1-5 stars
+    var isFavorite: Bool?  // Favorite status (replaces PHAsset.isFavorite)
 
     var toothEntry: ToothEntry? {
         guard let proc = procedure, let num = toothNumber, let date = toothDate else { return nil }
