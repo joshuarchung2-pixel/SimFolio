@@ -18,6 +18,7 @@
 // - EditProfileSheet.swift: Profile editing
 
 import SwiftUI
+import FirebaseAuth
 
 // MARK: - ProfileView
 
@@ -27,6 +28,7 @@ struct ProfileView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @ObservedObject var library = PhotoLibraryManager.shared
     @ObservedObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var authService = AuthenticationService.shared
 
     // MARK: - Navigation State
 
@@ -42,6 +44,8 @@ struct ProfileView: View {
     @State private var showSubscriptionSettings: Bool = false
     @State private var showShareSheet: Bool = false
     @State private var showSocialSettings: Bool = false
+    @State private var showSignIn: Bool = false
+    @State private var showSignOutConfirmation: Bool = false
 
     // MARK: - Computed Properties
 
@@ -151,6 +155,7 @@ struct ProfileView: View {
                     }
 
                     // Settings sections
+                    accountSection
                     appearanceSection
                     subscriptionSection
                     socialSection
@@ -217,6 +222,22 @@ struct ProfileView: View {
             let appURL = URL(string: "https://apps.apple.com/app/simfolio/id6746268638")!
             let shareText = "Check out SimFolio \u{2014} it makes managing your dental portfolio so much easier!"
             ActivityViewSheet(activityItems: [shareText, appURL])
+        }
+        .sheet(isPresented: $showSignIn) {
+            SignInView(context: .generic, onSignIn: {
+                AnalyticsService.logEvent(.accountCreated, parameters: ["source": "profile"])
+                Task { try? await UserProfileService.shared.linkOnboardingData() }
+            })
+        }
+        .alert("Sign Out", isPresented: $showSignOutConfirmation) {
+            Button("Sign Out", role: .destructive) {
+                try? AuthenticationService.shared.signOut()
+                UserProfileService.shared.clearProfile()
+                AnalyticsService.logEvent(.signOutCompleted)
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to sign out?")
         }
         .onAppear {
             ensureUserCreatedDate()
@@ -372,6 +393,52 @@ struct ProfileView: View {
     }
 
     // MARK: - Settings Sections
+
+    @ViewBuilder
+    var accountSection: some View {
+        if authService.authState == .signedOut {
+            settingsGroup(title: "ACCOUNT") {
+                settingsRow("Create Account") { showSignIn = true }
+            }
+        } else if authService.authState == .signedIn {
+            settingsGroup(title: "ACCOUNT") {
+                accountInfoRow
+                Divider().padding(.leading, AppTheme.Spacing.md)
+                signOutRow
+            }
+        }
+    }
+
+    var accountInfoRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(authService.currentUser?.email ?? "Signed in")
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("Signed in")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, 13)
+    }
+
+    var signOutRow: some View {
+        Button(action: { showSignOutConfirmation = true }) {
+            HStack {
+                Text("Sign Out")
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(Color.red)
+                Spacer()
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SettingsRowButtonStyle())
+    }
 
     var appearanceSection: some View {
         settingsGroup(title: "APPEARANCE") {
