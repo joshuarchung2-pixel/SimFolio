@@ -384,6 +384,17 @@ class PhotoLibraryManager: ObservableObject {
         }
     }
 
+    /// Save image to camera roll without tracking (fire-and-forget)
+    func saveImageToCameraRoll(_ image: UIImage) {
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.creationRequestForAsset(from: image)
+        } completionHandler: { success, error in
+            if let error = error {
+                print("Failed to save to camera roll: \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Create album if it doesn't exist
     func createAlbumIfNeeded(completion: @escaping (Bool) -> Void) {
         // Check if album already exists

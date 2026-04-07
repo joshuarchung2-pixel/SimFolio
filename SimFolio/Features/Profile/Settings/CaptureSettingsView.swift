@@ -28,6 +28,7 @@ struct CaptureSettingsView: View {
 
     @AppStorage("autoSaveToLibrary") private var autoSaveToLibrary = true
     @AppStorage("imageQuality") private var imageQuality = "High"
+    @AppStorage("saveToCameraRoll") private var saveToCameraRoll = false
 
     // MARK: - Flash Options
 
@@ -175,6 +176,22 @@ struct CaptureSettingsView: View {
                 .pickerStyle(.menu)
                 .tint(AppTheme.Colors.primary)
             }
+
+            Divider().padding(.leading, AppTheme.Spacing.md)
+
+            Toggle(isOn: $saveToCameraRoll) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save to Camera Roll")
+                        .font(AppTheme.Typography.body)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Also save a copy to the Photos app")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            }
+            .tint(AppTheme.Colors.primary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, 10)
         } header: {
             Text("Saving")
         } footer: {
