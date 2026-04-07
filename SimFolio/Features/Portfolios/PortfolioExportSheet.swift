@@ -13,7 +13,6 @@
 // - Share sheet integration
 
 import SwiftUI
-import Photos
 import UniformTypeIdentifiers
 
 // MARK: - Export Enums
@@ -110,7 +109,7 @@ struct PortfolioExportSheet: View {
     @Binding var isPresented: Bool
 
     @ObservedObject var metadataManager = MetadataManager.shared
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
 
     // MARK: - Export Options State
 
@@ -130,24 +129,20 @@ struct PortfolioExportSheet: View {
 
     // MARK: - Computed Properties
 
-    /// All assets matching portfolio requirements
-    var matchingAssets: [PHAsset] {
-        library.assets.filter { asset in
-            guard let metadata = metadataManager.getMetadata(for: asset.localIdentifier) else {
-                return false
-            }
-
-            for requirement in portfolio.requirements {
-                if metadata.procedure == requirement.procedure {
-                    return true
+    /// All asset IDs matching portfolio requirements
+    var matchingAssetIds: [String] {
+        portfolio.requirements.flatMap { req in
+            metadataManager.assetMetadata.compactMap { (key, metadata) in
+                if metadata.procedure == req.procedure {
+                    return key
                 }
+                return nil
             }
-            return false
         }
     }
 
     var photoCount: Int {
-        matchingAssets.count
+        matchingAssetIds.count
     }
 
     var stats: (fulfilled: Int, total: Int) {
@@ -476,10 +471,11 @@ struct PortfolioExportSheet: View {
 
         try fileManager.createDirectory(at: exportDir, withIntermediateDirectories: true)
 
-        let total = Double(matchingAssets.count)
+        let assetIds = matchingAssetIds
+        let total = Double(assetIds.count)
 
-        for (index, asset) in matchingAssets.enumerated() {
-            let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
+        for (index, assetId) in assetIds.enumerated() {
+            let metadata = metadataManager.getMetadata(for: assetId)
 
             // Determine folder path
             var folderPath = exportDir
@@ -490,7 +486,9 @@ struct PortfolioExportSheet: View {
                     folderPath = exportDir.appendingPathComponent(sanitizeFilename(procedure))
                 }
             case .byDate:
-                if let date = asset.creationDate {
+                let creationDate = PhotoStorageService.shared.records
+                    .first(where: { $0.id.uuidString == assetId })?.createdDate
+                if let date = creationDate {
                     let formatter = DateFormatter()
                     formatter.dateFormat = "yyyy-MM-dd"
                     let dateString = formatter.string(from: date)
@@ -503,11 +501,11 @@ struct PortfolioExportSheet: View {
             try fileManager.createDirectory(at: folderPath, withIntermediateDirectories: true)
 
             // Generate filename
-            let filename = generateFilename(for: asset, metadata: metadata, index: index)
+            let filename = generateFilename(for: assetId, metadata: metadata, index: index)
             let filePath = folderPath.appendingPathComponent(filename)
 
             // Load and save image
-            let image = try await loadImage(from: asset)
+            let image = try await loadImage(for: assetId)
             let resizedImage = resizeImage(image, maxDimension: imageQuality.maxDimension)
 
             if let data = resizedImage.jpegData(compressionQuality: 0.9) {
@@ -551,14 +549,15 @@ struct PortfolioExportSheet: View {
 
         try fileManager.createDirectory(at: exportDir, withIntermediateDirectories: true)
 
-        let total = Double(matchingAssets.count)
+        let assetIds = matchingAssetIds
+        let total = Double(assetIds.count)
 
-        for (index, asset) in matchingAssets.enumerated() {
-            let metadata = metadataManager.getMetadata(for: asset.localIdentifier)
-            let filename = generateFilename(for: asset, metadata: metadata, index: index)
+        for (index, assetId) in assetIds.enumerated() {
+            let metadata = metadataManager.getMetadata(for: assetId)
+            let filename = generateFilename(for: assetId, metadata: metadata, index: index)
             let filePath = exportDir.appendingPathComponent(filename)
 
-            let image = try await loadImage(from: asset)
+            let image = try await loadImage(for: assetId)
             let resizedImage = resizeImage(image, maxDimension: imageQuality.maxDimension)
 
             if let data = resizedImage.jpegData(compressionQuality: 0.9) {
@@ -576,33 +575,21 @@ struct PortfolioExportSheet: View {
 
     // MARK: - Helper Functions
 
-    func loadImage(from asset: PHAsset) async throws -> UIImage {
-        return try await withCheckedThrowingContinuation { continuation in
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .highQualityFormat
-            options.isNetworkAccessAllowed = true
-            options.isSynchronous = false
-
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: PHImageManagerMaximumSize,
-                contentMode: .default,
-                options: options
-            ) { image, info in
-                if let error = info?[PHImageErrorKey] as? Error {
-                    continuation.resume(throwing: error)
-                } else if let image = image {
-                    // Apply any saved edits to the image
-                    let editedImage = PhotoEditPersistenceService.shared.applyStoredEdits(
-                        to: image,
-                        assetId: asset.localIdentifier
-                    )
-                    continuation.resume(returning: editedImage)
-                } else {
-                    continuation.resume(throwing: ExportError.failedToLoadImage)
-                }
-            }
+    func loadImage(for assetId: String) async throws -> UIImage {
+        guard let uuid = UUID(uuidString: assetId) else {
+            throw ExportError.failedToLoadImage
         }
+
+        guard let image = await MainActor.run(body: { PhotoStorageService.shared.loadImage(id: uuid) }) else {
+            throw ExportError.failedToLoadImage
+        }
+
+        // Apply saved edits
+        let editedImage = PhotoEditPersistenceService.shared.applyStoredEdits(
+            to: image,
+            assetId: assetId
+        )
+        return editedImage
     }
 
     func resizeImage(_ image: UIImage, maxDimension: CGFloat?) -> UIImage {
@@ -626,7 +613,7 @@ struct PortfolioExportSheet: View {
         return resizedImage ?? image
     }
 
-    func generateFilename(for asset: PHAsset, metadata: PhotoMetadata?, index: Int) -> String {
+    func generateFilename(for assetId: String, metadata: PhotoMetadata?, index: Int) -> String {
         var parts: [String] = []
 
         if includeMetadata, let metadata = metadata {
@@ -644,8 +631,10 @@ struct PortfolioExportSheet: View {
             }
         }
 
-        // Add date
-        if let date = asset.creationDate {
+        // Add date from storage record, fall back to index
+        let creationDate = PhotoStorageService.shared.records
+            .first(where: { $0.id.uuidString == assetId })?.createdDate
+        if let date = creationDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd_HHmmss"
             parts.append(formatter.string(from: date))
