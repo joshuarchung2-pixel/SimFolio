@@ -26,7 +26,6 @@ struct CaptureSettingsView: View {
 
     // MARK: - Saving Settings
 
-    @AppStorage("autoSaveToLibrary") private var autoSaveToLibrary = true
     @AppStorage("imageQuality") private var imageQuality = "High"
     @AppStorage("saveToCameraRoll") private var saveToCameraRoll = false
 
@@ -90,6 +89,7 @@ struct CaptureSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(AppTheme.Colors.primary)
+                .labelsHidden()
             }
         } header: {
             Text("Camera")
@@ -148,16 +148,6 @@ struct CaptureSettingsView: View {
 
     private var savingSection: some View {
         Section {
-            // Auto-Save Toggle
-            Toggle(isOn: $autoSaveToLibrary) {
-                SettingLabel(
-                    icon: "square.and.arrow.down.fill",
-                    title: "Auto-Save to Photos",
-                    subtitle: "Save captures to photo library"
-                )
-            }
-            .tint(AppTheme.Colors.primary)
-
             // Image Quality Picker
             HStack {
                 SettingLabel(
@@ -175,6 +165,7 @@ struct CaptureSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(AppTheme.Colors.primary)
+                .labelsHidden()
             }
 
             Divider().padding(.leading, AppTheme.Spacing.md)
