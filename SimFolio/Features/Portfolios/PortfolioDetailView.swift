@@ -14,7 +14,6 @@
 // - Smart capture navigation with pre-filled metadata
 
 import SwiftUI
-import Photos
 
 // MARK: - PortfolioTab
 
@@ -44,7 +43,6 @@ struct PortfolioDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var router: NavigationRouter
     @ObservedObject var metadataManager = MetadataManager.shared
-    @ObservedObject var library = PhotoLibraryManager.shared
 
     // MARK: - State
 

@@ -16,9 +16,20 @@
 		57F1B0092F3A0002001109B6 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 57F1B00A2F3A0002001109B6 /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		57A1B0012F4A0001001109B6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 57E137492F0FAE870043415F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 57E137502F0FAE870043415F;
+			remoteInfo = SimFolio;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		572D6A3A2F3283A30078A0FD /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		57E137512F0FAE870043415F /* SimFolio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimFolio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		57A1B0002F4A0001001109B6 /* SimFolioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimFolioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -40,6 +51,11 @@
 			path = SimFolio;
 			sourceTree = "<group>";
 		};
+		57A1B0022F4A0001001109B6 /* SimFolioTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SimFolioTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +69,13 @@
 				57F1B0052F3A0002001109B6 /* FirebaseAuth in Frameworks */,
 				57F1B0072F3A0002001109B6 /* FirebaseFirestore in Frameworks */,
 				57F1B0092F3A0002001109B6 /* FirebaseStorage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		57A1B0042F4A0001001109B6 /* Frameworks (SimFolioTests) */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				57E137512F0FAE870043415F /* SimFolio.app */,
+				57A1B0002F4A0001001109B6 /* SimFolioTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,6 +111,27 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		57A1B0032F4A0001001109B6 /* SimFolioTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 57A1B00A2F4A0001001109B6 /* Build configuration list for PBXNativeTarget "SimFolioTests" */;
+			buildPhases = (
+				57A1B0052F4A0001001109B6 /* Sources */,
+				57A1B0042F4A0001001109B6 /* Frameworks (SimFolioTests) */,
+				57A1B0062F4A0001001109B6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				57A1B0072F4A0001001109B6 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				57A1B0022F4A0001001109B6 /* SimFolioTests */,
+			);
+			name = SimFolioTests;
+			productName = SimFolioTests;
+			productReference = 57A1B0002F4A0001001109B6 /* SimFolioTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		57E137502F0FAE870043415F /* SimFolio */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 57E1375C2F0FAE880043415F /* Build configuration list for PBXNativeTarget "SimFolio" */;
@@ -129,6 +174,10 @@
 					57E137502F0FAE870043415F = {
 						CreatedOnToolsVersion = 26.2;
 					};
+					57A1B0032F4A0001001109B6 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 57E137502F0FAE870043415F;
+					};
 				};
 			};
 			buildConfigurationList = 57E1374C2F0FAE870043415F /* Build configuration list for PBXProject "SimFolio" */;
@@ -150,6 +199,7 @@
 			projectRoot = "";
 			targets = (
 				57E137502F0FAE870043415F /* SimFolio */,
+				57A1B0032F4A0001001109B6 /* SimFolioTests */,
 			);
 		};
 /* End PBXProject section */
@@ -163,7 +213,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		57A1B0062F4A0001001109B6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section (SimFolioTests) */
+		57A1B0052F4A0001001109B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section (SimFolioTests) */
+
+/* Begin PBXTargetDependency section */
+		57A1B0072F4A0001001109B6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 57E137502F0FAE870043415F /* SimFolio */;
+			targetProxy = 57A1B0012F4A0001001109B6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		57F1B0042F3A0001001109B6 /* Upload dSYMs to Crashlytics */ = {
@@ -412,6 +487,50 @@
 			};
 			name = Release;
 		};
+		57A1B0082F4A0001001109B6 /* Debug (SimFolioTests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B93BJQAH8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
+			};
+			name = Debug;
+		};
+		57A1B0092F4A0001001109B6 /* Release (SimFolioTests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B93BJQAH8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -429,6 +548,15 @@
 			buildConfigurations = (
 				57E1375D2F0FAE880043415F /* Debug */,
 				57E1375E2F0FAE880043415F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		57A1B00A2F4A0001001109B6 /* Build configuration list for PBXNativeTarget "SimFolioTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57A1B0082F4A0001001109B6 /* Debug (SimFolioTests) */,
+				57A1B0092F4A0001001109B6 /* Release (SimFolioTests) */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

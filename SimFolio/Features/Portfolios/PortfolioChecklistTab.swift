@@ -12,7 +12,6 @@
 // - Auto-expand first incomplete requirement on appear
 
 import SwiftUI
-import Photos
 
 // MARK: - PortfolioChecklistTab
 
@@ -23,7 +22,6 @@ struct PortfolioChecklistTab: View {
     @EnvironmentObject var router: NavigationRouter
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var metadataManager = MetadataManager.shared
-    @ObservedObject var library = PhotoLibraryManager.shared
 
     // Track which requirements are expanded
     @State private var expandedRequirements: Set<String> = []
@@ -373,7 +371,7 @@ struct AngleChecklistRow: View {
     let onCapturePressed: () -> Void
 
     @ObservedObject var metadataManager = MetadataManager.shared
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
 
     var currentCount: Int {
         metadataManager.getMatchingPhotoCount(
@@ -391,10 +389,10 @@ struct AngleChecklistRow: View {
         currentCount >= neededCount
     }
 
-    var matchingAssets: [PHAsset] {
-        // Get assets that match this procedure/stage/angle
-        library.assets.filter { asset in
-            if let metadata = metadataManager.getMetadata(for: asset.localIdentifier) {
+    var matchingRecords: [PhotoRecord] {
+        // Get records that match this procedure/stage/angle
+        photoStorage.records.filter { record in
+            if let metadata = metadataManager.getMetadata(for: record.id.uuidString) {
                 return metadata.procedure == requirement.procedure &&
                        metadata.stage == stage &&
                        metadata.angle == angle
@@ -421,8 +419,8 @@ struct AngleChecklistRow: View {
             Spacer()
 
             // Thumbnail stack (if photos exist)
-            if !matchingAssets.isEmpty {
-                ThumbnailStack(assets: matchingAssets)
+            if !matchingRecords.isEmpty {
+                ThumbnailStack(records: matchingRecords)
             }
 
             // Count text
@@ -468,22 +466,22 @@ struct AngleChecklistRow: View {
 
 /// Overlapping stack of photo thumbnails
 struct ThumbnailStack: View {
-    let assets: [PHAsset]
+    let records: [PhotoRecord]
 
     private let thumbnailSize: CGFloat = 28
     private let overlap: CGFloat = 10
 
     var body: some View {
         HStack(spacing: -overlap) {
-            ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
-                AsyncThumbnailView(asset: asset, size: thumbnailSize)
+            ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                AsyncThumbnailView(assetId: record.id.uuidString, size: thumbnailSize)
                     .frame(width: thumbnailSize, height: thumbnailSize)
                     .clipShape(Circle())
                     .overlay(
                         Circle()
                             .stroke(AppTheme.Colors.surface, lineWidth: 2)
                     )
-                    .zIndex(Double(assets.count - index)) // Stack order
+                    .zIndex(Double(records.count - index)) // Stack order
             }
         }
     }
@@ -493,7 +491,7 @@ struct ThumbnailStack: View {
 
 /// Asynchronously loads and displays a photo thumbnail
 struct AsyncThumbnailView: View {
-    let asset: PHAsset
+    let assetId: String
     let size: CGFloat
 
     @State private var image: UIImage? = nil
@@ -519,16 +517,15 @@ struct AsyncThumbnailView: View {
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
             // Refresh if this asset was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == assetId {
                 loadThumbnail()
             }
         }
     }
 
     private func loadThumbnail() {
-        let targetSize = CGSize(width: size * 2, height: size * 2) // 2x for retina
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: targetSize) { loadedImage in
-            self.image = loadedImage
+        if let uuid = UUID(uuidString: assetId) {
+            image = PhotoStorageService.shared.loadThumbnail(id: uuid)
         }
     }
 }

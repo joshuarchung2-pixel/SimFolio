@@ -166,6 +166,35 @@ class MetadataManager: ObservableObject {
         }
     }
 
+    // MARK: - Key Remapping (for migration)
+
+    /// Remap assetMetadata keys from old identifiers to new ones
+    func remapMetadataKeys(_ mapping: [String: UUID]) {
+        var newMetadata: [String: PhotoMetadata] = [:]
+        for (oldKey, metadata) in assetMetadata {
+            if let newId = mapping[oldKey] {
+                newMetadata[newId.uuidString] = metadata
+            } else {
+                // Keep unmapped entries (shouldn't happen, but safe)
+                newMetadata[oldKey] = metadata
+            }
+        }
+        assetMetadata = newMetadata
+        saveAssetMetadata()
+    }
+
+    /// Clean up metadata entries that have no corresponding PhotoRecord
+    func cleanupOrphanedAppStorageData() {
+        let validIds = Set(PhotoStorageService.shared.records.map { $0.id.uuidString })
+        let orphanedKeys = assetMetadata.keys.filter { !validIds.contains($0) }
+        for key in orphanedKeys {
+            assetMetadata.removeValue(forKey: key)
+        }
+        if !orphanedKeys.isEmpty {
+            saveAssetMetadata()
+        }
+    }
+
     // MARK: - Portfolio Persistence
 
     /// Load portfolios from UserDefaults

@@ -10,7 +10,6 @@
 // - Save changes to Photos library
 
 import SwiftUI
-import Photos
 import Combine
 import UIKit
 
@@ -20,7 +19,7 @@ import UIKit
 struct PhotoEditorView: View {
     // MARK: - Properties
 
-    let asset: PHAsset
+    let photoId: UUID
     @Binding var isPresented: Bool
     let onSave: ((UIImage) -> Void)?
 
@@ -43,11 +42,11 @@ struct PhotoEditorView: View {
 
     // MARK: - Init
 
-    init(asset: PHAsset, isPresented: Binding<Bool>, onSave: ((UIImage) -> Void)? = nil) {
-        self.asset = asset
+    init(photoId: UUID, isPresented: Binding<Bool>, onSave: ((UIImage) -> Void)? = nil) {
+        self.photoId = photoId
         self._isPresented = isPresented
         self.onSave = onSave
-        self._viewModel = StateObject(wrappedValue: PhotoEditorViewModel(assetId: asset.localIdentifier))
+        self._viewModel = StateObject(wrappedValue: PhotoEditorViewModel(assetId: photoId.uuidString))
     }
 
     // MARK: - Body
@@ -421,10 +420,8 @@ struct PhotoEditorView: View {
     // MARK: - Actions
 
     private func loadImage() {
-        PhotoLibraryManager.shared.requestImage(for: asset) { image in
-            if let image = image {
-                viewModel.setOriginalImage(image)
-            }
+        if let image = PhotoStorageService.shared.loadImage(id: photoId) {
+            viewModel.setOriginalImage(image)
         }
     }
 
@@ -457,7 +454,7 @@ struct PhotoEditorView: View {
                     // Save edit state for persistence
                     PhotoEditPersistenceService.shared.saveEditState(
                         editStateSnapshot,
-                        for: asset.localIdentifier
+                        for: photoId.uuidString
                     )
                     onSave?(processedImage)
                     isPresented = false
@@ -2488,7 +2485,7 @@ struct ZoomableCropView: View {
 struct PhotoEditorView_Previews: PreviewProvider {
     static var previews: some View {
         PhotoEditorView(
-            asset: PHAsset(),
+            photoId: UUID(),
             isPresented: .constant(true)
         )
     }
