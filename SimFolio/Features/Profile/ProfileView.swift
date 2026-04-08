@@ -258,7 +258,7 @@ struct ProfileView: View {
                     .clipShape(Circle())
 
                 // Name + school
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(userName)
                         .font(.system(.title3, design: .serif).weight(.bold))
                         .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -318,7 +318,7 @@ struct ProfileView: View {
     }
 
     private func statItem(value: String, label: String, valueColor: Color = AppTheme.Colors.textPrimary) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: AppTheme.Spacing.xxs) {
             Text(value)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(valueColor)
@@ -411,7 +411,7 @@ struct ProfileView: View {
 
     var accountInfoRow: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 Text(authService.currentUser?.email ?? "Signed in")
                     .font(AppTheme.Typography.body)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -629,7 +629,7 @@ struct SettingsRow: View {
             HStack(spacing: AppTheme.Spacing.md) {
                 // Icon container
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                         .fill(iconColor.opacity(0.15))
                         .frame(width: 32, height: 32)
 
@@ -639,7 +639,7 @@ struct SettingsRow: View {
                 }
 
                 // Text content
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(title)
                         .font(AppTheme.Typography.subheadline)
                         .foregroundStyle(isDestructive ? AppTheme.Colors.error : AppTheme.Colors.textPrimary)

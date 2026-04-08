@@ -189,13 +189,12 @@ struct PaywallView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [.orange, .yellow],
+                            colors: [AppTheme.Colors.warning, AppTheme.Colors.warning.opacity(0.6)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 56, height: 56)
-                    .shadow(color: .orange.opacity(0.4), radius: 10, x: 0, y: 4)
 
                 Image(systemName: "crown.fill")
                     .font(.system(size: 26))
@@ -317,7 +316,7 @@ struct PaywallView: View {
                 VStack(spacing: AppTheme.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 28))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.Colors.warning)
 
                     Text(error)
                         .font(AppTheme.Typography.caption)
@@ -586,7 +585,7 @@ private struct CompactSubscriptionCard: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(AppTheme.Colors.success)
-                        .cornerRadius(4)
+                        .cornerRadius(AppTheme.CornerRadius.xs)
                 } else {
                     // Spacer for consistent height
                     Text(" ")
@@ -616,11 +615,11 @@ private struct CompactSubscriptionCard: View {
                     let unitText = value == 1 ? unit.localizedDescription.uppercased() : unit.localizedDescriptionPlural.uppercased()
                     Text("\(value) \(unitText) FREE")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.Colors.warning)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.15))
-                        .cornerRadius(4)
+                        .background(AppTheme.Colors.warning.opacity(0.15))
+                        .cornerRadius(AppTheme.CornerRadius.xs)
                 } else {
                     // Spacer for consistent height
                     Text(" ")
@@ -656,7 +655,7 @@ private struct CompactSubscriptionCard: View {
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
                     .stroke(
                         isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider,
-                        lineWidth: isSelected ? 2 : 1
+                        lineWidth: 1
                     )
             )
         }

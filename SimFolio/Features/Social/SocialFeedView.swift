@@ -58,7 +58,7 @@ struct SocialFeedView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Spacer()
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.large)
                     .fill(AppTheme.Colors.accentLight)
                     .frame(width: 64, height: 64)
                 Image(systemName: "person.2.fill")
@@ -66,7 +66,7 @@ struct SocialFeedView: View {
                     .foregroundStyle(AppTheme.Colors.primary)
             }
             Text("Sign in to see your class feed")
-                .font(.system(.title3, design: .serif).weight(.semibold))
+                .font(AppTheme.Typography.title3)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
             Text("Share simulation photos and connect with classmates")
                 .font(AppTheme.Typography.body)
@@ -87,7 +87,7 @@ struct SocialFeedView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             Spacer()
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.large)
                     .fill(AppTheme.Colors.accentLight)
                     .frame(width: 64, height: 64)
                 Image(systemName: "bubble.left.and.text.bubble.right.fill")
@@ -95,7 +95,7 @@ struct SocialFeedView: View {
                     .foregroundStyle(AppTheme.Colors.primary)
             }
             Text("Join the Class Feed")
-                .font(.system(.title3, design: .serif).weight(.semibold))
+                .font(AppTheme.Typography.title3)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
             Text("Share your simulation work and see what your classmates are working on")
                 .font(AppTheme.Typography.body)
@@ -125,7 +125,8 @@ struct SocialFeedView: View {
                             Image(systemName: "arrow.up")
                             Text("New posts available")
                         }
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppTheme.Typography.footnote)
+                    .fontWeight(.semibold)
                         .foregroundStyle(AppTheme.Colors.primary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -203,7 +204,8 @@ struct SocialFeedView: View {
         Button(action: action) {
             if isSelected {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Typography.caption)
+                    .fontWeight(.semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
@@ -211,7 +213,7 @@ struct SocialFeedView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 Text(title)
-                    .font(.system(size: 12))
+                    .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)

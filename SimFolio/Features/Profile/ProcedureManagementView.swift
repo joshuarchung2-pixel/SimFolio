@@ -289,7 +289,7 @@ struct ProcedureRow: View {
                 .shadow(color: procedure.color.opacity(0.4), radius: 2, x: 0, y: 1)
 
             // Procedure info
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 HStack(spacing: AppTheme.Spacing.xs) {
                     Text(procedure.name)
                         .font(AppTheme.Typography.subheadline)
@@ -300,10 +300,10 @@ struct ProcedureRow: View {
                         Text("DEFAULT")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(AppTheme.Colors.textTertiary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, AppTheme.Spacing.xs)
+                            .padding(.vertical, AppTheme.Spacing.xxs)
                             .background(AppTheme.Colors.surfaceSecondary)
-                            .cornerRadius(4)
+                            .cornerRadius(AppTheme.CornerRadius.xs)
                     }
                 }
 
@@ -644,7 +644,7 @@ struct ColorOption: View {
                         .frame(width: 36, height: 36)
 
                     Circle()
-                        .stroke(color, lineWidth: 2)
+                        .stroke(color, lineWidth: 1)
                         .frame(width: 42, height: 42)
 
                     Image(systemName: "checkmark")

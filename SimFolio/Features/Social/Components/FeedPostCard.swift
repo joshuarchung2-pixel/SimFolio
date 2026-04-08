@@ -19,7 +19,7 @@ struct FeedPostCard: View {
                                 .foregroundStyle(AppTheme.procedureColor(for: post.procedure))
                         )
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                         Text(post.authorName)
                             .font(AppTheme.Typography.subheadline)
                             .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -75,7 +75,7 @@ struct FeedPostCard: View {
                 // Caption
                 if let caption = post.caption, !caption.isEmpty {
                     Text(caption)
-                        .font(.system(size: 13))
+                        .font(AppTheme.Typography.footnote)
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -83,7 +83,7 @@ struct FeedPostCard: View {
 
                 // Bottom bar: heart + comment count only
                 HStack(spacing: 12) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: AppTheme.Spacing.xs) {
                         Image(systemName: "heart")
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.Colors.textTertiary)
@@ -92,7 +92,7 @@ struct FeedPostCard: View {
                             .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: AppTheme.Spacing.xs) {
                         Image(systemName: "bubble.right")
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.Colors.textTertiary)
@@ -106,9 +106,9 @@ struct FeedPostCard: View {
             }
             .padding(AppTheme.Spacing.md)
             .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
                     .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
             )
         }

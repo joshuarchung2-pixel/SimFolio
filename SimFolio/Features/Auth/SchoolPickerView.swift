@@ -48,6 +48,7 @@ struct SchoolPickerView: View {
                                         .font(AppTheme.Typography.body)
                                         .foregroundColor(AppTheme.Colors.textPrimary)
                                         .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
                                     Text("\(school.shortName) - \(school.state)")
                                         .font(AppTheme.Typography.caption)
                                         .foregroundColor(AppTheme.Colors.textSecondary)

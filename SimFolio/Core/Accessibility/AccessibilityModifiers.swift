@@ -359,7 +359,7 @@ struct AccessibilityModifiers_Previews: PreviewProvider {
         VStack(spacing: 20) {
             // Semantic accessibility
             Text("Header")
-                .font(.title)
+                .font(AppTheme.Typography.title)
                 .semanticAccessibility(
                     label: "Section Header",
                     hint: nil,
@@ -370,7 +370,7 @@ struct AccessibilityModifiers_Previews: PreviewProvider {
 
             // Card accessibility
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.blue.opacity(0.2))
+                .fill(AppTheme.Colors.info.opacity(0.2))
                 .frame(height: 100)
                 .cardAccessibility(
                     label: "Sample card with content",

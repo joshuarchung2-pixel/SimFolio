@@ -59,7 +59,7 @@ struct ErrorView: View {
             // Text
             VStack(spacing: AppTheme.Spacing.sm) {
                 Text(title)
-                    .font(.system(.title3, design: .serif).weight(.semibold))
+                    .font(AppTheme.Typography.title3)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 

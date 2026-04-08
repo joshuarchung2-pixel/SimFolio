@@ -65,7 +65,7 @@ struct AppearanceOptionRow: View {
             HStack(spacing: AppTheme.Spacing.md) {
                 // Icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                         .fill(iconBackgroundColor.opacity(0.15))
                         .frame(width: 32, height: 32)
 
@@ -75,7 +75,7 @@ struct AppearanceOptionRow: View {
                 }
 
                 // Text content
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(appearance.displayName)
                         .font(AppTheme.Typography.subheadline)
                         .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -129,7 +129,7 @@ struct AppearancePreview: View {
                             .font(.system(size: 18))
                     )
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
                     Text("Sample Card")
                         .font(AppTheme.Typography.headline)
                         .foregroundStyle(AppTheme.Colors.textPrimary)

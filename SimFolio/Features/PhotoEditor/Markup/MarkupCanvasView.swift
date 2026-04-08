@@ -465,8 +465,8 @@ struct InlineTextEditorView: View {
             .multilineTextAlignment(.center)
             .lineLimit(nil)  // No line limit - allow text to extend naturally
             .fixedSize(horizontal: false, vertical: true)  // Grow vertically as needed
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, AppTheme.Spacing.sm)
+            .padding(.vertical, AppTheme.Spacing.xs)
             .background(textBackground)
             .focused($isFocused)
             .frame(minWidth: 60)  // Minimum width for tapping
@@ -476,7 +476,7 @@ struct InlineTextEditorView: View {
     @ViewBuilder
     private var textBackground: some View {
         if let fill = fillColor {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs)
                 .fill(fill.color.opacity(0.8))
         } else {
             // No background when no fill color - matches TextBoxView

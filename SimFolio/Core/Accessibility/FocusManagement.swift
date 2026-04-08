@@ -276,14 +276,14 @@ struct FocusManagement_Previews: PreviewProvider {
         var body: some View {
             VStack(spacing: 20) {
                 Text("Focus Management Demo")
-                    .font(.headline)
+                    .font(AppTheme.Typography.headline)
                     .focusOnAppear()
 
                 // Rotor actions example
                 Text("Item with custom actions")
                     .padding()
-                    .background(Color.blue.opacity(0.2))
-                    .cornerRadius(8)
+                    .background(AppTheme.Colors.info.opacity(0.2))
+                    .cornerRadius(AppTheme.CornerRadius.small)
                     .rotorActions([
                         ("Edit", { print("Edit") }),
                         ("Delete", { print("Delete") }),
@@ -313,8 +313,8 @@ struct FocusManagement_Previews: PreviewProvider {
 
                 Text("Focus Target")
                     .padding()
-                    .background(Color.green.opacity(0.2))
-                    .cornerRadius(8)
+                    .background(AppTheme.Colors.success.opacity(0.2))
+                    .cornerRadius(AppTheme.CornerRadius.small)
                     .focusAfterAction(trigger: $shouldFocus)
             }
             .padding()
@@ -330,13 +330,13 @@ struct FocusManagement_Previews: PreviewProvider {
                         .font(.title2)
                         .fontWeight(.bold)
                     Text(label)
-                        .font(.caption)
+                        .font(AppTheme.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
+                .background(AppTheme.Colors.textTertiary.opacity(0.1))
+                .cornerRadius(AppTheme.CornerRadius.small)
             }
         }
     }

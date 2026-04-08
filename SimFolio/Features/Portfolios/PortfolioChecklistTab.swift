@@ -241,11 +241,9 @@ struct RequirementChecklistCard: View {
         }
         .background(AppTheme.Colors.surface)
         .cornerRadius(AppTheme.CornerRadius.medium)
-        .shadow(
-            color: Color.black.opacity(0.04),
-            radius: 4,
-            x: 0,
-            y: 2
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                .stroke(AppTheme.Colors.divider, lineWidth: 1)
         )
     }
 

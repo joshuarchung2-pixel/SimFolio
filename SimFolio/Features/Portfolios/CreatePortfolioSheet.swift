@@ -175,8 +175,8 @@ struct CreatePortfolioSheet: View {
                     Text("\(requirements.count)")
                         .font(AppTheme.Typography.caption)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xxs)
                         .background(AppTheme.Colors.primary)
                         .cornerRadius(10)
                 }
@@ -222,7 +222,7 @@ struct CreatePortfolioSheet: View {
                     .padding(AppTheme.Spacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
-                            .stroke(AppTheme.Colors.primary, style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                            .stroke(AppTheme.Colors.primary, style: StrokeStyle(lineWidth: 1, dash: [6]))
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -516,8 +516,8 @@ struct RequirementPreviewRow: View {
             Text("\(totalPhotos) photo\(totalPhotos == 1 ? "" : "s")")
                 .font(AppTheme.Typography.caption)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, AppTheme.Spacing.sm)
+                .padding(.vertical, AppTheme.Spacing.xs)
                 .background(AppTheme.Colors.surfaceSecondary)
                 .cornerRadius(AppTheme.CornerRadius.small)
 
@@ -763,9 +763,9 @@ struct RequirementEditorSheet: View {
                     .padding(.horizontal, AppTheme.Spacing.sm)
                     .padding(.vertical, AppTheme.Spacing.xs)
                     .background(AppTheme.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                             .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
                     )
                 }
@@ -833,7 +833,7 @@ struct RequirementEditorSheet: View {
                 .tracking(0.8)
 
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text("Required photos")
                         .font(AppTheme.Typography.headline)
                         .foregroundStyle(AppTheme.Colors.textPrimary)
@@ -1048,11 +1048,11 @@ struct StageChip: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                     .fill(isSelected ? AppTheme.Colors.accentLight : AppTheme.Colors.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                     .strokeBorder(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1)
             )
         }

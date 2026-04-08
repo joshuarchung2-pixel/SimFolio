@@ -152,7 +152,7 @@ struct DPTabBar: View {
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.vertical, AppTheme.Spacing.xxs)
             .background(AppTheme.Colors.error)
             .clipShape(Capsule())
             .minimumScaleFactor(0.8)

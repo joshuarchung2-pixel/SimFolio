@@ -44,22 +44,12 @@ struct AboutView: View {
         Section {
             VStack(spacing: AppTheme.Spacing.md) {
                 // App Icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(
-                            LinearGradient(
-                                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 100, height: 100)
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 10, x: 0, y: 5)
-
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.white)
-                }
+                Image("AppIconImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 10, x: 0, y: 5)
                 .padding(.top, AppTheme.Spacing.md)
 
                 // App Name
@@ -79,11 +69,11 @@ struct AboutView: View {
                         .font(AppTheme.Typography.caption)
                         .foregroundStyle(AppVersion.isDebug ? AppTheme.Colors.warning : .purple)
                         .padding(.horizontal, AppTheme.Spacing.sm)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, AppTheme.Spacing.xxs)
                         .background(
                             (AppVersion.isDebug ? AppTheme.Colors.warning : Color.purple).opacity(0.1)
                         )
-                        .cornerRadius(4)
+                        .cornerRadius(AppTheme.CornerRadius.xs)
                 }
 
                 // Tagline
@@ -365,7 +355,7 @@ struct AcknowledgementsSheet: View {
 
     private func acknowledgementRow(_ name: String, description: String) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 Text(name)
                     .font(AppTheme.Typography.body)
                     .foregroundStyle(AppTheme.Colors.textPrimary)

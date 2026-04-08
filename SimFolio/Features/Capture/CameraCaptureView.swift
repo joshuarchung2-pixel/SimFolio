@@ -464,7 +464,7 @@ struct CameraCaptureView: View {
                     }
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                        .fill(Color.gray.opacity(AppTheme.Opacity.medium))
+                        .fill(AppTheme.Colors.textTertiary.opacity(AppTheme.Opacity.medium))
                         .frame(width: 60, height: 60)
                         .overlay(
                             Image(systemName: "photo")
@@ -504,7 +504,7 @@ struct CameraCaptureView: View {
         Button(action: cycleFlashMode) {
             Image(systemName: flashModeIcon)
                 .font(.system(size: AppTheme.IconSize.md, weight: .medium))
-                .foregroundStyle(flashMode == .off ? .white : .yellow)
+                .foregroundStyle(flashMode == .off ? .white : AppTheme.Colors.warning)
                 .frame(width: 60, height: 60)
                 .background(Color.black.opacity(AppTheme.Opacity.medium))
                 .clipShape(Circle())
@@ -523,7 +523,7 @@ struct CameraCaptureView: View {
                 }) {
                     Text("\(Int(zoom))x")
                         .font(AppTheme.Typography.caption)
-                        .foregroundStyle(isZoomSelected(zoom) ? .yellow : .white)
+                        .foregroundStyle(isZoomSelected(zoom) ? AppTheme.Colors.warning : .white)
                         .padding(.horizontal, AppTheme.Spacing.sm)
                         .padding(.vertical, AppTheme.Spacing.xs)
                         .background(isZoomSelected(zoom) ? Color.white.opacity(AppTheme.Opacity.light) : Color.clear)
@@ -833,7 +833,7 @@ struct ZoomIndicatorView: View {
             // Zoom multiplier text (matches zoom button caption size)
             Text(String(format: "%.1fx", currentZoom))
                 .font(AppTheme.Typography.caption)
-                .foregroundStyle(.yellow)
+                .foregroundStyle(AppTheme.Colors.warning)
 
             // Ticker ruler animation
             ZStack {
@@ -852,7 +852,7 @@ struct ZoomIndicatorView: View {
 
                 // Center indicator line
                 Rectangle()
-                    .fill(Color.yellow)
+                    .fill(AppTheme.Colors.warning)
                     .frame(width: 1.5, height: 10)
             }
             .frame(width: 80, height: 12)
@@ -1080,7 +1080,7 @@ struct QuickTagEditorSheet: View {
         } else if metadataManager.getEnabledStageNames().contains(tag) {
             return metadataManager.stageColor(for: tag)
         } else if MetadataManager.angles.contains(tag) {
-            return .purple
+            return AppTheme.Colors.crown
         }
         return AppTheme.Colors.textSecondary
     }
@@ -1302,7 +1302,7 @@ struct QuickTagEditorSheet: View {
                                             .foregroundStyle(captureState.selectedAngle == angle ? .white : AppTheme.Colors.textPrimary)
                                             .padding(.horizontal, AppTheme.Spacing.sm)
                                             .padding(.vertical, AppTheme.Spacing.xs)
-                                            .background(captureState.selectedAngle == angle ? Color.purple : AppTheme.Colors.surfaceSecondary)
+                                            .background(captureState.selectedAngle == angle ? AppTheme.Colors.crown : AppTheme.Colors.surfaceSecondary)
                                             .cornerRadius(AppTheme.CornerRadius.full)
                                     }
                                     .buttonStyle(PlainButtonStyle())
@@ -1529,7 +1529,7 @@ struct QuickToothCell: View {
                 .foregroundStyle(isSelected ? .white : AppTheme.Colors.textPrimary)
                 .frame(width: 20, height: 28)
                 .background(isSelected ? AppTheme.Colors.info : AppTheme.Colors.surfaceSecondary)
-                .cornerRadius(4)
+                .cornerRadius(AppTheme.CornerRadius.xs)
         }
     }
 }

@@ -356,13 +356,13 @@ struct PortfolioPhotoGrid: View {
     let onPhotoTapped: (PHAsset) -> Void
 
     private let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
+        GridItem(.flexible(), spacing: AppTheme.Spacing.xxs),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.xxs),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.xxs)
     ]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
+        LazyVGrid(columns: columns, spacing: AppTheme.Spacing.xxs) {
             ForEach(assets, id: \.localIdentifier) { asset in
                 PortfolioPhotoThumbnail(
                     asset: asset,
@@ -437,11 +437,11 @@ struct PortfolioPhotoThumbnail: View {
                         Text(label)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, AppTheme.Spacing.xs)
+                            .padding(.vertical, AppTheme.Spacing.xxs)
                             .background(Color.black.opacity(0.6))
-                            .cornerRadius(4)
-                            .padding(4)
+                            .cornerRadius(AppTheme.CornerRadius.xs)
+                            .padding(AppTheme.Spacing.xs)
                     }
                 }
             }
@@ -619,11 +619,11 @@ struct PortfolioPhotoDetailSheet: View {
             // Rating and date row
             HStack {
                 if let rating = metadata.rating, rating > 0 {
-                    HStack(spacing: 2) {
+                    HStack(spacing: AppTheme.Spacing.xxs) {
                         ForEach(1...5, id: \.self) { star in
                             Image(systemName: star <= rating ? "star.fill" : "star")
                                 .font(.system(size: 12))
-                                .foregroundStyle(star <= rating ? .yellow : .gray)
+                                .foregroundStyle(star <= rating ? AppTheme.Colors.warning : .gray)
                         }
                     }
                 }

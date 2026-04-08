@@ -517,7 +517,7 @@ struct FilterChipsBar: View {
                 if let minRating = filter.minimumRating {
                     FilterChip(
                         text: "\(minRating)+ Stars",
-                        color: .yellow,
+                        color: AppTheme.Colors.warning,
                         onRemove: {
                             filter.minimumRating = nil
                         }
@@ -528,7 +528,7 @@ struct FilterChipsBar: View {
                 if filter.favoritesOnly {
                     FilterChip(
                         text: "Favorites",
-                        color: .yellow,
+                        color: AppTheme.Colors.warning,
                         onRemove: {
                             filter.favoritesOnly = false
                         }
@@ -1470,9 +1470,9 @@ struct ProcedureDetailView: View {
 
     // MARK: - Grid Content
     private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm)
     ]
 
     var gridContent: some View {
@@ -1611,10 +1611,10 @@ struct ToothGroupSection: View {
                             ForEach(assets.prefix(3), id: \.localIdentifier) { asset in
                                 AsyncThumbnailView(asset: asset, size: 32)
                                     .frame(width: 32, height: 32)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .stroke(AppTheme.Colors.surface, lineWidth: 2)
+                                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs)
+                                            .stroke(AppTheme.Colors.surface, lineWidth: 1)
                                     )
                             }
                         }
@@ -1749,7 +1749,7 @@ struct LibraryPhotoThumbnail: View {
                                     .foregroundStyle(.white)
                             } else {
                                 Circle()
-                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 1.5)
+                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 1)
                                     .frame(width: 22, height: 22)
                             }
                         }
@@ -1887,7 +1887,7 @@ struct PhotoGridCell: View {
                                     .foregroundStyle(.white)
                             } else {
                                 Circle()
-                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 1.5)
+                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 1)
                                     .frame(width: 18, height: 18)
                             }
                         }
@@ -1949,7 +1949,7 @@ struct PhotoGridCell: View {
                             ForEach(0..<rating, id: \.self) { _ in
                                 Image(systemName: "star.fill")
                                     .font(.system(size: AppTheme.IconSize.xs - 4))
-                                    .foregroundStyle(.yellow)
+                                    .foregroundStyle(AppTheme.Colors.warning)
                             }
                             ForEach(0..<(5 - rating), id: \.self) { _ in
                                 Image(systemName: "star")
@@ -2437,8 +2437,8 @@ struct PhotoDetailView: View {
         .padding(.horizontal, AppTheme.Spacing.md)
         .padding(.bottom, AppTheme.Spacing.lg)
         .background(
-            Color(UIColor.systemBackground)
-                .cornerRadius(20, corners: [.topLeft, .topRight])
+            AppTheme.Colors.surface
+                .cornerRadius(AppTheme.CornerRadius.xl, corners: [.topLeft, .topRight])
         )
     }
 
@@ -2720,7 +2720,7 @@ struct RatingStarsView: View {
                 }) {
                     Image(systemName: star <= rating ? "star.fill" : "star")
                         .font(.system(size: starSize))
-                        .foregroundStyle(star <= rating ? .yellow : .white.opacity(AppTheme.Opacity.medium))
+                        .foregroundStyle(star <= rating ? AppTheme.Colors.warning : .white.opacity(AppTheme.Opacity.medium))
                 }
             }
         }
@@ -2969,7 +2969,7 @@ struct PhotoMetadataEditSheet: View {
                                     }
                                 ),
                                 starSize: 32,
-                                spacing: 8
+                                spacing: AppTheme.Spacing.sm
                             )
 
                             Spacer()
@@ -3161,9 +3161,9 @@ struct AllPhotosGridView: View {
     }
 
     let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+        GridItem(.flexible(), spacing: AppTheme.Spacing.sm)
     ]
 
     var body: some View {
@@ -3357,11 +3357,11 @@ struct PhotoListRow: View {
 
                     // Rating
                     if let rating = metadata?.rating, rating > 0 {
-                        HStack(spacing: 2) {
+                        HStack(spacing: AppTheme.Spacing.xxs) {
                             ForEach(0..<rating, id: \.self) { _ in
                                 Image(systemName: "star.fill")
                                     .font(.system(size: AppTheme.IconSize.xs - 2))
-                                    .foregroundStyle(.yellow)
+                                    .foregroundStyle(AppTheme.Colors.warning)
                             }
                         }
                     }
@@ -3446,7 +3446,7 @@ struct PhotoGridItem: View {
                                     .foregroundStyle(.white)
                             } else {
                                 Circle()
-                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 2)
+                                    .stroke(AppTheme.Colors.textTertiary, lineWidth: 1)
                                     .frame(width: 22, height: 22)
                             }
                         }
@@ -3458,7 +3458,7 @@ struct PhotoGridItem: View {
                         VStack {
                             Spacer()
                             HStack {
-                                HStack(spacing: 2) {
+                                HStack(spacing: AppTheme.Spacing.xxs) {
                                     ForEach(0..<rating, id: \.self) { _ in
                                         Image(systemName: "star.fill")
                                             .font(.system(size: AppTheme.IconSize.xs - 4))
@@ -3479,7 +3479,7 @@ struct PhotoGridItem: View {
                 .cornerRadius(AppTheme.CornerRadius.small)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                        .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 3)
+                        .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 1)
                 )
             }
             .aspectRatio(1, contentMode: .fit)
@@ -3871,7 +3871,7 @@ struct RatingFilterButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 2) {
+            HStack(spacing: AppTheme.Spacing.xxs) {
                 Text("\(rating)")
                     .font(AppTheme.Typography.subheadline)
                 Image(systemName: "star.fill")
@@ -3882,11 +3882,11 @@ struct RatingFilterButton: View {
             .foregroundStyle(isSelected ? .white : AppTheme.Colors.textPrimary)
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
-            .background(isSelected ? Color.yellow : AppTheme.Colors.surface)
+            .background(isSelected ? AppTheme.Colors.warning : AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.full)
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
-                    .stroke(isSelected ? Color.yellow : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
+                    .stroke(isSelected ? AppTheme.Colors.warning : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())

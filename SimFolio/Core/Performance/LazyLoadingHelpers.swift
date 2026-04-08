@@ -177,7 +177,7 @@ struct InfiniteScrollModifier: ViewModifier {
         .background(
             Capsule()
                 .fill(AppTheme.Colors.surface)
-                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                .shadowSmall()
         )
         .padding(.bottom, AppTheme.Spacing.lg)
     }

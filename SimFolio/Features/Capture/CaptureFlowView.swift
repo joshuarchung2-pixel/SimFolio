@@ -661,7 +661,7 @@ struct ProcedureSelectionButton: View {
                         isSelected
                             ? AppTheme.Colors.primary
                             : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.surfaceSecondary),
-                        lineWidth: isSelected ? 2 : (hasRequirement ? 1.5 : 1)
+                        lineWidth: 1
                     )
             )
         }
@@ -934,7 +934,7 @@ struct StageButton: View {
                         isSelected
                             ? stageConfig.color
                             : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.surfaceSecondary),
-                        lineWidth: isSelected ? 2 : (hasRequirement ? 1.5 : 1)
+                        lineWidth: 1
                     )
             )
         }
@@ -1086,7 +1086,7 @@ struct AngleButton: View {
                         isSelected
                             ? AppTheme.angleColor(for: angle)
                             : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.surfaceSecondary),
-                        lineWidth: isSelected ? 2 : (hasRequirement ? 1.5 : 1)
+                        lineWidth: 1
                     )
             )
         }
@@ -1465,7 +1465,7 @@ struct ReviewPhotoCard: View {
                 Button(action: onToggleKeep) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundStyle(photo.shouldKeep ? Color.gray.opacity(0.5) : AppTheme.Colors.error)
+                        .foregroundStyle(photo.shouldKeep ? AppTheme.Colors.textTertiary.opacity(0.5) : AppTheme.Colors.error)
                         .background(Color.white.clipShape(Circle()))
                 }
                 .padding(AppTheme.Spacing.sm)
@@ -1478,7 +1478,7 @@ struct ReviewPhotoCard: View {
                         Button(action: { onRatingChange(star) }) {
                             Image(systemName: star <= photo.rating ? "star.fill" : "star")
                                 .font(.system(size: 20))
-                                .foregroundStyle(star <= photo.rating ? .yellow : AppTheme.Colors.textTertiary)
+                                .foregroundStyle(star <= photo.rating ? AppTheme.Colors.warning : AppTheme.Colors.textTertiary)
                         }
                     }
                 }

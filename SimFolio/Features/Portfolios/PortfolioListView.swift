@@ -291,11 +291,9 @@ struct PortfolioListCard: View {
             .padding(AppTheme.Spacing.md)
             .background(AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.medium)
-            .shadow(
-                color: Color.black.opacity(0.05),
-                radius: 4,
-                x: 0,
-                y: 2
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
             )
         }
         .buttonStyle(CardPressButtonStyle())

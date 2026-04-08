@@ -236,7 +236,7 @@ struct EditProfileSheet: View {
             Button(action: { showSchoolPicker = true }) {
                 HStack(spacing: AppTheme.Spacing.md) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                             .fill(AppTheme.Colors.primary.opacity(0.15))
                             .frame(width: 32, height: 32)
 
@@ -245,7 +245,7 @@ struct EditProfileSheet: View {
                             .foregroundStyle(AppTheme.Colors.primary)
                     }
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                         Text("Dental School")
                             .font(AppTheme.Typography.caption)
                             .foregroundStyle(AppTheme.Colors.textSecondary)
@@ -355,7 +355,7 @@ struct ProfileTextField: View {
         HStack(spacing: AppTheme.Spacing.md) {
             // Icon container
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                     .fill(AppTheme.Colors.primary.opacity(0.15))
                     .frame(width: 32, height: 32)
 
@@ -365,7 +365,7 @@ struct ProfileTextField: View {
             }
 
             // Text field
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 Text(label)
                     .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)

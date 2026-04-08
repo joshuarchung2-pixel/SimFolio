@@ -708,7 +708,7 @@ struct ExportOptionRow: View {
                     .frame(width: 32)
 
                 // Text
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(title)
                         .font(AppTheme.Typography.subheadline)
                         .fontWeight(isSelected ? .semibold : .regular)
@@ -740,7 +740,7 @@ struct ExportOptionRow: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
-                    .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())

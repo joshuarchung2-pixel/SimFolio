@@ -179,7 +179,7 @@ struct DPButton: View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(borderColor, lineWidth: style == .secondary ? 1.5 : 0)
+                    .strokeBorder(borderColor, lineWidth: style == .secondary ? 1 : 0)
             )
         }
         .buttonStyle(DPButtonStyle(isPressed: $isPressed, isDisabled: isDisabled || isLoading))
@@ -241,8 +241,8 @@ struct DPButton: View {
 
     private var iconSize: CGFloat {
         switch size {
-        case .small: return 12
-        case .medium: return 16
+        case .small: return AppTheme.IconSize.xs
+        case .medium: return AppTheme.IconSize.sm
         case .large: return 18
         }
     }
@@ -260,7 +260,7 @@ struct DPButton: View {
         case .tertiary:
             return .clear
         case .destructive:
-            return Color(hex: "C44040")
+            return AppTheme.Colors.error
         }
     }
 
@@ -613,11 +613,11 @@ struct DPProgressBar: View {
         }
         switch progress {
         case 0..<0.25:
-            return Color(hex: "C47070")
+            return AppTheme.Colors.error
         case 0.25..<0.50:
-            return Color(hex: "C49A5C")
+            return AppTheme.Colors.warning
         case 0.50..<0.75:
-            return Color(hex: "C49A5C")
+            return AppTheme.Colors.warning
         default:
             return AppTheme.Colors.primary
         }
@@ -629,11 +629,11 @@ struct DPProgressBar: View {
     static func autoColor(for progress: Double) -> Color {
         switch progress {
         case 0..<0.25:
-            return Color(hex: "C47070")
+            return AppTheme.Colors.error
         case 0.25..<0.50:
-            return Color(hex: "C49A5C")
+            return AppTheme.Colors.warning
         case 0.50..<0.75:
-            return Color(hex: "C49A5C")
+            return AppTheme.Colors.warning
         default:
             return AppTheme.Colors.primary
         }
@@ -674,15 +674,15 @@ struct DPEmptyState: View {
     var body: some View {
         VStack(spacing: AppTheme.Spacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 32, weight: .light))
+                .font(.system(size: AppTheme.IconSize.xl, weight: .light))
                 .foregroundStyle(AppTheme.Colors.textTertiary)
                 .frame(width: 64, height: 64)
                 .background(AppTheme.Colors.accentLight)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.large))
 
             VStack(spacing: AppTheme.Spacing.xs) {
                 Text(title)
-                    .font(.system(.title3, design: .serif).weight(.semibold))
+                    .font(AppTheme.Typography.title3)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
@@ -812,9 +812,9 @@ struct DPToast: View {
     var body: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
             // Colored left border
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xxs)
                 .fill(type.color)
-                .frame(width: 4, height: 24)
+                .frame(width: AppTheme.Spacing.xs, height: AppTheme.Spacing.lg)
 
             // Icon
             Image(systemName: icon ?? type.defaultIcon)

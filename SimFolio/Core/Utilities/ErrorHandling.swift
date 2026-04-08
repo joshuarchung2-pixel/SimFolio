@@ -314,14 +314,14 @@ struct AppErrorBanner: View {
                 .foregroundStyle(.white)
                 .font(.system(size: 20))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                 Text(error.errorDescription ?? "Error")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 
                 if let recovery = error.recoverySuggestion {
                     Text(recovery)
-                        .font(.caption)
+                        .font(AppTheme.Typography.caption)
                         .foregroundStyle(.white.opacity(0.9))
                 }
             }
@@ -335,9 +335,9 @@ struct AppErrorBanner: View {
             }
         }
         .padding()
-        .background(Color.red)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+        .background(AppTheme.Colors.error)
+        .cornerRadius(AppTheme.CornerRadius.medium)
+        .shadowMedium()
         .padding(.horizontal)
     }
 }

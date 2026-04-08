@@ -315,33 +315,33 @@ struct DynamicTypeSupport_Previews: PreviewProvider {
         var body: some View {
             VStack(spacing: 20) {
                 Text("Adaptive Stack Demo")
-                    .font(.headline)
+                    .font(AppTheme.Typography.headline)
 
                 AdaptiveStack(spacing: 12) {
                     Text("Item 1")
                         .padding()
-                        .background(Color.blue.opacity(0.2))
-                        .cornerRadius(8)
+                        .background(AppTheme.Colors.info.opacity(0.2))
+                        .cornerRadius(AppTheme.CornerRadius.small)
 
                     Text("Item 2")
                         .padding()
-                        .background(Color.green.opacity(0.2))
-                        .cornerRadius(8)
+                        .background(AppTheme.Colors.success.opacity(0.2))
+                        .cornerRadius(AppTheme.CornerRadius.small)
 
                     Text("Item 3")
                         .padding()
-                        .background(Color.orange.opacity(0.2))
-                        .cornerRadius(8)
+                        .background(AppTheme.Colors.warning.opacity(0.2))
+                        .cornerRadius(AppTheme.CornerRadius.small)
                 }
 
                 Divider()
 
                 Text("Touch Target Demo")
-                    .font(.headline)
+                    .font(AppTheme.Typography.headline)
 
                 Button("Tap Me") { }
                     .minimumTouchTarget()
-                    .background(Color.blue.opacity(0.1))
+                    .background(AppTheme.Colors.info.opacity(0.1))
             }
             .padding()
         }

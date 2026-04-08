@@ -9,11 +9,11 @@ struct FreeUnlockAnnouncementView: View {
     @Environment(\.dismiss) var dismiss
 
     private let features: [(icon: String, title: String, color: Color)] = [
-        ("infinity", "Unlimited Portfolios", .blue),
-        ("slider.horizontal.3", "Advanced Photo Editing", .purple),
-        ("pencil.tip.crop.circle", "Photo Annotations", .orange),
-        ("square.and.arrow.up.fill", "Advanced Export", .green),
-        ("bell.badge.fill", "Due Date Reminders", .red),
+        ("infinity", "Unlimited Portfolios", AppTheme.Colors.primary),
+        ("slider.horizontal.3", "Advanced Photo Editing", AppTheme.Colors.crown),
+        ("pencil.tip.crop.circle", "Photo Annotations", AppTheme.Colors.primary),
+        ("square.and.arrow.up.fill", "Advanced Export", AppTheme.Colors.success),
+        ("bell.badge.fill", "Due Date Reminders", AppTheme.Colors.error),
         ("plus.rectangle.on.folder", "Custom Procedures", .cyan),
         ("checkmark.circle.fill", "Batch Operations", .indigo),
     ]
@@ -22,13 +22,13 @@ struct FreeUnlockAnnouncementView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Crown icon with celebration
+            // App icon with celebration
             ZStack {
                 // Glow effect
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [.orange.opacity(0.3), .clear],
+                            colors: [AppTheme.Colors.primary.opacity(0.3), .clear],
                             center: .center,
                             startRadius: 30,
                             endRadius: 80
@@ -36,19 +36,11 @@ struct FreeUnlockAnnouncementView: View {
                     )
                     .frame(width: 160, height: 160)
 
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.orange, .yellow],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                Image("AppIconImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                     .frame(width: 90, height: 90)
-
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 42))
-                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl))
             }
             .padding(.bottom, AppTheme.Spacing.lg)
 
@@ -84,7 +76,7 @@ struct FreeUnlockAnnouncementView: View {
 
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 16))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.Colors.success)
                     }
                     .padding(.horizontal, AppTheme.Spacing.lg)
                 }
@@ -109,7 +101,7 @@ struct FreeUnlockAnnouncementView: View {
                     .padding(.vertical, AppTheme.Spacing.md)
                     .background(
                         LinearGradient(
-                            colors: [.orange, .yellow.opacity(0.9)],
+                            colors: [AppTheme.Colors.primary, AppTheme.Colors.accentDark],
                             startPoint: .leading,
                             endPoint: .trailing
                         )

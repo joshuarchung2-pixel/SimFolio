@@ -72,12 +72,12 @@ class ThemeManager: ObservableObject {
     // MARK: - Initialization
 
     private init() {
-        // Load saved appearance preference, default to dark
+        // Load saved appearance preference, default to light
         if let savedAppearance = UserDefaults.standard.string(forKey: "appAppearance"),
            let appearance = AppAppearance(rawValue: savedAppearance) {
             self.appearance = appearance
         } else {
-            self.appearance = .dark
+            self.appearance = .light
         }
     }
 

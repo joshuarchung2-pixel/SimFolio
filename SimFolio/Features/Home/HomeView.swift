@@ -78,9 +78,7 @@ struct HomeView: View {
                 }
 
                 // 4. Portfolios Section
-                if !metadataManager.portfolios.isEmpty {
-                    portfoliosSection
-                }
+                portfoliosSection
             }
             .padding(.top, AppTheme.Spacing.md)
             .padding(.bottom, AppTheme.Spacing.xxl)
@@ -190,7 +188,7 @@ struct HomeView: View {
                 .foregroundStyle(AppTheme.Colors.primary)
                 .frame(width: 64, height: 64)
                 .background(AppTheme.Colors.accentLight)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.large))
 
             Text("Start your portfolio")
                 .font(.system(.title3, design: .serif).weight(.semibold))
@@ -308,7 +306,7 @@ struct PortfolioRowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(portfolio.name)
                         .font(AppTheme.Typography.headline)
                         .foregroundStyle(AppTheme.Colors.textPrimary)

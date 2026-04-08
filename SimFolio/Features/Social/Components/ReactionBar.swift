@@ -16,9 +16,9 @@ struct ReactionBar: View {
                 Button {
                     onToggle(emoji)
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: AppTheme.Spacing.xs) {
                         Text(emoji)
-                            .font(.body)
+                            .font(AppTheme.Typography.body)
                         if count > 0 {
                             Text("\(count)")
                                 .font(AppTheme.Typography.caption)

@@ -204,12 +204,12 @@ struct TextBoxView: View {
             .foregroundStyle(textBox.fontColor.color)
             .multilineTextAlignment(.center)
             .lineLimit(nil)
-            .padding(4)
+            .padding(AppTheme.Spacing.xs)
             .frame(width: max(size.width, 50), height: max(size.height, 24))
             .background(
                 Group {
                     if let fillColor = textBox.fillColor {
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs)
                             .fill(fillColor.color)
                     }
                 }

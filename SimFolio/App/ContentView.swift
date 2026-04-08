@@ -259,8 +259,8 @@ struct ContentView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                    .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl))
+                    .shadow(color: .black.opacity(AppTheme.Opacity.light), radius: 20, x: 0, y: 10)
 
                 Text("SimFolio")
                     .font(AppTheme.Typography.title2)

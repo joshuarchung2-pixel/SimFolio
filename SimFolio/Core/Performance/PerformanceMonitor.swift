@@ -23,8 +23,8 @@ struct PerformanceMonitorView: View {
     @StateObject private var monitor = PerformanceMonitor()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+            HStack(spacing: AppTheme.Spacing.sm) {
                 Circle()
                     .fill(fpsColor)
                     .frame(width: 8, height: 8)
@@ -43,9 +43,9 @@ struct PerformanceMonitorView: View {
         }
         .font(.system(size: 10, weight: .medium, design: .monospaced))
         .foregroundStyle(.white)
-        .padding(8)
+        .padding(AppTheme.Spacing.sm)
         .background(Color.black.opacity(0.75))
-        .cornerRadius(8)
+        .cornerRadius(AppTheme.CornerRadius.small)
     }
 
     private var fpsColor: Color {
@@ -192,7 +192,7 @@ struct PerformanceOverlayModifier: ViewModifier {
             .overlay(alignment: position) {
                 if enabled {
                     PerformanceMonitorView()
-                        .padding(8)
+                        .padding(AppTheme.Spacing.sm)
                 }
             }
     }
@@ -338,7 +338,7 @@ struct FrameRateIndicator: View {
                 .stroke(Color.white, lineWidth: 1)
                 .frame(width: 12, height: 12)
         }
-        .shadow(radius: 2)
+        .shadowSmall()
     }
 
     private var indicatorColor: Color {

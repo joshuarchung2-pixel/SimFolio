@@ -58,7 +58,7 @@ extension View {
 struct SkeletonRect: View {
     var width: CGFloat? = nil
     var height: CGFloat = 16
-    var cornerRadius: CGFloat = 4
+    var cornerRadius: CGFloat = AppTheme.CornerRadius.xs
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
@@ -153,7 +153,7 @@ struct SkeletonStatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             SkeletonCircle(size: 24)
-            SkeletonRect(width: 50, height: 28, cornerRadius: 4)
+            SkeletonRect(width: 50, height: 28, cornerRadius: AppTheme.CornerRadius.xs)
             SkeletonRect(width: 70, height: 12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,7 +261,7 @@ struct SkeletonLibraryView: View {
             // Filter tabs
             HStack(spacing: AppTheme.Spacing.md) {
                 ForEach(0..<4, id: \.self) { _ in
-                    SkeletonRect(width: 70, height: 32, cornerRadius: 16)
+                    SkeletonRect(width: 70, height: 32, cornerRadius: AppTheme.CornerRadius.large)
                 }
                 Spacer()
             }
@@ -288,7 +288,7 @@ struct SkeletonPortfolioDetail: View {
                     SkeletonCircle(size: 80)
                     SkeletonRect(width: 150, height: 24)
                     SkeletonRect(width: 200, height: 16)
-                    SkeletonRect(height: 8, cornerRadius: 4)
+                    SkeletonRect(height: 8, cornerRadius: AppTheme.CornerRadius.xs)
                 }
                 .padding(AppTheme.Spacing.lg)
                 .background(AppTheme.Colors.surface)
@@ -368,7 +368,7 @@ struct SkeletonView_Previews: PreviewProvider {
             // Basic shapes
             VStack(spacing: AppTheme.Spacing.md) {
                 SkeletonRect(width: 200, height: 20)
-                SkeletonRect(height: 100, cornerRadius: 12)
+                SkeletonRect(height: 100, cornerRadius: AppTheme.CornerRadius.medium)
                 HStack {
                     SkeletonCircle(size: 40)
                     SkeletonCircle(size: 50)
