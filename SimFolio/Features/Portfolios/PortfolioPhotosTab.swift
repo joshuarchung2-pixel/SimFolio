@@ -400,7 +400,7 @@ struct PortfolioPhotoThumbnail: View {
 
         // Angle abbreviation
         if let angle = metadata.angle {
-            let abbrev = angleAbbreviation(angle)
+            let abbrev = PhotoMetadata.angleAbbreviation(for: angle)
             parts.append(abbrev)
         }
 
@@ -461,19 +461,6 @@ struct PortfolioPhotoThumbnail: View {
         image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 
-    private func angleAbbreviation(_ angle: String) -> String {
-        switch angle.lowercased() {
-        case "occlusal": return "O"
-        case "buccal", "buccal/facial": return "B"
-        case "lingual": return "L"
-        case "mesial": return "M"
-        case "distal": return "D"
-        case "facial": return "F"
-        case "incisal": return "I"
-        case "proximal": return "P"
-        default: return String(angle.prefix(1)).uppercased()
-        }
-    }
 }
 
 // MARK: - Photo Thumbnail Button Style

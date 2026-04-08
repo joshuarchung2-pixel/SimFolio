@@ -464,6 +464,24 @@ struct PortfolioExportSheet: View {
         }
     }
 
+    private static let dateFolderFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let filenameDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd_HHmmss"
+        return f
+    }()
+
+    private func buildRecordsLookup() -> [String: PhotoRecord] {
+        Dictionary(
+            uniqueKeysWithValues: PhotoStorageService.shared.records.map { ($0.id.uuidString, $0) }
+        )
+    }
+
     func exportAsZip() async throws -> URL {
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory
@@ -473,11 +491,11 @@ struct PortfolioExportSheet: View {
 
         let assetIds = matchingAssetIds
         let total = Double(assetIds.count)
+        let recordsLookup = await MainActor.run { buildRecordsLookup() }
 
         for (index, assetId) in assetIds.enumerated() {
             let metadata = metadataManager.getMetadata(for: assetId)
 
-            // Determine folder path
             var folderPath = exportDir
 
             switch organization {
@@ -486,12 +504,8 @@ struct PortfolioExportSheet: View {
                     folderPath = exportDir.appendingPathComponent(sanitizeFilename(procedure))
                 }
             case .byDate:
-                let creationDate = PhotoStorageService.shared.records
-                    .first(where: { $0.id.uuidString == assetId })?.createdDate
-                if let date = creationDate {
-                    let formatter = DateFormatter()
-                    formatter.dateFormat = "yyyy-MM-dd"
-                    let dateString = formatter.string(from: date)
+                if let date = recordsLookup[assetId]?.createdDate {
+                    let dateString = Self.dateFolderFormatter.string(from: date)
                     folderPath = exportDir.appendingPathComponent(dateString)
                 }
             case .flat:
@@ -501,10 +515,9 @@ struct PortfolioExportSheet: View {
             try fileManager.createDirectory(at: folderPath, withIntermediateDirectories: true)
 
             // Generate filename
-            let filename = generateFilename(for: assetId, metadata: metadata, index: index)
+            let filename = generateFilename(for: assetId, metadata: metadata, index: index, recordsLookup: recordsLookup)
             let filePath = folderPath.appendingPathComponent(filename)
 
-            // Load and save image
             let image = try await loadImage(for: assetId)
             let resizedImage = resizeImage(image, maxDimension: imageQuality.maxDimension)
 
@@ -542,7 +555,6 @@ struct PortfolioExportSheet: View {
     }
 
     func exportIndividual() async throws -> URL {
-        // For individual export, create a temporary directory
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory
         let exportDir = tempDir.appendingPathComponent("PortfolioExport_\(UUID().uuidString)")
@@ -551,10 +563,11 @@ struct PortfolioExportSheet: View {
 
         let assetIds = matchingAssetIds
         let total = Double(assetIds.count)
+        let recordsLookup = await MainActor.run { buildRecordsLookup() }
 
         for (index, assetId) in assetIds.enumerated() {
             let metadata = metadataManager.getMetadata(for: assetId)
-            let filename = generateFilename(for: assetId, metadata: metadata, index: index)
+            let filename = generateFilename(for: assetId, metadata: metadata, index: index, recordsLookup: recordsLookup)
             let filePath = exportDir.appendingPathComponent(filename)
 
             let image = try await loadImage(for: assetId)
@@ -613,7 +626,7 @@ struct PortfolioExportSheet: View {
         return resizedImage ?? image
     }
 
-    func generateFilename(for assetId: String, metadata: PhotoMetadata?, index: Int) -> String {
+    func generateFilename(for assetId: String, metadata: PhotoMetadata?, index: Int, recordsLookup: [String: PhotoRecord]) -> String {
         var parts: [String] = []
 
         if includeMetadata, let metadata = metadata {
@@ -631,13 +644,9 @@ struct PortfolioExportSheet: View {
             }
         }
 
-        // Add date from storage record, fall back to index
-        let creationDate = PhotoStorageService.shared.records
-            .first(where: { $0.id.uuidString == assetId })?.createdDate
+        let creationDate = recordsLookup[assetId]?.createdDate
         if let date = creationDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd_HHmmss"
-            parts.append(formatter.string(from: date))
+            parts.append(Self.filenameDateFormatter.string(from: date))
         } else {
             parts.append("Photo\(index + 1)")
         }

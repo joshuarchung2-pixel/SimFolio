@@ -41,23 +41,29 @@ class PhotoStorageService: ObservableObject {
         loadRecords()
     }
 
+    // MARK: - URL Helpers
+
+    private func photoURL(for id: UUID) -> URL {
+        Self.photosDirectory.appendingPathComponent("\(id.uuidString).jpg")
+    }
+
+    private func thumbnailURL(for id: UUID) -> URL {
+        Self.thumbnailsDirectory.appendingPathComponent("\(id.uuidString).jpg")
+    }
+
     // MARK: - Save
 
     /// Save an image to app storage and generate a thumbnail. Returns the new PhotoRecord.
     @discardableResult
     func savePhoto(_ image: UIImage, compressionQuality: CGFloat = 0.85) -> PhotoRecord {
         let id = UUID()
-        let photoURL = Self.photosDirectory.appendingPathComponent("\(id.uuidString).jpg")
-        let thumbnailURL = Self.thumbnailsDirectory.appendingPathComponent("\(id.uuidString).jpg")
 
-        // Save full-res
         let data = image.jpegData(compressionQuality: compressionQuality) ?? Data()
-        try? data.write(to: photoURL)
+        try? data.write(to: photoURL(for: id))
 
-        // Generate and save thumbnail
         let thumbnail = generateThumbnail(from: image)
         let thumbData = thumbnail.jpegData(compressionQuality: thumbnailCompressionQuality) ?? Data()
-        try? thumbData.write(to: thumbnailURL)
+        try? thumbData.write(to: thumbnailURL(for: id))
 
         let record = PhotoRecord(
             id: id,
@@ -65,7 +71,7 @@ class PhotoStorageService: ObservableObject {
             fileSize: Int64(data.count)
         )
 
-        records.insert(record, at: 0) // newest first
+        records.insert(record, at: 0)
         saveRecords()
 
         return record
@@ -75,15 +81,13 @@ class PhotoStorageService: ObservableObject {
 
     /// Load full-resolution image from disk
     func loadImage(id: UUID) -> UIImage? {
-        let url = Self.photosDirectory.appendingPathComponent("\(id.uuidString).jpg")
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? Data(contentsOf: photoURL(for: id)) else { return nil }
         return UIImage(data: data)
     }
 
     /// Load thumbnail image from disk
     func loadThumbnail(id: UUID) -> UIImage? {
-        let url = Self.thumbnailsDirectory.appendingPathComponent("\(id.uuidString).jpg")
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? Data(contentsOf: thumbnailURL(for: id)) else { return nil }
         return UIImage(data: data)
     }
 
@@ -91,11 +95,8 @@ class PhotoStorageService: ObservableObject {
 
     /// Delete a photo and its thumbnail from disk
     func deletePhoto(id: UUID) {
-        let photoURL = Self.photosDirectory.appendingPathComponent("\(id.uuidString).jpg")
-        let thumbnailURL = Self.thumbnailsDirectory.appendingPathComponent("\(id.uuidString).jpg")
-
-        try? FileManager.default.removeItem(at: photoURL)
-        try? FileManager.default.removeItem(at: thumbnailURL)
+        try? FileManager.default.removeItem(at: photoURL(for: id))
+        try? FileManager.default.removeItem(at: thumbnailURL(for: id))
 
         records.removeAll { $0.id == id }
         saveRecords()
@@ -104,10 +105,8 @@ class PhotoStorageService: ObservableObject {
     /// Delete multiple photos
     func deletePhotos(ids: [UUID]) {
         for id in ids {
-            let photoURL = Self.photosDirectory.appendingPathComponent("\(id.uuidString).jpg")
-            let thumbnailURL = Self.thumbnailsDirectory.appendingPathComponent("\(id.uuidString).jpg")
-            try? FileManager.default.removeItem(at: photoURL)
-            try? FileManager.default.removeItem(at: thumbnailURL)
+            try? FileManager.default.removeItem(at: photoURL(for: id))
+            try? FileManager.default.removeItem(at: thumbnailURL(for: id))
         }
         records.removeAll { ids.contains($0.id) }
         saveRecords()
