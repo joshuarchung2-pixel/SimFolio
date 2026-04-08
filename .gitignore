@@ -68,3 +68,7 @@ GoogleService-Info.plist
 Config/Secrets.xcconfig
 Secrets.xcconfig
 *.secrets
+
+# Local scripts and tasks
+scripts/
+tasks/

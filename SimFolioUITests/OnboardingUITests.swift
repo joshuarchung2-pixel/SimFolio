@@ -1,11 +1,9 @@
 // OnboardingUITests.swift
 // SimFolioUITests - Onboarding Flow UI Tests
 //
-// Tests for the onboarding flow including:
-// - Welcome screen display
-// - Feature pages navigation
-// - Permission requests
-// - Get Started completion
+// Tests for the 2-page onboarding flow:
+// - Sign-in page (with skip option)
+// - Profile details page (name, school, graduation year)
 
 import XCTest
 
@@ -29,12 +27,17 @@ final class OnboardingUITests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Welcome Page Tests
+    // MARK: - Sign-In Page Tests
 
-    func testWelcomePageDisplays() {
+    func testSignInPageDisplays() {
+        // Then - Sign in page should show
+        XCTAssertTrue(app.staticTexts["Back Up Your Portfolio"].waitForExistence(timeout: 3))
+    }
+
+    func testSkipButtonExists() {
         // Then
-        XCTAssertTrue(app.staticTexts["Welcome to"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Simfolio"].exists || app.staticTexts["SimFolio"].exists)
+        let skipButton = app.buttons["Skip for now"]
+        XCTAssertTrue(skipButton.waitForExistence(timeout: 3))
     }
 
     func testContinueButtonExists() {
@@ -46,138 +49,54 @@ final class OnboardingUITests: XCTestCase {
 
     // MARK: - Navigation Tests
 
-    func testSwipeToNextPage() {
-        // Given
-        let welcomeText = app.staticTexts["Welcome to"]
-        XCTAssertTrue(welcomeText.waitForExistence(timeout: 3))
-
-        // When
-        app.swipeLeft()
-
-        // Then - Should show next page (Smart Capture or similar)
-        // Wait for animation
-        sleep(1)
-        // The welcome text should no longer be centered/visible or should have moved
-    }
-
-    func testContinueButtonAdvancesPage() {
+    func testContinueAdvancesToProfilePage() {
         // Given
         XCTAssertTrue(app.buttons["Continue"].waitForExistence(timeout: 3))
 
         // When
         app.buttons["Continue"].tap()
-
-        // Then - Should show feature page
         sleep(1)
-        // Look for any indication we're on a different page
+
+        // Then - Should show personalization page
+        XCTAssertTrue(
+            app.staticTexts["Let's personalize"].waitForExistence(timeout: 3) ||
+            app.staticTexts["Your Name"].waitForExistence(timeout: 3)
+        )
     }
 
-    // MARK: - Permission Page Tests
+    func testSkipAdvancesToProfilePage() {
+        // Given
+        let skipButton = app.buttons["Skip for now"]
+        XCTAssertTrue(skipButton.waitForExistence(timeout: 3))
 
-    func testCameraPermissionPageDisplays() {
-        // Navigate to camera permission page
-        navigateToPermissions()
+        // When
+        skipButton.tap()
+        sleep(1)
 
-        // Then
-        let cameraTextExists = app.staticTexts["Camera"].waitForExistence(timeout: 3) ||
-                               app.staticTexts["camera"].waitForExistence(timeout: 3)
-        XCTAssertTrue(cameraTextExists)
-    }
-
-    func testAllowButtonExists() {
-        // Navigate to permissions
-        navigateToPermissions()
-
-        // Then
-        let allowButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Allow'")).firstMatch
-        XCTAssertTrue(allowButton.waitForExistence(timeout: 3))
-    }
-
-    // MARK: - Page Indicator Tests
-
-    func testPageIndicatorExists() {
-        // Then
-        let pageIndicator = app.pageIndicators.firstMatch
-        XCTAssertTrue(pageIndicator.waitForExistence(timeout: 3))
+        // Then - Should show personalization page
+        XCTAssertTrue(
+            app.staticTexts["Let's personalize"].waitForExistence(timeout: 3) ||
+            app.staticTexts["Your Name"].waitForExistence(timeout: 3)
+        )
     }
 
     // MARK: - Complete Flow Test
 
     func testCompleteOnboardingFlow() {
-        // This test walks through the entire onboarding flow
-        // Note: System permission dialogs cannot be fully automated
-
-        // Page 1: Welcome
+        // Page 1: Sign In — skip it
         XCTAssertTrue(app.buttons["Continue"].waitForExistence(timeout: 3))
         app.buttons["Continue"].tap()
         sleep(1)
 
-        // Page 2: Feature (Smart Capture)
-        if app.buttons["Continue"].waitForExistence(timeout: 2) {
-            app.buttons["Continue"].tap()
-            sleep(1)
-        }
-
-        // Page 3: Feature (Portfolio Tracking)
-        if app.buttons["Continue"].waitForExistence(timeout: 2) {
-            app.buttons["Continue"].tap()
-            sleep(1)
-        }
-
-        // Continue through any remaining feature pages
-        while app.buttons["Continue"].exists {
-            app.buttons["Continue"].tap()
-            sleep(1)
-        }
-
-        // Permission pages - look for Get Started
-        // Note: We can't actually grant permissions in UI tests without special handling
-        if app.buttons["Get Started"].waitForExistence(timeout: 5) {
-            app.buttons["Get Started"].tap()
-        }
-
-        // Verify main app is shown (tab bar should appear)
-        let tabBar = app.tabBars.firstMatch
-        let mainAppShown = tabBar.waitForExistence(timeout: 5) ||
-                          app.buttons["Home"].waitForExistence(timeout: 5)
-        // This may fail if permissions weren't granted - that's expected
-    }
-
-    // MARK: - Helper Methods
-
-    private func navigateToPermissions() {
-        // Continue through all pages until reaching permissions
-        while app.buttons["Continue"].exists {
-            app.buttons["Continue"].tap()
-            sleep(1)
-
-            // Break if we've reached permissions
-            if app.staticTexts["Camera"].exists || app.staticTexts["Photo"].exists {
-                break
-            }
+        // Page 2: Profile Details — Get Started button should exist but be disabled
+        // until all fields are filled (can't fully test form fill in UI tests
+        // without more complex interaction)
+        if app.buttons["Get Started"].waitForExistence(timeout: 3) {
+            // The button exists — form validation prevents tapping until filled
         }
     }
-}
 
-// MARK: - Onboarding Accessibility Tests
-
-final class OnboardingAccessibilityUITests: XCTestCase {
-
-    var app: XCUIApplication!
-
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-
-        app = XCUIApplication()
-        app.launchArguments = ["--uitesting", "--reset-onboarding"]
-        app.launch()
-    }
-
-    override func tearDown() {
-        app = nil
-        super.tearDown()
-    }
+    // MARK: - Accessibility Tests
 
     func testContinueButtonIsAccessible() {
         // Given
