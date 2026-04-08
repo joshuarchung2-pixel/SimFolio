@@ -24,10 +24,11 @@ struct SocialFeedView: View {
         Group {
             if authService.authState == .signedOut {
                 signedOutView
-            } else if profileService.isLoading {
-                ProgressView()
             } else if profileService.userProfile == nil {
-                signedOutView
+                ProgressView()
+                    .task {
+                        try? await profileService.linkOnboardingData()
+                    }
             } else if profileService.userProfile?.socialOptIn != true {
                 optInPromptView
             } else {

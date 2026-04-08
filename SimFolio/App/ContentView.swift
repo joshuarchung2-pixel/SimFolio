@@ -49,11 +49,13 @@ struct ContentView: View {
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
     @State private var showFreeUnlockAnnouncement: Bool = false
+    @State private var showAccountNudge: Bool = false
 
     // MARK: - Persisted State
 
     @AppStorage("hasCompletedAppTour") private var hasCompletedAppTour = false
     @AppStorage("hasSeenFreeUnlockAnnouncement") private var hasSeenFreeUnlockAnnouncement = false
+    @AppStorage("hasSeenAccountNudge") private var hasSeenAccountNudge = false
 
     // MARK: - Environment
 
@@ -93,6 +95,11 @@ struct ContentView: View {
             hasSeenFreeUnlockAnnouncement = true
         }) {
             FreeUnlockAnnouncementView()
+        }
+        .fullScreenCover(isPresented: $showAccountNudge, onDismiss: {
+            hasSeenAccountNudge = true
+        }) {
+            AccountNudgeView()
         }
         .fullScreenCover(isPresented: $showPostOnboardingPaywall, onDismiss: {
             // After paywall dismisses, show tour if not completed
@@ -184,14 +191,16 @@ struct ContentView: View {
                 }
                 .tag(MainTab.library)
 
-                NavigationView {
-                    SocialFeedView()
+                if FeatureGateService.socialFeedEnabled {
+                    NavigationView {
+                        SocialFeedView()
+                    }
+                    .navigationViewStyle(.stack)
+                    .tabItem {
+                        Label("Feed", systemImage: router.selectedTab == .feed ? "bubble.left.and.text.bubble.right.fill" : "bubble.left.and.text.bubble.right")
+                    }
+                    .tag(MainTab.feed)
                 }
-                .navigationViewStyle(.stack)
-                .tabItem {
-                    Label("Feed", systemImage: router.selectedTab == .feed ? "bubble.left.and.text.bubble.right.fill" : "bubble.left.and.text.bubble.right")
-                }
-                .tag(MainTab.feed)
 
                 NavigationView {
                     ProfileView()
@@ -345,6 +354,16 @@ struct ContentView: View {
                     // One-time announcement for existing users that all features are now free
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         showFreeUnlockAnnouncement = true
+                    }
+                } else if !hasSeenAccountNudge
+                    && AuthenticationService.shared.authState == .signedOut {
+                    // Show account nudge 3+ days after onboarding
+                    let createdDate = UserDefaults.standard.object(forKey: "userCreatedDate") as? Date ?? Date()
+                    let daysSinceOnboarding = Calendar.current.dateComponents([.day], from: createdDate, to: Date()).day ?? 0
+                    if daysSinceOnboarding >= 3 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showAccountNudge = true
+                        }
                     }
                 }
             }

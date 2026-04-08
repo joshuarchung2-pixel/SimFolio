@@ -354,6 +354,7 @@ struct OnboardingView: View {
         }
         .sheet(isPresented: $showSignInSheet) {
             SignInView(context: .generic, onSignIn: {
+                AnalyticsService.logEvent(.accountCreated, parameters: ["source": "onboarding"])
                 saveUserProfile()
                 Task { try? await UserProfileService.shared.linkOnboardingData() }
             })

@@ -87,6 +87,12 @@ enum AnalyticsEvent: String {
     case signInFailed = "sign_in_failed"
     case accountDeleted = "account_deleted"
 
+    // Account nudge
+    case accountNudgeShown = "account_nudge_shown"
+    case accountNudgeDismissed = "account_nudge_dismissed"
+    case accountCreated = "account_created"
+    case signOutCompleted = "sign_out_completed"
+
     // Errors
     case errorOccurred = "error_occurred"
 }

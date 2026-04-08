@@ -13,16 +13,25 @@ struct HomeView: View {
     @EnvironmentObject var router: NavigationRouter
     @ObservedObject var metadataManager = MetadataManager.shared
     @ObservedObject var library = PhotoLibraryManager.shared
+    @State private var showingCreatePortfolio = false
 
     // MARK: - Greeting
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
+        let timeGreeting: String
         switch hour {
-        case 0..<12: return "Good morning"
-        case 12..<17: return "Good afternoon"
-        default: return "Good evening"
+        case 0..<12: timeGreeting = "Good morning"
+        case 12..<17: timeGreeting = "Good afternoon"
+        default: timeGreeting = "Good evening"
         }
+
+        if let fullName = UserDefaults.standard.string(forKey: "userName"),
+           let firstName = fullName.split(separator: " ").first,
+           !firstName.isEmpty {
+            return "\(timeGreeting), \(firstName)"
+        }
+        return timeGreeting
     }
 
     // MARK: - Computed Stats
@@ -78,6 +87,9 @@ struct HomeView: View {
         }
         .background(AppTheme.Colors.background.ignoresSafeArea())
         .navigationBarHidden(true)
+        .sheet(isPresented: $showingCreatePortfolio) {
+            CreatePortfolioSheet(isPresented: $showingCreatePortfolio)
+        }
     }
 
     // MARK: - Header
@@ -215,6 +227,26 @@ struct HomeView: View {
                         router.navigateToPortfolio(id: portfolio.id)
                     }
             }
+
+            Button {
+                showingCreatePortfolio = true
+            } label: {
+                HStack {
+                    Image(systemName: "plus")
+                    Text("New Portfolio")
+                }
+                .font(AppTheme.Typography.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.Colors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                        .strokeBorder(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1, antialiased: true)
+                )
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
         }
     }
 }
