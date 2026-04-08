@@ -97,7 +97,6 @@ struct OnboardingView: View {
                     }
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.3), value: currentPage)
                 .onChange(of: currentPage) { newValue in
                     if newValue > pages.count - 1 {
                         withAnimation {
@@ -267,15 +266,15 @@ struct OnboardingSignInPageView: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
-            Spacer(minLength: AppTheme.Spacing.sm)
+            Spacer()
 
                 // Header
                 VStack(spacing: AppTheme.Spacing.md) {
                     Image("AppIconImage")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 80, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.large))
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl))
 
                     Text("Welcome to SimFolio")
                         .font(AppTheme.Typography.title)

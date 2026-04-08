@@ -618,7 +618,7 @@ struct ProcedureSelectionButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: hasRequirement && !isSelected ? AppTheme.Spacing.xs : 0) {
+            VStack(alignment: .leading, spacing: hasRequirement ? AppTheme.Spacing.xs : 0) {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     Circle()
                         .fill(color)
@@ -626,23 +626,18 @@ struct ProcedureSelectionButton: View {
 
                     Text(procedure)
                         .font(AppTheme.Typography.subheadline)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .foregroundStyle(isSelected ? AppTheme.procedureColor(for: procedure) : AppTheme.Colors.textPrimary)
 
                     Spacer()
 
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(AppTheme.Colors.primary)
-                    } else if hasRequirement {
-                        // Show requirement indicator when not selected
+                    if hasRequirement {
                         Image(systemName: "exclamationmark.circle.fill")
                             .font(.system(size: 14))
                             .foregroundStyle(AppTheme.Colors.error.opacity(0.8))
                     }
                 }
 
-                // Show requirement count when not selected and has requirements
-                if hasRequirement && !isSelected {
+                if hasRequirement {
                     Text("\(missingCount) photo\(missingCount == 1 ? "" : "s") required")
                         .font(AppTheme.Typography.caption2)
                         .foregroundStyle(AppTheme.Colors.error.opacity(0.9))
@@ -651,7 +646,7 @@ struct ProcedureSelectionButton: View {
             .padding(AppTheme.Spacing.md)
             .background(
                 isSelected
-                    ? AppTheme.Colors.primary.opacity(0.1)
+                    ? AppTheme.procedureBackgroundColor(for: procedure)
                     : (hasRequirement ? AppTheme.Colors.error.opacity(0.06) : AppTheme.Colors.surface)
             )
             .cornerRadius(AppTheme.CornerRadius.medium)
@@ -659,8 +654,8 @@ struct ProcedureSelectionButton: View {
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
                     .stroke(
                         isSelected
-                            ? AppTheme.Colors.primary
-                            : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.surfaceSecondary),
+                            ? AppTheme.procedureBorderColor(for: procedure)
+                            : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.divider),
                         lineWidth: 1
                     )
             )
@@ -887,7 +882,7 @@ struct StageButton: View {
                     )
 
                     // Requirement badge
-                    if hasRequirement && !isSelected {
+                    if hasRequirement {
                         Circle()
                             .fill(AppTheme.Colors.error)
                             .frame(width: 18, height: 18)
@@ -1042,32 +1037,28 @@ struct AngleButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: hasRequirement && !isSelected ? AppTheme.Spacing.xs : 0) {
+            VStack(alignment: .leading, spacing: hasRequirement ? AppTheme.Spacing.xs : 0) {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     Image(systemName: icon)
                         .font(.system(size: AppTheme.IconSize.sm))
-                        .foregroundStyle(isSelected ? .white : AppTheme.angleColor(for: angle))
+                        .foregroundStyle(isSelected ? AppTheme.Colors.primary : AppTheme.angleColor(for: angle))
                         .frame(width: 24)
 
                     Text(angle)
-                        .font(AppTheme.Typography.subheadline)
-                        .foregroundStyle(isSelected ? .white : AppTheme.Colors.textPrimary)
+                        .font(AppTheme.Typography.footnote)
+                        .foregroundStyle(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
 
                     Spacer()
 
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(.white)
-                    } else if hasRequirement {
+                    if hasRequirement {
                         Image(systemName: "exclamationmark.circle.fill")
                             .font(.system(size: AppTheme.IconSize.sm - 2))
                             .foregroundStyle(AppTheme.Colors.error.opacity(AppTheme.Opacity.strong))
                     }
                 }
 
-                // Show requirement count when not selected and has requirements
-                if hasRequirement && !isSelected {
+                if hasRequirement {
                     Text("\(missingCount) photo\(missingCount == 1 ? "" : "s") required")
                         .font(AppTheme.Typography.caption2)
                         .foregroundStyle(AppTheme.Colors.error.opacity(0.9))
@@ -1076,7 +1067,7 @@ struct AngleButton: View {
             .padding(AppTheme.Spacing.md)
             .background(
                 isSelected
-                    ? AppTheme.angleColor(for: angle)
+                    ? AppTheme.Colors.accentLight
                     : (hasRequirement ? AppTheme.Colors.error.opacity(0.06) : AppTheme.Colors.surface)
             )
             .cornerRadius(AppTheme.CornerRadius.medium)
@@ -1084,8 +1075,8 @@ struct AngleButton: View {
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
                     .stroke(
                         isSelected
-                            ? AppTheme.angleColor(for: angle)
-                            : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.surfaceSecondary),
+                            ? AppTheme.Colors.primary
+                            : (hasRequirement ? AppTheme.Colors.error.opacity(0.4) : AppTheme.Colors.divider),
                         lineWidth: 1
                     )
             )
