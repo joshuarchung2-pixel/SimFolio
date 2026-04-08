@@ -532,6 +532,41 @@ private struct DPIconButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - DPProgressRing
+
+/// Circular progress ring indicator
+struct DPProgressRing: View {
+    let progress: Double
+    var size: CGFloat = 60
+    var lineWidth: CGFloat = 6
+    var foregroundColor: Color? = nil
+    var showLabel: Bool = true
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(AppTheme.Colors.divider, lineWidth: lineWidth)
+
+            Circle()
+                .trim(from: 0, to: min(max(progress, 0), 1))
+                .stroke(
+                    foregroundColor ?? DPProgressBar.autoColor(for: progress),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.3), value: progress)
+
+            if showLabel {
+                Text("\(Int(progress * 100))%")
+                    .font(AppTheme.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 // MARK: - DPProgressBar
 
 /// Linear progress indicator with auto-coloring based on progress level

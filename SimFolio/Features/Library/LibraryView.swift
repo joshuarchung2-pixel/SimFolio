@@ -403,9 +403,6 @@ struct LibraryView: View {
             }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .onAppear {
-                library.fetchAssets()
-            }
         }
     }
 
