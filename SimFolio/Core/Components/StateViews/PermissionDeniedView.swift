@@ -47,9 +47,9 @@ enum PermissionDeniedType {
 
     var iconColor: Color {
         switch self {
-        case .camera: return .blue
-        case .photos: return .purple
-        case .notifications: return .red
+        case .camera: return AppTheme.Colors.primary
+        case .photos: return AppTheme.Colors.primary
+        case .notifications: return AppTheme.Colors.error
         }
     }
 }
@@ -90,8 +90,7 @@ struct PermissionDeniedView: View {
             // Text
             VStack(spacing: AppTheme.Spacing.sm) {
                 Text(type.title)
-                    .font(AppTheme.Typography.title3)
-                    .fontWeight(.bold)
+                    .font(.system(.title3, design: .serif).weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 

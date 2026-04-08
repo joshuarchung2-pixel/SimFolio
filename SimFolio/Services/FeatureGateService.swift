@@ -90,6 +90,10 @@ enum FeatureGateService {
     /// When ready to re-monetize, set back to false.
     static let allFeaturesUnlocked = true
 
+    /// Set to true to show the Social Feed tab.
+    /// Disabled until adoption grows enough to populate the feed.
+    static let socialFeedEnabled = false
+
     /// Maximum number of portfolios on the free tier
     static let freePortfolioLimit = 2
 

@@ -28,7 +28,9 @@ struct AppearanceSettingsView: View {
                     )
                 }
             } header: {
-                Text("Appearance")
+                Text("APPEARANCE")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .tracking(0.8)
             } footer: {
                 Text("Choose how SimFolio looks. Dark mode is easier on the eyes in low-light environments.")
             }
@@ -37,7 +39,9 @@ struct AppearanceSettingsView: View {
                 // Preview of current appearance
                 AppearancePreview()
             } header: {
-                Text("Preview")
+                Text("PREVIEW")
+                    .font(AppTheme.Typography.sectionLabel)
+                    .tracking(0.8)
             }
         }
         .listStyle(.insetGrouped)

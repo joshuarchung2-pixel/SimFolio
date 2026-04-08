@@ -303,32 +303,32 @@ struct PortfolioListCard: View {
 
     // MARK: - Subviews
 
-    /// Header row with title, date, and progress ring
+    /// Header row with title, date, and progress
     var headerRow: some View {
-        HStack(alignment: .top) {
-            // Title and date
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                Text(portfolio.name)
-                    .font(AppTheme.Typography.headline)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                // Title and date
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                    Text(portfolio.name)
+                        .font(AppTheme.Typography.headline)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
 
-                Text("Created \(portfolio.dateString)")
-                    .font(AppTheme.Typography.caption)
-                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                    Text("Created \(portfolio.dateString)")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textTertiary)
+                }
+
+                Spacer()
+
+                // Percentage badge
+                Text("\(Int(progress * 100))%")
+                    .font(AppTheme.Typography.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(isCompleted ? AppTheme.Colors.success : AppTheme.Colors.textSecondary)
             }
 
-            Spacer()
-
-            // Progress ring
-            DPProgressRing(
-                progress: progress,
-                size: 50,
-                lineWidth: 5,
-                foregroundColor: isCompleted ? AppTheme.Colors.success : nil,
-                showLabel: true,
-                labelStyle: .percentage
-            )
+            DPProgressBar(progress: progress)
         }
     }
 

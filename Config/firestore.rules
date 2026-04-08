@@ -1,0 +1,136 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // Helper Functions
+    // ============================================================
+
+    // Check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Get the user document for the authenticated user
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Check if authenticated user has blocked or is blocked by another user
+    function isBlocked(otherUserId) {
+      let myDoc = getUserDoc();
+      let otherDoc = get(/databases/$(database)/documents/users/$(otherUserId)).data;
+      return (otherUserId in myDoc.blockedUserIds) || (request.auth.uid in otherDoc.blockedUserIds);
+    }
+
+    // Check if the post is visible (not hidden by moderation)
+    function isPostVisible(postId) {
+      let post = get(/databases/$(database)/documents/posts/$(postId)).data;
+      return post.isHidden == false;
+    }
+
+    // ============================================================
+    // Users Collection
+    // ============================================================
+
+    match /users/{userId} {
+      // Anyone authenticated can read user profiles (for feed display)
+      allow read: if isAuthenticated();
+
+      // Users can only create/update their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+
+      // Users can only delete their own profile
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================================
+    // Posts Collection (Shared Photos)
+    // ============================================================
+
+    match /posts/{postId} {
+      // Authenticated users can read posts that aren't hidden
+      allow read: if isAuthenticated()
+                  && resource.data.isHidden == false;
+
+      // Authenticated users can create posts only as themselves
+      // and only simulation photos
+      allow create: if isAuthenticated()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.isSimulation == true
+                    && request.resource.data.isHidden == false
+                    && request.resource.data.reportCount == 0;
+
+      // Post owner can edit their own post (caption, etc.)
+      // Cannot change userId, isSimulation, or reset reportCount
+      allow update: if isOwner(resource.data.userId)
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.isSimulation == resource.data.isSimulation;
+
+      // Any authenticated user can update counters (commentCount, reactionCounts, reportCount)
+      // This is needed because comments/reactions/reports run transactions that increment these fields
+      allow update: if isAuthenticated()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['commentCount', 'reactionCounts', 'reportCount', 'isHidden']);
+
+      // Users can only delete their own posts
+      allow delete: if isOwner(resource.data.userId);
+
+      // --------------------------------------------------------
+      // Comments Subcollection
+      // --------------------------------------------------------
+
+      match /comments/{commentId} {
+        // Authenticated users can read comments on visible posts
+        allow read: if isAuthenticated();
+
+        // Authenticated users can create comments as themselves
+        allow create: if isAuthenticated()
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.isHidden == false;
+
+        // Users can only update their own comments
+        allow update: if isOwner(resource.data.userId);
+
+        // Users can delete their own comments
+        allow delete: if isOwner(resource.data.userId);
+      }
+
+      // --------------------------------------------------------
+      // Reactions Subcollection
+      // --------------------------------------------------------
+
+      match /reactions/{userId} {
+        // Authenticated users can read reactions
+        allow read: if isAuthenticated();
+
+        // Users can only create/update/delete their own reactions
+        allow create, update, delete: if isOwner(userId);
+      }
+    }
+
+    // ============================================================
+    // Reports Collection
+    // ============================================================
+
+    match /reports/{reportId} {
+      // Only the reporter can read their own reports
+      allow read: if isAuthenticated()
+                  && resource.data.reporterId == request.auth.uid;
+
+      // Authenticated users can create reports
+      allow create: if isAuthenticated()
+                    && request.resource.data.reporterId == request.auth.uid;
+
+      // Reports cannot be updated or deleted by users
+      allow update, delete: if false;
+    }
+  }
+}

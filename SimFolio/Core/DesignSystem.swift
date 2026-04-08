@@ -58,39 +58,39 @@ struct AppTheme {
         // MARK: Primary Colors
 
         /// Primary brand color - used for actions, links, and interactive elements
-        static let primary = Color(hex: "2563EB")
+        static let primary = Color(hex: "2B7A5F")
 
         /// Secondary color - used for secondary text and less prominent elements
-        static let secondary = Color(hex: "64748B")
+        static let secondary = Color(hex: "8B8578")
 
         // MARK: Procedure Colors
         // These colors are consistent throughout the app for procedure identification
 
         /// Class I restoration - Blue
-        static let class1 = Color(hex: "3B82F6")
+        static let class1 = Color(hex: "6B8FC7")
 
         /// Class II restoration - Green
-        static let class2 = Color(hex: "22C55E")
+        static let class2 = Color(hex: "5BA678")
 
         /// Class III restoration - Orange
-        static let class3 = Color(hex: "F97316")
+        static let class3 = Color(hex: "C49A5C")
 
         /// Crown procedure - Purple
-        static let crown = Color(hex: "A855F7")
+        static let crown = Color(hex: "9678BD")
 
         // MARK: Status Colors
 
         /// Success state - Green
-        static let success = Color(hex: "22C55E")
+        static let success = Color(hex: "2B7A5F")
 
         /// Warning state - Yellow
-        static let warning = Color(hex: "EAB308")
+        static let warning = Color(hex: "C49A5C")
 
         /// Error state - Red
-        static let error = Color(hex: "EF4444")
+        static let error = Color(hex: "C47070")
 
         /// Info state - Blue
-        static let info = Color(hex: "3B82F6")
+        static let info = Color(hex: "4A6FA5")
 
         // MARK: Background Colors (Adaptive)
 
@@ -118,31 +118,37 @@ struct AppTheme {
 
         /// Divider color - used for separators and borders - adapts to light/dark mode
         static let divider = Color("Divider")
+
+        /// Accent light tint - for selected pill backgrounds, status tints (adaptive via Asset Catalog)
+        static let accentLight = Color("AccentLight")
+
+        /// Accent dark - for pressed states
+        static let accentDark = Color(hex: "1D5A45")
     }
 
     // MARK: - Typography
 
-    /// Typography system using Nexa for headings and system font for body
+    /// Typography system using New York serif for headings and SF Pro system font for body
     struct Typography {
 
-        // MARK: Headings - Nexa Bold
+        // MARK: Headings - New York Serif
         // Use these for titles, section headers, and prominent text
 
-        /// Large title - 34pt Nexa Bold
+        /// Large title - serif bold
         /// Use for main screen titles
-        static let largeTitle = Font.custom("Nexa-Bold", size: 34)
+        static let largeTitle = Font.system(.largeTitle, design: .serif).weight(.bold)
 
-        /// Title - 28pt Nexa Bold
+        /// Title - serif bold
         /// Use for prominent section headers
-        static let title = Font.custom("Nexa-Bold", size: 28)
+        static let title = Font.system(.title, design: .serif).weight(.bold)
 
-        /// Title 2 - 22pt Nexa Bold
+        /// Title 2 - serif semibold
         /// Use for secondary titles
-        static let title2 = Font.custom("Nexa-Bold", size: 22)
+        static let title2 = Font.system(.title2, design: .serif).weight(.semibold)
 
-        /// Title 3 - 20pt Nexa Bold
+        /// Title 3 - serif semibold
         /// Use for tertiary titles and card headers
-        static let title3 = Font.custom("Nexa-Bold", size: 20)
+        static let title3 = Font.system(.title3, design: .serif).weight(.semibold)
 
         // MARK: Body - System Font
         // Use these for body text, labels, and general content
@@ -174,6 +180,9 @@ struct AppTheme {
         /// Caption 2 - Caption size
         /// Use for very small text like timestamps
         static let caption2 = Font.caption
+
+        /// Section label - 11pt uppercase for section headers
+        static let sectionLabel = Font.system(size: 11, weight: .semibold)
     }
 
     // MARK: - Spacing
@@ -337,15 +346,95 @@ struct AppTheme {
     static func procedureColor(for procedure: String) -> Color {
         switch procedure.lowercased() {
         case "class 1", "class1", "class i":
-            return Colors.class1
+            return Color(hex: "4A6FA5")
         case "class 2", "class2", "class ii":
-            return Colors.class2
+            return Color(hex: "3D7A54")
         case "class 3", "class3", "class iii":
-            return Colors.class3
+            return Color(hex: "7A5CA0")
+        case "class 4", "class4", "class iv":
+            return Color(hex: "A07840")
+        case "class 5", "class5", "class v":
+            return Color(hex: "A05050")
         case "crown", "crowns":
-            return Colors.crown
+            return Color(hex: "A07840")
+        case "bridge":
+            return Color(hex: "2B7A5F")
+        case "veneer":
+            return Color(hex: "7A8A40")
+        case "inlay":
+            return Color(hex: "A07840")
+        case "onlay":
+            return Color(hex: "7A5CA0")
+        case "root canal":
+            return Color(hex: "3D7A54")
+        case "extraction":
+            return Color(hex: "A05050")
         default:
             return Colors.secondary
+        }
+    }
+
+    /// Get the background tint color for a procedure type
+    static func procedureBackgroundColor(for procedure: String) -> Color {
+        switch procedure.lowercased() {
+        case "class 1", "class1", "class i":
+            return Color(hex: "F0F4FE")
+        case "class 2", "class2", "class ii":
+            return Color(hex: "EDF7F0")
+        case "class 3", "class3", "class iii":
+            return Color(hex: "F5F0FA")
+        case "class 4", "class4", "class iv":
+            return Color(hex: "FEF6EE")
+        case "class 5", "class5", "class v":
+            return Color(hex: "FEF0F0")
+        case "crown", "crowns":
+            return Color(hex: "FEF6EE")
+        case "bridge":
+            return Color(hex: "E8F5F0")
+        case "veneer":
+            return Color(hex: "F4F6EE")
+        case "inlay":
+            return Color(hex: "FEF6EE")
+        case "onlay":
+            return Color(hex: "F5F0FA")
+        case "root canal":
+            return Color(hex: "EDF7F0")
+        case "extraction":
+            return Color(hex: "FEF0F0")
+        default:
+            return Colors.surfaceSecondary
+        }
+    }
+
+    /// Get the border color for a procedure type
+    static func procedureBorderColor(for procedure: String) -> Color {
+        switch procedure.lowercased() {
+        case "class 1", "class1", "class i":
+            return Color(hex: "D8E2F8")
+        case "class 2", "class2", "class ii":
+            return Color(hex: "D0EBDA")
+        case "class 3", "class3", "class iii":
+            return Color(hex: "E4D8F2")
+        case "class 4", "class4", "class iv":
+            return Color(hex: "F8E4CC")
+        case "class 5", "class5", "class v":
+            return Color(hex: "F8D4D4")
+        case "crown", "crowns":
+            return Color(hex: "F8E4CC")
+        case "bridge":
+            return Color(hex: "D0E8DF")
+        case "veneer":
+            return Color(hex: "E2E8CC")
+        case "inlay":
+            return Color(hex: "F8E4CC")
+        case "onlay":
+            return Color(hex: "E4D8F2")
+        case "root canal":
+            return Color(hex: "D0EBDA")
+        case "extraction":
+            return Color(hex: "F8D4D4")
+        default:
+            return Colors.divider
         }
     }
 
@@ -373,19 +462,19 @@ struct AppTheme {
     static func angleColor(for angle: String) -> Color {
         switch angle.lowercased() {
         case "occlusal", "incisal", "occlusal/incisal":
-            return Colors.class1 // Blue
+            return Color(hex: "4A6FA5")
         case "buccal", "facial", "buccal/facial":
-            return Colors.class2 // Green
+            return Color(hex: "3D7A54")
         case "lingual", "palatal":
-            return Colors.class3 // Orange
+            return Color(hex: "A07840")
         case "mesial":
-            return Colors.crown // Purple
+            return Color(hex: "7A5CA0")
         case "distal":
-            return Color(hex: "EC4899") // Pink
+            return Color(hex: "A05050")
         case "facial straight":
-            return Color(hex: "14B8A6") // Teal
+            return Color(hex: "2B7A5F")
         case "facial retracted":
-            return Color(hex: "8B5CF6") // Violet
+            return Color(hex: "7A5CA0")
         default:
             return Colors.secondary
         }
@@ -421,24 +510,24 @@ struct ShadowModifier: ViewModifier {
 // MARK: - View Extension for Shadows
 
 extension View {
-    /// Apply a small shadow (subtle elevation)
+    /// Shadow removed in Clarity redesign — borders provide elevation
     func shadowSmall() -> some View {
-        modifier(ShadowModifier(style: AppTheme.Shadows.small))
+        self
     }
 
-    /// Apply a medium shadow (moderate elevation)
+    /// Shadow removed in Clarity redesign — borders provide elevation
     func shadowMedium() -> some View {
-        modifier(ShadowModifier(style: AppTheme.Shadows.medium))
+        self
     }
 
-    /// Apply a large shadow (prominent elevation)
+    /// Shadow removed in Clarity redesign — borders provide elevation
     func shadowLarge() -> some View {
-        modifier(ShadowModifier(style: AppTheme.Shadows.large))
+        self
     }
 
     /// Apply a custom shadow style
     func shadow(_ style: ShadowStyle) -> some View {
-        modifier(ShadowModifier(style: style))
+        self
     }
 }
 

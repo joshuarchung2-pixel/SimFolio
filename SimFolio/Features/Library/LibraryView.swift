@@ -401,7 +401,6 @@ struct LibraryView: View {
                 Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
             }
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .onAppear {
                 library.fetchAssets()
             }
@@ -575,7 +574,6 @@ struct FilterChipsBar: View {
             .padding(.vertical, AppTheme.Spacing.sm)
         }
         .background(AppTheme.Colors.surface)
-        .shadow(color: .black.opacity(AppTheme.Opacity.subtle), radius: 2, x: 0, y: 2)
     }
 
     func dateRangeText(_ range: LibraryFilter.DateRange) -> String {
@@ -721,7 +719,6 @@ struct LibraryProcedureDetailWrapper: View {
             }
         }
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
         .onChange(of: viewModel.isSelectionMode) { isSelecting in
             withAnimation(.easeInOut(duration: 0.25)) {
                 router.isTabBarVisible = !isSelecting
@@ -817,7 +814,6 @@ struct LibraryAllPhotosWrapper: View {
             }
         }
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
         .onChange(of: viewModel.isSelectionMode) { isSelecting in
             withAnimation(.easeInOut(duration: 0.25)) {
                 router.isTabBarVisible = !isSelecting
@@ -1084,7 +1080,6 @@ struct QuickAccessCard: View {
             .padding(AppTheme.Spacing.md)
             .background(AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.medium)
-            .shadow(color: .black.opacity(AppTheme.Opacity.subtle), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -1176,7 +1171,6 @@ struct ProcedureFolderRow: View {
             .padding(AppTheme.Spacing.md)
             .background(AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.medium)
-            .shadow(color: .black.opacity(AppTheme.Opacity.subtle), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -1658,7 +1652,6 @@ struct ToothGroupSection: View {
         }
         .background(AppTheme.Colors.surface)
         .cornerRadius(AppTheme.CornerRadius.medium)
-        .shadow(color: .black.opacity(AppTheme.Opacity.subtle), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -2446,7 +2439,6 @@ struct PhotoDetailView: View {
         .background(
             Color(UIColor.systemBackground)
                 .cornerRadius(20, corners: [.topLeft, .topRight])
-                .shadow(color: .black.opacity(AppTheme.Opacity.medium), radius: 10, y: -5)
         )
     }
 

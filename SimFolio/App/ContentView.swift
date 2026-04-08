@@ -49,11 +49,13 @@ struct ContentView: View {
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
     @State private var showFreeUnlockAnnouncement: Bool = false
+    @State private var showAccountNudge: Bool = false
 
     // MARK: - Persisted State
 
     @AppStorage("hasCompletedAppTour") private var hasCompletedAppTour = false
     @AppStorage("hasSeenFreeUnlockAnnouncement") private var hasSeenFreeUnlockAnnouncement = false
+    @AppStorage("hasSeenAccountNudge") private var hasSeenAccountNudge = false
 
     // MARK: - Environment
 
@@ -63,10 +65,6 @@ struct ContentView: View {
 
     private var hasCompletedOnboarding: Bool {
         UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-    }
-
-    private var isTabBarVisible: Bool {
-        router.selectedTab != .capture && router.isTabBarVisible
     }
 
     // MARK: - Body
@@ -97,6 +95,11 @@ struct ContentView: View {
             hasSeenFreeUnlockAnnouncement = true
         }) {
             FreeUnlockAnnouncementView()
+        }
+        .fullScreenCover(isPresented: $showAccountNudge, onDismiss: {
+            hasSeenAccountNudge = true
+        }) {
+            AccountNudgeView()
         }
         .fullScreenCover(isPresented: $showPostOnboardingPaywall, onDismiss: {
             // After paywall dismisses, show tour if not completed
@@ -162,18 +165,77 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainAppContent: some View {
-        ZStack(alignment: .bottom) {
-            // Tab content
-            tabContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            TabView(selection: $router.selectedTab) {
+                NavigationView {
+                    HomeView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("Home", systemImage: router.selectedTab == .home ? "house.fill" : "house")
+                }
+                .tag(MainTab.home)
 
-            // Custom tab bar with animated visibility
-            if isTabBarVisible {
-                DPTabBar(selectedTab: $router.selectedTab)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                CaptureFlowView(cameraService: cameraService)
+                    .tabItem {
+                        Label("Capture", systemImage: router.selectedTab == .capture ? "camera.fill" : "camera")
+                    }
+                    .tag(MainTab.capture)
+
+                NavigationView {
+                    LibraryView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("Library", systemImage: router.selectedTab == .library ? "photo.on.rectangle.fill" : "photo.on.rectangle")
+                }
+                .tag(MainTab.library)
+
+                if FeatureGateService.socialFeedEnabled {
+                    NavigationView {
+                        SocialFeedView()
+                    }
+                    .navigationViewStyle(.stack)
+                    .tabItem {
+                        Label("Feed", systemImage: router.selectedTab == .feed ? "bubble.left.and.text.bubble.right.fill" : "bubble.left.and.text.bubble.right")
+                    }
+                    .tag(MainTab.feed)
+                }
+
+                NavigationView {
+                    ProfileView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("Profile", systemImage: router.selectedTab == .profile ? "person.fill" : "person")
+                }
+                .tag(MainTab.profile)
+            }
+            .tint(AppTheme.Colors.primary)
+            .onChange(of: router.selectedTab) { newTab in
+                if previousTab == .capture && newTab != .capture {
+                    cameraService.stopSession()
+                }
+                if newTab == .capture && previousTab != .capture {
+                    cameraService.startSession()
+                }
+                switch newTab {
+                case .home:
+                    AnalyticsService.logScreenView("Home", screenClass: "HomeView")
+                case .capture:
+                    AnalyticsService.logScreenView("Capture", screenClass: "CaptureFlowView")
+                    AnalyticsService.logEvent(.cameraOpened)
+                case .library:
+                    AnalyticsService.logScreenView("Library", screenClass: "LibraryView")
+                    AnalyticsService.logEvent(.libraryOpened)
+                case .feed:
+                    AnalyticsService.logScreenView("Social Feed", screenClass: "SocialFeedView")
+                case .profile:
+                    AnalyticsService.logScreenView("Profile", screenClass: "ProfileView")
+                }
+                previousTab = newTab
             }
 
-            // App tour overlay (above everything, including tab bar)
             if showAppTour {
                 AppTourView(
                     isPresented: $showAppTour,
@@ -182,68 +244,6 @@ struct ContentView: View {
                 .transition(.opacity)
                 .zIndex(999)
             }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTabBarVisible)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-    }
-
-    // MARK: - Tab Content
-
-    @ViewBuilder
-    private var tabContent: some View {
-        Group {
-            switch router.selectedTab {
-            case .home:
-                NavigationView {
-                    HomeView()
-                }
-                .navigationViewStyle(StackNavigationViewStyle())
-                .transition(.opacity)
-
-            case .capture:
-                CaptureFlowView(cameraService: cameraService)
-                    .transition(.opacity)
-
-            case .library:
-                NavigationView {
-                    LibraryView()
-                }
-                .navigationViewStyle(StackNavigationViewStyle())
-                .transition(.opacity)
-
-            case .profile:
-                NavigationView {
-                    ProfileView()
-                }
-                .navigationViewStyle(StackNavigationViewStyle())
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
-        .onChange(of: router.selectedTab) { newTab in
-            // Manage camera lifecycle on tab switch
-            if previousTab == .capture && newTab != .capture {
-                cameraService.stopSession()
-            }
-            if newTab == .capture && previousTab != .capture {
-                cameraService.startSession()
-            }
-
-            // Track screen views for analytics
-            switch newTab {
-            case .home:
-                AnalyticsService.logScreenView("Home", screenClass: "HomeView")
-            case .capture:
-                AnalyticsService.logScreenView("Capture", screenClass: "CaptureFlowView")
-                AnalyticsService.logEvent(.cameraOpened)
-            case .library:
-                AnalyticsService.logScreenView("Library", screenClass: "LibraryView")
-                AnalyticsService.logEvent(.libraryOpened)
-            case .profile:
-                AnalyticsService.logScreenView("Profile", screenClass: "ProfileView")
-            }
-
-            previousTab = newTab
         }
     }
 
@@ -318,6 +318,9 @@ struct ContentView: View {
                 NotificationSettingsView()
             }
             .presentationDetents([.medium, .large])
+
+        case .signIn:
+            SignInView()
         }
     }
 
@@ -351,6 +354,16 @@ struct ContentView: View {
                     // One-time announcement for existing users that all features are now free
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         showFreeUnlockAnnouncement = true
+                    }
+                } else if !hasSeenAccountNudge
+                    && AuthenticationService.shared.authState == .signedOut {
+                    // Show account nudge 3+ days after onboarding
+                    let createdDate = UserDefaults.standard.object(forKey: "userCreatedDate") as? Date ?? Date()
+                    let daysSinceOnboarding = Calendar.current.dateComponents([.day], from: createdDate, to: Date()).day ?? 0
+                    if daysSinceOnboarding >= 3 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showAccountNudge = true
+                        }
                     }
                 }
             }
