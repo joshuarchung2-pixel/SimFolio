@@ -1106,6 +1106,10 @@ struct CompactAccessCard: View {
             .padding(.vertical, AppTheme.Spacing.sm)
             .background(AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
+            )
         }
         .buttonStyle(ScaleButtonStyle())
     }
