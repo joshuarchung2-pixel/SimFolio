@@ -189,13 +189,11 @@ struct TestData {
 
     /// Create a ToothEntry with optional parameters
     static func createToothEntry(
-        id: String = UUID().uuidString,
         procedure: String = "Class 1",
         toothNumber: Int = 14,
         date: Date = Date()
     ) -> ToothEntry {
         ToothEntry(
-            id: id,
             procedure: procedure,
             toothNumber: toothNumber,
             date: date

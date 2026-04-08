@@ -589,7 +589,8 @@ final class AspectRatioPresetTests: XCTestCase {
         let preset = AspectRatioPreset.ratio4x3
 
         // Then
-        XCTAssertEqual(preset.ratio(originalAspect: 1.0), 4.0 / 3.0, accuracy: 0.001)
+        guard let ratio = preset.ratio(originalAspect: 1.0) else { return XCTFail("ratio was nil") }
+        XCTAssertEqual(Double(ratio), 4.0 / 3.0, accuracy: 0.001)
     }
 
     func test3x4Ratio() {
@@ -597,7 +598,8 @@ final class AspectRatioPresetTests: XCTestCase {
         let preset = AspectRatioPreset.ratio3x4
 
         // Then
-        XCTAssertEqual(preset.ratio(originalAspect: 1.0), 3.0 / 4.0, accuracy: 0.001)
+        guard let ratio = preset.ratio(originalAspect: 1.0) else { return XCTFail("ratio was nil") }
+        XCTAssertEqual(Double(ratio), 3.0 / 4.0, accuracy: 0.001)
     }
 
     func test16x9Ratio() {
@@ -605,7 +607,8 @@ final class AspectRatioPresetTests: XCTestCase {
         let preset = AspectRatioPreset.ratio16x9
 
         // Then
-        XCTAssertEqual(preset.ratio(originalAspect: 1.0), 16.0 / 9.0, accuracy: 0.001)
+        guard let ratio = preset.ratio(originalAspect: 1.0) else { return XCTFail("ratio was nil") }
+        XCTAssertEqual(Double(ratio), 16.0 / 9.0, accuracy: 0.001)
     }
 
     func test9x16Ratio() {
@@ -613,7 +616,8 @@ final class AspectRatioPresetTests: XCTestCase {
         let preset = AspectRatioPreset.ratio9x16
 
         // Then
-        XCTAssertEqual(preset.ratio(originalAspect: 1.0), 9.0 / 16.0, accuracy: 0.001)
+        guard let ratio = preset.ratio(originalAspect: 1.0) else { return XCTFail("ratio was nil") }
+        XCTAssertEqual(Double(ratio), 9.0 / 16.0, accuracy: 0.001)
     }
 
     func testAllCasesHaveIds() {

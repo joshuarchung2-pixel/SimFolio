@@ -26,8 +26,8 @@ struct CaptureSettingsView: View {
 
     // MARK: - Saving Settings
 
-    @AppStorage("autoSaveToLibrary") private var autoSaveToLibrary = true
     @AppStorage("imageQuality") private var imageQuality = "High"
+    @AppStorage("saveToCameraRoll") private var saveToCameraRoll = false
 
     // MARK: - Flash Options
 
@@ -89,6 +89,7 @@ struct CaptureSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(AppTheme.Colors.primary)
+                .labelsHidden()
             }
         } header: {
             Text("Camera")
@@ -147,16 +148,6 @@ struct CaptureSettingsView: View {
 
     private var savingSection: some View {
         Section {
-            // Auto-Save Toggle
-            Toggle(isOn: $autoSaveToLibrary) {
-                SettingLabel(
-                    icon: "square.and.arrow.down.fill",
-                    title: "Auto-Save to Photos",
-                    subtitle: "Save captures to photo library"
-                )
-            }
-            .tint(AppTheme.Colors.primary)
-
             // Image Quality Picker
             HStack {
                 SettingLabel(
@@ -174,7 +165,24 @@ struct CaptureSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(AppTheme.Colors.primary)
+                .labelsHidden()
             }
+
+            Divider().padding(.leading, AppTheme.Spacing.md)
+
+            Toggle(isOn: $saveToCameraRoll) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save to Camera Roll")
+                        .font(AppTheme.Typography.body)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Also save a copy to the Photos app")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            }
+            .tint(AppTheme.Colors.primary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, 10)
         } header: {
             Text("Saving")
         } footer: {

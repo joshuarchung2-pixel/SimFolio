@@ -1103,6 +1103,8 @@ struct CaptureReviewView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
+    @AppStorage("saveToCameraRoll") private var saveToCameraRoll = false
+
     @State private var showTagEditor = false
     @State private var selectedPhotoIndex: Int? = nil
     @State private var isSaving = false
@@ -1378,61 +1380,66 @@ struct CaptureReviewView: View {
             rating: nil
         )
 
-        // Track analytics for each photo saved
         let photoCount = photosToSave.count
-        for _ in photosToSave {
-            AnalyticsService.logPhotoCaptured(
-                procedure: baseMetadata.procedure,
-                stage: baseMetadata.stage,
-                toothNumber: baseMetadata.toothNumber
-            )
-        }
-
-        let group = DispatchGroup()
 
         for photo in photosToSave {
-            group.enter()
-
             var photoMetadata = baseMetadata
             photoMetadata.rating = photo.rating > 0 ? photo.rating : nil
 
-            PhotoLibraryManager.shared.saveWithMetadata(image: photo.image, metadata: photoMetadata) { _ in
-                group.leave()
+            // Save to app storage
+            let record = PhotoStorageService.shared.savePhoto(photo.image)
+
+            // Store metadata keyed by new UUID
+            MetadataManager.shared.assignMetadata(photoMetadata, to: record.id.uuidString)
+
+            // Add tooth entry
+            if let entry = photoMetadata.toothEntry {
+                MetadataManager.shared.addToothEntry(entry)
             }
+
+            // Optionally save to camera roll
+            if saveToCameraRoll {
+                PhotoLibraryManager.shared.saveImageToCameraRoll(photo.image)
+            }
+
+            // Analytics
+            AnalyticsService.logPhotoCaptured(
+                procedure: photoMetadata.procedure,
+                stage: photoMetadata.stage,
+                toothNumber: photoMetadata.toothNumber
+            )
         }
 
-        group.notify(queue: .main) {
-            isSaving = false
+        // Log batch capture completion
+        AnalyticsService.logCustomEvent("batch_capture_completed", parameters: [
+            "photo_count": photoCount
+        ])
 
-            // Log batch capture completion
-            AnalyticsService.logCustomEvent("batch_capture_completed", parameters: [
-                "photo_count": photoCount
-            ])
+        // Prompt review after first photo capture
+        ReviewPromptService.requestIfEligible(for: .firstPhotoCaptured)
 
-            // Prompt review after first photo capture
-            ReviewPromptService.requestIfEligible(for: .firstPhotoCaptured)
+        // Determine toast message based on portfolio match
+        let toastMessage: String
+        if let portfolioMatch = findPortfolioMatchName() {
+            toastMessage = "\(photoCount) photo\(photoCount == 1 ? "" : "s") added to \(portfolioMatch)"
+        } else {
+            toastMessage = "\(photoCount) photo\(photoCount == 1 ? "" : "s") saved to library"
+        }
 
-            // Determine toast message based on portfolio match
-            let toastMessage: String
-            if let portfolioMatch = findPortfolioMatchName() {
-                toastMessage = "\(photoCount) photo\(photoCount == 1 ? "" : "s") added to \(portfolioMatch)"
-            } else {
-                toastMessage = "\(photoCount) photo\(photoCount == 1 ? "" : "s") saved to library"
-            }
+        isSaving = false
 
-            // Reset and go home
-            captureState.reset()
-            router.resetCaptureState()
-            router.selectedTab = .home
+        // Reset and go home
+        captureState.reset()
+        router.resetCaptureState()
+        router.selectedTab = .home
 
-            // Show toast after navigation (small delay for smooth UX)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                NotificationCenter.default.post(
-                    name: .showGlobalToast,
-                    object: nil,
-                    userInfo: ["message": toastMessage, "type": "success"]
-                )
-            }
+        // Show toast after navigation (small delay for smooth UX)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(
+                name: .showGlobalToast,
+                object: nil,
+                userInfo: ["message": toastMessage, "type": "success"]
+            )
         }
     }
 }

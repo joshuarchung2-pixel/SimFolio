@@ -86,22 +86,28 @@ enum PremiumFeature: String, CaseIterable {
 /// Centralized service for checking premium feature availability
 enum FeatureGateService {
 
+    /// Set to true to unlock all premium features for all users.
+    /// When ready to re-monetize, set back to false.
+    static let allFeaturesUnlocked = true
+
     /// Maximum number of portfolios on the free tier
     static let freePortfolioLimit = 2
 
     /// Check if a premium feature is available to the current user
     static func isAvailable(_ feature: PremiumFeature) -> Bool {
-        SubscriptionManager.shared.isSubscribed
+        allFeaturesUnlocked || SubscriptionManager.shared.isSubscribed
     }
 
     /// Check if the user can create a new portfolio (subscribed or under the free limit)
     static func canCreatePortfolio() -> Bool {
+        allFeaturesUnlocked ||
         SubscriptionManager.shared.isSubscribed ||
         MetadataManager.shared.portfolios.count < freePortfolioLimit
     }
 
     /// Whether to show the portfolio limit banner (free user at or over the limit)
     static func shouldShowPortfolioLimitBanner() -> Bool {
+        !allFeaturesUnlocked &&
         !SubscriptionManager.shared.isSubscribed &&
         MetadataManager.shared.portfolios.count >= freePortfolioLimit
     }

@@ -281,11 +281,18 @@ struct EditPortfolioSheet: View {
     @State private var name: String = ""
     @State private var hasDueDate: Bool = false
     @State private var dueDate: Date = Date()
+    @State private var requirements: [PortfolioRequirement] = []
+    @State private var showRequirementEditor = false
+    @State private var editingRequirementIndex: Int? = nil
+    @State private var requirementToDeleteIndex: Int? = nil
+    @State private var showDeleteRequirementAlert = false
+    @State private var matchingPhotoCount: Int = 0
 
     // MARK: - Validation
 
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !requirements.isEmpty
     }
 
     var hasChanges: Bool {
@@ -306,6 +313,10 @@ struct EditPortfolioSheet: View {
             }
         }
 
+        if requirements != portfolio.requirements {
+            return true
+        }
+
         return false
     }
 
@@ -321,8 +332,8 @@ struct EditPortfolioSheet: View {
                     // Due date section
                     dueDateSection
 
-                    // Requirements info
-                    requirementsInfo
+                    // Requirements section
+                    requirementsSection
 
                     Spacer(minLength: 100)
                 }
@@ -348,6 +359,37 @@ struct EditPortfolioSheet: View {
             }
             .onAppear {
                 loadPortfolio()
+            }
+            .sheet(isPresented: $showRequirementEditor) {
+                RequirementEditorSheet(
+                    isPresented: $showRequirementEditor,
+                    existingRequirement: editingRequirementIndex != nil ? requirements[editingRequirementIndex!] : nil,
+                    onSave: { requirement in
+                        if let index = editingRequirementIndex {
+                            requirements[index] = requirement
+                        } else {
+                            requirements.append(requirement)
+                        }
+                        editingRequirementIndex = nil
+                    }
+                )
+            }
+            .alert("Remove Requirement?", isPresented: $showDeleteRequirementAlert) {
+                Button("Cancel", role: .cancel) {
+                    requirementToDeleteIndex = nil
+                }
+                Button("Remove", role: .destructive) {
+                    if let index = requirementToDeleteIndex {
+                        requirements.remove(at: index)
+                        requirementToDeleteIndex = nil
+                    }
+                }
+            } message: {
+                if matchingPhotoCount > 0 {
+                    Text("This requirement has \(matchingPhotoCount) matching photo\(matchingPhotoCount == 1 ? "" : "s"). The photos will remain in your library but will no longer count toward this portfolio.")
+                } else {
+                    Text("This requirement will be removed from the portfolio.")
+                }
             }
         }
     }
@@ -407,25 +449,49 @@ struct EditPortfolioSheet: View {
         .padding(.horizontal, AppTheme.Spacing.md)
     }
 
-    // MARK: - Requirements Info
+    // MARK: - Requirements Section
 
-    var requirementsInfo: some View {
-        DPCard(padding: AppTheme.Spacing.md) {
-            HStack {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(AppTheme.Colors.textTertiary)
+    var requirementsSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text("Requirements")
+                .font(AppTheme.Typography.headline)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                    Text("Requirements")
-                        .font(AppTheme.Typography.subheadline)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                    Text("Requirements cannot be edited after creation. This portfolio has \(portfolio.requirements.count) requirement\(portfolio.requirements.count == 1 ? "" : "s").")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+            VStack(spacing: AppTheme.Spacing.sm) {
+                ForEach(Array(requirements.enumerated()), id: \.element.id) { index, requirement in
+                    RequirementPreviewRow(
+                        requirement: requirement,
+                        onEdit: {
+                            editingRequirementIndex = index
+                            showRequirementEditor = true
+                        },
+                        onDelete: {
+                            prepareDeleteRequirement(at: index)
+                        }
+                    )
                 }
 
-                Spacer()
+                // Add Requirement button
+                Button(action: {
+                    editingRequirementIndex = nil
+                    showRequirementEditor = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(AppTheme.Colors.primary)
+                        Text("Add Requirement")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(AppTheme.Spacing.md)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(AppTheme.CornerRadius.medium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                            .stroke(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1)
+                    )
+                }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
@@ -437,6 +503,7 @@ struct EditPortfolioSheet: View {
         name = portfolio.name
         hasDueDate = portfolio.dueDate != nil
         dueDate = portfolio.dueDate ?? Date()
+        requirements = portfolio.requirements
     }
 
     func saveChanges() {
@@ -445,11 +512,24 @@ struct EditPortfolioSheet: View {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             createdDate: portfolio.createdDate,
             dueDate: hasDueDate ? dueDate : nil,
-            requirements: portfolio.requirements
+            requirements: requirements
         )
 
         metadataManager.updatePortfolio(updatedPortfolio)
         isPresented = false
+    }
+
+    func prepareDeleteRequirement(at index: Int) {
+        requirementToDeleteIndex = index
+        let requirement = requirements[index]
+
+        matchingPhotoCount = metadataManager.assetMetadata.values.filter { metadata in
+            metadata.procedure == requirement.procedure
+                && requirement.stages.contains(metadata.stage ?? "")
+                && requirement.angles.contains(metadata.angle ?? "")
+        }.count
+
+        showDeleteRequirementAlert = true
     }
 }
 

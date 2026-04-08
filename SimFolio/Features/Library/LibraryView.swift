@@ -9,9 +9,9 @@
 // - Improved photo detail view with metadata editing
 
 import SwiftUI
-import Photos
 import Combine
 import UniformTypeIdentifiers
+import UIKit
 
 // MARK: - LibraryViewModel
 
@@ -66,8 +66,8 @@ class LibraryViewModel: ObservableObject {
     /// Whether selection mode is active
     @Published var isSelectionMode: Bool = false
 
-    /// Set of selected asset identifiers
-    @Published var selectedAssetIds: Set<String> = []
+    /// Set of selected photo record IDs
+    @Published var selectedAssetIds: Set<UUID> = []
 
     /// Current sort order
     @Published var sortOrder: SortOrder = .dateNewest
@@ -89,23 +89,23 @@ class LibraryViewModel: ObservableObject {
 
     // MARK: - Filtering Methods
 
-    /// Filter assets based on current LibraryFilter
+    /// Filter records based on current LibraryFilter
     /// - Parameters:
-    ///   - assets: All assets to filter
+    ///   - records: All records to filter
     ///   - metadata: MetadataManager instance
     ///   - filter: Current filter configuration
-    /// - Returns: Filtered array of assets
-    func filteredAssets(
-        from assets: [PHAsset],
+    /// - Returns: Filtered array of records
+    func filteredRecords(
+        from records: [PhotoRecord],
         metadata: MetadataManager,
         filter: LibraryFilter
-    ) -> [PHAsset] {
-        var result = assets
+    ) -> [PhotoRecord] {
+        var result = records
 
         // Filter by procedure
         if !filter.procedures.isEmpty {
-            result = result.filter { asset in
-                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+            result = result.filter { record in
+                guard let m = metadata.getMetadata(for: record.id.uuidString),
                       let procedure = m.procedure else { return false }
                 return filter.procedures.contains(procedure)
             }
@@ -113,8 +113,8 @@ class LibraryViewModel: ObservableObject {
 
         // Filter by stage
         if !filter.stages.isEmpty {
-            result = result.filter { asset in
-                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+            result = result.filter { record in
+                guard let m = metadata.getMetadata(for: record.id.uuidString),
                       let stage = m.stage else { return false }
                 return filter.stages.contains(stage)
             }
@@ -122,8 +122,8 @@ class LibraryViewModel: ObservableObject {
 
         // Filter by angle
         if !filter.angles.isEmpty {
-            result = result.filter { asset in
-                guard let m = metadata.getMetadata(for: asset.localIdentifier),
+            result = result.filter { record in
+                guard let m = metadata.getMetadata(for: record.id.uuidString),
                       let angle = m.angle else { return false }
                 return filter.angles.contains(angle)
             }
@@ -131,14 +131,16 @@ class LibraryViewModel: ObservableObject {
 
         // Filter by minimum rating
         if let minRating = filter.minimumRating {
-            result = result.filter { asset in
-                (metadata.getRating(for: asset.localIdentifier) ?? 0) >= minRating
+            result = result.filter { record in
+                (metadata.getRating(for: record.id.uuidString) ?? 0) >= minRating
             }
         }
 
         // Filter by favorites only
         if filter.favoritesOnly {
-            result = result.filter { $0.isFavorite }
+            result = result.filter { record in
+                metadata.getMetadata(for: record.id.uuidString)?.isFavorite == true
+            }
         }
 
         // Filter by date range
@@ -149,34 +151,33 @@ class LibraryViewModel: ObservableObject {
             switch dateRange {
             case .lastWeek:
                 let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-                result = result.filter { ($0.creationDate ?? now) >= weekAgo }
+                result = result.filter { $0.createdDate >= weekAgo }
 
             case .lastMonth:
                 let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
-                result = result.filter { ($0.creationDate ?? now) >= monthAgo }
+                result = result.filter { $0.createdDate >= monthAgo }
 
             case .last3Months:
                 let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
-                result = result.filter { ($0.creationDate ?? now) >= threeMonthsAgo }
+                result = result.filter { $0.createdDate >= threeMonthsAgo }
 
             case .lastYear:
                 let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
-                result = result.filter { ($0.creationDate ?? now) >= yearAgo }
+                result = result.filter { $0.createdDate >= yearAgo }
 
             case .custom(let start, let end):
-                result = result.filter { asset in
-                    guard let date = asset.creationDate else { return false }
-                    return date >= start && date <= end
+                result = result.filter { record in
+                    return record.createdDate >= start && record.createdDate <= end
                 }
             }
         }
 
-        // Filter by portfolio (assets matching portfolio requirements)
+        // Filter by portfolio (records matching portfolio requirements)
         if let portfolioId = filter.portfolioId {
             if let portfolio = metadata.portfolios.first(where: { $0.id == portfolioId }) {
                 let proceduresInPortfolio = Set(portfolio.requirements.map { $0.procedure })
-                result = result.filter { asset in
-                    guard let m = metadata.getMetadata(for: asset.localIdentifier),
+                result = result.filter { record in
+                    guard let m = metadata.getMetadata(for: record.id.uuidString),
                           let procedure = m.procedure else { return false }
                     return proceduresInPortfolio.contains(procedure)
                 }
@@ -186,19 +187,19 @@ class LibraryViewModel: ObservableObject {
         // Sort
         switch sortOrder {
         case .dateNewest:
-            result.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
+            result.sort { $0.createdDate > $1.createdDate }
         case .dateOldest:
-            result.sort { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+            result.sort { $0.createdDate < $1.createdDate }
         case .procedure:
-            result.sort { asset1, asset2 in
-                let p1 = metadata.getMetadata(for: asset1.localIdentifier)?.procedure ?? ""
-                let p2 = metadata.getMetadata(for: asset2.localIdentifier)?.procedure ?? ""
+            result.sort { record1, record2 in
+                let p1 = metadata.getMetadata(for: record1.id.uuidString)?.procedure ?? ""
+                let p2 = metadata.getMetadata(for: record2.id.uuidString)?.procedure ?? ""
                 return p1 < p2
             }
         case .rating:
-            result.sort { asset1, asset2 in
-                let r1 = metadata.getRating(for: asset1.localIdentifier) ?? 0
-                let r2 = metadata.getRating(for: asset2.localIdentifier) ?? 0
+            result.sort { record1, record2 in
+                let r1 = metadata.getRating(for: record1.id.uuidString) ?? 0
+                let r2 = metadata.getRating(for: record2.id.uuidString) ?? 0
                 return r1 > r2
             }
         }
@@ -208,20 +209,20 @@ class LibraryViewModel: ObservableObject {
 
     // MARK: - Grouping Methods
 
-    /// Group assets by procedure type
+    /// Group records by procedure type
     /// - Parameters:
-    ///   - assets: Assets to group
+    ///   - records: Records to group
     ///   - metadata: MetadataManager instance
-    /// - Returns: Dictionary of procedure name to assets
-    func assetsByProcedure(
-        from assets: [PHAsset],
+    /// - Returns: Dictionary of procedure name to records
+    func recordsByProcedure(
+        from records: [PhotoRecord],
         metadata: MetadataManager
-    ) -> [String: [PHAsset]] {
-        var grouped: [String: [PHAsset]] = [:]
+    ) -> [String: [PhotoRecord]] {
+        var grouped: [String: [PhotoRecord]] = [:]
 
-        for asset in assets {
+        for record in records {
             let procedure: String
-            if let meta = metadata.getMetadata(for: asset.localIdentifier),
+            if let meta = metadata.getMetadata(for: record.id.uuidString),
                let proc = meta.procedure {
                 procedure = proc
             } else {
@@ -231,7 +232,7 @@ class LibraryViewModel: ObservableObject {
             if grouped[procedure] == nil {
                 grouped[procedure] = []
             }
-            grouped[procedure]?.append(asset)
+            grouped[procedure]?.append(record)
         }
 
         return grouped
@@ -239,14 +240,14 @@ class LibraryViewModel: ObservableObject {
 
     /// Get sorted list of procedure names for display
     /// - Parameters:
-    ///   - assets: Assets to analyze
+    ///   - records: Records to analyze
     ///   - metadata: MetadataManager instance
     /// - Returns: Sorted array of procedure names
     func sortedProcedureNames(
-        from assets: [PHAsset],
+        from records: [PhotoRecord],
         metadata: MetadataManager
     ) -> [String] {
-        let grouped = assetsByProcedure(from: assets, metadata: metadata)
+        let grouped = recordsByProcedure(from: records, metadata: metadata)
         var names = Array(grouped.keys)
 
         // Sort with base procedures first, then alphabetically, with Untagged last
@@ -269,20 +270,20 @@ class LibraryViewModel: ObservableObject {
 
     // MARK: - Selection Methods
 
-    /// Toggle selection state for an asset
-    /// - Parameter assetId: The asset's local identifier
-    func toggleSelection(for assetId: String) {
-        if selectedAssetIds.contains(assetId) {
-            selectedAssetIds.remove(assetId)
+    /// Toggle selection state for a record
+    /// - Parameter recordId: The record's UUID
+    func toggleSelection(for recordId: UUID) {
+        if selectedAssetIds.contains(recordId) {
+            selectedAssetIds.remove(recordId)
         } else {
-            selectedAssetIds.insert(assetId)
+            selectedAssetIds.insert(recordId)
         }
     }
 
-    /// Select all provided assets
-    /// - Parameter assets: Assets to select
-    func selectAll(assets: [PHAsset]) {
-        selectedAssetIds = Set(assets.map { $0.localIdentifier })
+    /// Select all provided records
+    /// - Parameter records: Records to select
+    func selectAll(records: [PhotoRecord]) {
+        selectedAssetIds = Set(records.map { $0.id })
     }
 
     /// Clear all selections
@@ -329,7 +330,7 @@ enum LibraryDestination: Hashable {
 struct LibraryView: View {
     @EnvironmentObject var router: NavigationRouter
     @StateObject private var viewModel = LibraryViewModel()
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
     @ObservedObject var metadataManager = MetadataManager.shared
 
     @State private var showFilterSheet = false
@@ -402,73 +403,51 @@ struct LibraryView: View {
             }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .onAppear {
-                library.fetchAssets()
-            }
         }
     }
 
     // MARK: - Action Handlers
 
-    /// Handle deletion of selected assets
+    /// Handle deletion of selected photos
     func handleDeleteSelected() {
-        let selectedIds = Array(viewModel.selectedAssetIds)
-        let assetsToDelete = library.assets.filter { selectedIds.contains($0.localIdentifier) }
+        let idsToDelete = Array(viewModel.selectedAssetIds)
+        guard !idsToDelete.isEmpty else { return }
 
-        guard !assetsToDelete.isEmpty else { return }
-
-        PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.deleteAssets(assetsToDelete as NSFastEnumeration)
-        } completionHandler: { success, error in
-            DispatchQueue.main.async {
-                if success {
-                    for id in selectedIds {
-                        MetadataManager.shared.deleteMetadata(for: id)
-                        PhotoEditPersistenceService.shared.deleteEditState(for: id)
-                    }
-                    viewModel.exitSelectionMode()
-                    library.fetchAssets()
-                }
-            }
+        // Remove metadata
+        for id in idsToDelete {
+            MetadataManager.shared.deleteMetadata(for: id.uuidString)
+            PhotoEditPersistenceService.shared.deleteEditState(for: id.uuidString)
         }
+
+        // Delete files from disk
+        PhotoStorageService.shared.deletePhotos(ids: idsToDelete)
+
+        viewModel.exitSelectionMode()
     }
 
-    /// Handle sharing of selected assets
+    /// Handle sharing of selected photos
     func handleShareSelected() {
-        let ids = Array(viewModel.selectedAssetIds)
+        let ids = Array(viewModel.selectedAssetIds).map { $0.uuidString }
         router.presentSheet(.shareSheet(photoIds: ids))
     }
 
-    /// Handle favoriting selected assets
+    /// Handle favoriting selected photos
     func handleFavoriteSelected() {
         let selectedIds = Array(viewModel.selectedAssetIds)
-        let assetsToFavorite = library.assets.filter { selectedIds.contains($0.localIdentifier) }
+        guard !selectedIds.isEmpty else { return }
 
-        guard !assetsToFavorite.isEmpty else { return }
-
-        // Store the asset IDs before the async operation
-        let assetIds = assetsToFavorite.map { $0.localIdentifier }
-
-        PHPhotoLibrary.shared().performChanges {
-            for asset in assetsToFavorite {
-                let request = PHAssetChangeRequest(for: asset)
-                request.isFavorite = true
-            }
-        } completionHandler: { success, error in
-            DispatchQueue.main.async {
-                if success {
-                    // Post notification for each favorited asset for immediate thumbnail update
-                    for assetId in assetIds {
-                        NotificationCenter.default.post(
-                            name: .photoFavoriteChanged,
-                            object: nil,
-                            userInfo: ["assetId": assetId, "isFavorite": true]
-                        )
-                    }
-                    viewModel.exitSelectionMode()
-                }
-            }
+        for id in selectedIds {
+            let key = id.uuidString
+            var meta = metadataManager.getMetadata(for: key) ?? PhotoMetadata()
+            meta.isFavorite = true
+            metadataManager.assignMetadata(meta, to: key)
+            NotificationCenter.default.post(
+                name: .photoFavoriteChanged,
+                object: nil,
+                userInfo: ["assetId": key, "isFavorite": true]
+            )
         }
+        viewModel.exitSelectionMode()
     }
 }
 
@@ -844,7 +823,7 @@ struct LibraryAllPhotosWrapper: View {
 /// List view showing procedure folders with photo counts and stats
 struct ProceduresListView: View {
     @ObservedObject var viewModel: LibraryViewModel
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
@@ -857,28 +836,28 @@ struct ProceduresListView: View {
 
     var procedureStats: [(procedure: String, count: Int, prepCount: Int, restoCount: Int, mostRecentDate: Date?)] {
         var stats: [(String, Int, Int, Int, Date?)] = []
-        let grouped = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)
+        let grouped = viewModel.recordsByProcedure(from: photoStorage.records, metadata: metadataManager)
 
         for procedure in metadataManager.procedures {
-            let assets = grouped[procedure] ?? []
-            let prepCount = assets.filter { asset in
-                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Preparation"
+            let records = grouped[procedure] ?? []
+            let prepCount = records.filter { record in
+                metadataManager.getMetadata(for: record.id.uuidString)?.stage == "Preparation"
             }.count
-            let restoCount = assets.filter { asset in
-                metadataManager.getMetadata(for: asset.localIdentifier)?.stage == "Restoration"
+            let restoCount = records.filter { record in
+                metadataManager.getMetadata(for: record.id.uuidString)?.stage == "Restoration"
             }.count
-            let mostRecentDate = assets.compactMap { $0.creationDate }.max()
+            let mostRecentDate = records.map { $0.createdDate }.max()
 
-            if assets.count > 0 {
-                stats.append((procedure, assets.count, prepCount, restoCount, mostRecentDate))
+            if records.count > 0 {
+                stats.append((procedure, records.count, prepCount, restoCount, mostRecentDate))
             }
         }
 
         // Add untagged if any
-        let untaggedAssets = grouped["Untagged"] ?? []
-        if untaggedAssets.count > 0 {
-            let mostRecentDate = untaggedAssets.compactMap { $0.creationDate }.max()
-            stats.append(("Untagged", untaggedAssets.count, 0, 0, mostRecentDate))
+        let untaggedRecords = grouped["Untagged"] ?? []
+        if untaggedRecords.count > 0 {
+            let mostRecentDate = untaggedRecords.map { $0.createdDate }.max()
+            stats.append(("Untagged", untaggedRecords.count, 0, 0, mostRecentDate))
         }
 
         return stats
@@ -921,7 +900,7 @@ struct ProceduresListView: View {
                 CompactAccessCard(
                     icon: "photo.on.rectangle",
                     title: "All",
-                    count: library.assets.count,
+                    count: photoStorage.records.count,
                     color: AppTheme.Colors.primary
                 ) {
                     onAllPhotosTap?()
@@ -1013,9 +992,9 @@ struct ProceduresListView: View {
                         ) {
                             if viewModel.isSelectionMode {
                                 // Select all in this procedure
-                                let assets = viewModel.assetsByProcedure(from: library.assets, metadata: metadataManager)[stat.procedure] ?? []
-                                for asset in assets {
-                                    viewModel.selectedAssetIds.insert(asset.localIdentifier)
+                                let records = viewModel.recordsByProcedure(from: photoStorage.records, metadata: metadataManager)[stat.procedure] ?? []
+                                for record in records {
+                                    viewModel.selectedAssetIds.insert(record.id)
                                 }
                             } else {
                                 onProcedureTap?(stat.procedure)
@@ -1032,17 +1011,19 @@ struct ProceduresListView: View {
     // MARK: - Computed Properties
 
     var starredCount: Int {
-        library.assets.filter { $0.isFavorite }.count
+        photoStorage.records.filter { record in
+            metadataManager.getMetadata(for: record.id.uuidString)?.isFavorite == true
+        }.count
     }
 
     var recentCount: Int {
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        return library.assets.filter { $0.creationDate ?? Date() > weekAgo }.count
+        return photoStorage.records.filter { $0.createdDate > weekAgo }.count
     }
 
     var untaggedCount: Int {
-        library.assets.filter { asset in
-            metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+        photoStorage.records.filter { record in
+            metadataManager.getMetadata(for: record.id.uuidString)?.procedure == nil
         }.count
     }
 }
@@ -1122,6 +1103,10 @@ struct CompactAccessCard: View {
             .padding(.vertical, AppTheme.Spacing.sm)
             .background(AppTheme.Colors.surface)
             .cornerRadius(AppTheme.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
+            )
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -1223,9 +1208,9 @@ struct StageBreakdownBar: View {
 
 // MARK: - ThumbnailView
 
-/// Async thumbnail loader for PHAsset
+/// Async thumbnail loader for PhotoRecord
 struct ThumbnailView: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     @State private var image: UIImage?
 
     var body: some View {
@@ -1247,17 +1232,41 @@ struct ThumbnailView: View {
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 loadThumbnail()
             }
         }
     }
 
     private func loadThumbnail() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 100, height: 100)) { loadedImage in
-            self.image = loadedImage
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+    }
+}
+
+// MARK: - RecordThumbnailView
+
+/// Small thumbnail view for PhotoRecord (used in collapsed tooth group previews)
+struct RecordThumbnailView: View {
+    let record: PhotoRecord
+    let size: CGFloat
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(AppTheme.Colors.surfaceSecondary)
+            }
+        }
+        .onAppear {
+            image = PhotoStorageService.shared.loadThumbnail(id: record.id)
         }
     }
 }
@@ -1268,7 +1277,7 @@ struct ThumbnailView: View {
 struct ProcedureDetailView: View {
     let procedure: String
     @ObservedObject var viewModel: LibraryViewModel
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
@@ -1285,38 +1294,38 @@ struct ProcedureDetailView: View {
         procedure == "Untagged"
     }
 
-    var procedureAssets: [PHAsset] {
+    var procedureRecords: [PhotoRecord] {
         if procedure == "Untagged" {
-            return library.assets.filter { asset in
-                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == nil
+            return photoStorage.records.filter { record in
+                metadataManager.getMetadata(for: record.id.uuidString)?.procedure == nil
             }
         } else {
-            return library.assets.filter { asset in
-                metadataManager.getMetadata(for: asset.localIdentifier)?.procedure == procedure
+            return photoStorage.records.filter { record in
+                metadataManager.getMetadata(for: record.id.uuidString)?.procedure == procedure
             }
         }
     }
 
-    var assetsByTooth: [Int: [PHAsset]] {
-        var grouped: [Int: [PHAsset]] = [:]
+    var recordsByTooth: [Int: [PhotoRecord]] {
+        var grouped: [Int: [PhotoRecord]] = [:]
 
-        for asset in procedureAssets {
-            let toothNumber = metadataManager.getMetadata(for: asset.localIdentifier)?.toothNumber ?? 0
-            grouped[toothNumber, default: []].append(asset)
+        for record in procedureRecords {
+            let toothNumber = metadataManager.getMetadata(for: record.id.uuidString)?.toothNumber ?? 0
+            grouped[toothNumber, default: []].append(record)
         }
 
         return grouped
     }
 
     var sortedToothNumbers: [Int] {
-        assetsByTooth.keys.sorted()
+        recordsByTooth.keys.sorted()
     }
 
-    /// Group procedure assets by stage
+    /// Group procedure records by stage
     var stageAssetCounts: [String: Int] {
         var counts: [String: Int] = [:]
-        for asset in procedureAssets {
-            let stage = metadataManager.getMetadata(for: asset.localIdentifier)?.stage ?? "Unknown"
+        for record in procedureRecords {
+            let stage = metadataManager.getMetadata(for: record.id.uuidString)?.stage ?? "Unknown"
             counts[stage, default: 0] += 1
         }
         return counts
@@ -1334,7 +1343,7 @@ struct ProcedureDetailView: View {
     }
 
     var body: some View {
-        if procedureAssets.isEmpty {
+        if procedureRecords.isEmpty {
             DPEmptyState(
                 icon: "folder",
                 title: "No Photos",
@@ -1366,7 +1375,7 @@ struct ProcedureDetailView: View {
             .sheet(item: $selectedPhotoId) { photoId in
                 PhotoDetailSheet(
                     photoId: photoId,
-                    allAssets: procedureAssets,
+                    allRecords: procedureRecords,
                     onDismiss: { selectedPhotoId = nil },
                     onPhotoTagged: { _ in
                         selectedPhotoId = nil
@@ -1383,7 +1392,7 @@ struct ProcedureDetailView: View {
             if isUntagged {
                 // Simplified stats for untagged photos
                 StatItem(
-                    value: "\(procedureAssets.count)",
+                    value: "\(procedureRecords.count)",
                     label: "Photos",
                     color: AppTheme.procedureColor(for: procedure)
                 )
@@ -1392,7 +1401,7 @@ struct ProcedureDetailView: View {
                 // Full stats for regular procedures
                 HStack(spacing: AppTheme.Spacing.lg) {
                     StatItem(
-                        value: "\(procedureAssets.count)",
+                        value: "\(procedureRecords.count)",
                         label: "Photos",
                         color: AppTheme.procedureColor(for: procedure)
                     )
@@ -1401,7 +1410,7 @@ struct ProcedureDetailView: View {
                         .frame(height: 40)
 
                     StatItem(
-                        value: "\(assetsByTooth.count)",
+                        value: "\(recordsByTooth.count)",
                         label: "Teeth",
                         color: AppTheme.Colors.success
                     )
@@ -1447,7 +1456,7 @@ struct ProcedureDetailView: View {
             ForEach(sortedToothNumbers, id: \.self) { toothNumber in
                 ToothGroupSection(
                     toothNumber: toothNumber,
-                    assets: assetsByTooth[toothNumber] ?? [],
+                    records: recordsByTooth[toothNumber] ?? [],
                     isExpanded: expandedTeeth.contains(toothNumber),
                     isSelectionMode: viewModel.isSelectionMode,
                     selectedIds: viewModel.selectedAssetIds,
@@ -1460,11 +1469,11 @@ struct ProcedureDetailView: View {
                             }
                         }
                     },
-                    onSelectAsset: { assetId in
+                    onSelectRecord: { recordId in
                         if viewModel.isSelectionMode {
-                            viewModel.toggleSelection(for: assetId)
+                            viewModel.toggleSelection(for: recordId)
                         } else {
-                            selectedPhotoId = assetId
+                            selectedPhotoId = recordId.uuidString
                         }
                     },
                     metadataManager: metadataManager
@@ -1485,7 +1494,7 @@ struct ProcedureDetailView: View {
         VStack(spacing: AppTheme.Spacing.sm) {
             // Results count
             HStack {
-                Text("\(procedureAssets.count) photo\(procedureAssets.count == 1 ? "" : "s")")
+                Text("\(procedureRecords.count) photo\(procedureRecords.count == 1 ? "" : "s")")
                     .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
@@ -1495,17 +1504,17 @@ struct ProcedureDetailView: View {
 
             // Photo grid
             LazyVGrid(columns: gridColumns, spacing: 12) {
-                ForEach(procedureAssets, id: \.localIdentifier) { asset in
+                ForEach(procedureRecords) { record in
                     PhotoGridCell(
-                        asset: asset,
-                        metadata: metadataManager.getMetadata(for: asset.localIdentifier),
-                        isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                        record: record,
+                        metadata: metadataManager.getMetadata(for: record.id.uuidString),
+                        isSelected: viewModel.selectedAssetIds.contains(record.id),
                         isSelectionMode: viewModel.isSelectionMode,
                         onTap: {
                             if viewModel.isSelectionMode {
-                                viewModel.toggleSelection(for: asset.localIdentifier)
+                                viewModel.toggleSelection(for: record.id)
                             } else {
-                                selectedPhotoId = asset.localIdentifier
+                                selectedPhotoId = record.id.uuidString
                             }
                         },
                         metadataManager: metadataManager
@@ -1543,31 +1552,31 @@ struct StatItem: View {
 /// Expandable section showing photos grouped by tooth number
 struct ToothGroupSection: View {
     let toothNumber: Int
-    let assets: [PHAsset]
+    let records: [PhotoRecord]
     let isExpanded: Bool
     let isSelectionMode: Bool
-    let selectedIds: Set<String>
+    let selectedIds: Set<UUID>
     let onToggleExpand: () -> Void
-    let onSelectAsset: (String) -> Void
+    let onSelectRecord: (UUID) -> Void
     @ObservedObject var metadataManager: MetadataManager
 
     var toothLabel: String {
         toothNumber == 0 ? "No Tooth Assigned" : "Tooth #\(toothNumber)"
     }
 
-    /// Group assets by their stage name
-    var assetsByStage: [String: [PHAsset]] {
-        var grouped: [String: [PHAsset]] = [:]
-        for asset in assets {
-            let stage = metadataManager.getMetadata(for: asset.localIdentifier)?.stage ?? "Unknown"
-            grouped[stage, default: []].append(asset)
+    /// Group records by their stage name
+    var recordsByStage: [String: [PhotoRecord]] {
+        var grouped: [String: [PhotoRecord]] = [:]
+        for record in records {
+            let stage = metadataManager.getMetadata(for: record.id.uuidString)?.stage ?? "Unknown"
+            grouped[stage, default: []].append(record)
         }
         return grouped
     }
 
     /// Get distinct stages in this tooth group, sorted by StageConfig.sortOrder
     var sortedStages: [String] {
-        let stages = Set(assetsByStage.keys)
+        let stages = Set(recordsByStage.keys)
         let enabledStages = metadataManager.getEnabledStages()
         return stages.sorted { stage1, stage2 in
             let order1 = enabledStages.first { $0.name == stage1 }?.sortOrder ?? 999
@@ -1600,7 +1609,7 @@ struct ToothGroupSection: View {
 
                         HStack(spacing: AppTheme.Spacing.sm) {
                             ForEach(sortedStages.prefix(3), id: \.self) { stage in
-                                if let count = assetsByStage[stage]?.count, count > 0 {
+                                if let count = recordsByStage[stage]?.count, count > 0 {
                                     Text("\(count) \(PhotoMetadata.stageAbbreviation(for: stage))")
                                         .font(AppTheme.Typography.caption)
                                         .foregroundStyle(metadataManager.stageColor(for: stage))
@@ -1614,8 +1623,8 @@ struct ToothGroupSection: View {
                     // Thumbnail preview (when collapsed)
                     if !isExpanded {
                         HStack(spacing: -8) {
-                            ForEach(assets.prefix(3), id: \.localIdentifier) { asset in
-                                AsyncThumbnailView(asset: asset, size: 32)
+                            ForEach(records.prefix(3)) { record in
+                                RecordThumbnailView(record: record, size: 32)
                                     .frame(width: 32, height: 32)
                                     .clipShape(RoundedRectangle(cornerRadius: 4))
                                     .overlay(
@@ -1639,13 +1648,13 @@ struct ToothGroupSection: View {
             if isExpanded {
                 VStack(spacing: AppTheme.Spacing.md) {
                     ForEach(sortedStages, id: \.self) { stage in
-                        if let stageAssets = assetsByStage[stage], !stageAssets.isEmpty {
+                        if let stageRecords = recordsByStage[stage], !stageRecords.isEmpty {
                             StagePhotoGrid(
                                 stage: stage,
-                                assets: stageAssets,
+                                records: stageRecords,
                                 isSelectionMode: isSelectionMode,
                                 selectedIds: selectedIds,
-                                onSelectAsset: onSelectAsset,
+                                onSelectRecord: onSelectRecord,
                                 metadataManager: metadataManager
                             )
                         }
@@ -1667,10 +1676,10 @@ struct ToothGroupSection: View {
 /// Grid of photos for a specific stage (Preparation or Restoration)
 struct StagePhotoGrid: View {
     let stage: String
-    let assets: [PHAsset]
+    let records: [PhotoRecord]
     let isSelectionMode: Bool
-    let selectedIds: Set<String>
-    let onSelectAsset: (String) -> Void
+    let selectedIds: Set<UUID>
+    let onSelectRecord: (UUID) -> Void
     @ObservedObject var metadataManager: MetadataManager
 
     var body: some View {
@@ -1691,13 +1700,13 @@ struct StagePhotoGrid: View {
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                 spacing: AppTheme.Spacing.xs
             ) {
-                ForEach(assets, id: \.localIdentifier) { asset in
+                ForEach(records) { record in
                     LibraryPhotoThumbnail(
-                        asset: asset,
-                        isSelected: selectedIds.contains(asset.localIdentifier),
+                        record: record,
+                        isSelected: selectedIds.contains(record.id),
                         isSelectionMode: isSelectionMode
                     ) {
-                        onSelectAsset(asset.localIdentifier)
+                        onSelectRecord(record.id)
                     }
                     .aspectRatio(1, contentMode: .fill)
                 }
@@ -1710,7 +1719,7 @@ struct StagePhotoGrid: View {
 
 /// Photo thumbnail with selection overlay and rating badge
 struct LibraryPhotoThumbnail: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     let isSelected: Bool
     let isSelectionMode: Bool
     let onTap: () -> Void
@@ -1721,7 +1730,7 @@ struct LibraryPhotoThumbnail: View {
     @ObservedObject var metadataManager = MetadataManager.shared
 
     var rating: Int {
-        metadataManager.getRating(for: asset.localIdentifier) ?? 0
+        metadataManager.getRating(for: record.id.uuidString) ?? 0
     }
 
     var body: some View {
@@ -1801,20 +1810,20 @@ struct LibraryPhotoThumbnail: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
-            isFavorite = asset.isFavorite
+            isFavorite = metadataManager.getMetadata(for: record.id.uuidString)?.isFavorite == true
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 loadThumbnail()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoFavoriteChanged)) { notification in
-            // Update favorite status if this asset's favorite changed
+            // Update favorite status if this record's favorite changed
             if let assetId = notification.userInfo?["assetId"] as? String,
-               assetId == asset.localIdentifier,
+               assetId == record.id.uuidString,
                let newFavorite = notification.userInfo?["isFavorite"] as? Bool {
                 let wasNotFavorite = !isFavorite
                 isFavorite = newFavorite
@@ -1836,9 +1845,7 @@ struct LibraryPhotoThumbnail: View {
     }
 
     private func loadThumbnail() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 150, height: 150)) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 }
 
@@ -1846,7 +1853,7 @@ struct LibraryPhotoThumbnail: View {
 
 /// Grid cell showing photo thumbnail with metadata below
 struct PhotoGridCell: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     let metadata: PhotoMetadata?
     let isSelected: Bool
     let isSelectionMode: Bool
@@ -1974,21 +1981,21 @@ struct PhotoGridCell: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
-            isFavorite = asset.isFavorite
+            isFavorite = metadataManager.getMetadata(for: record.id.uuidString)?.isFavorite == true
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 // Force reload by clearing and reloading
                 loadThumbnailForce()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoFavoriteChanged)) { notification in
-            // Update favorite status if this asset's favorite changed
+            // Update favorite status if this record's favorite changed
             if let assetId = notification.userInfo?["assetId"] as? String,
-               assetId == asset.localIdentifier,
+               assetId == record.id.uuidString,
                let newFavorite = notification.userInfo?["isFavorite"] as? Bool {
                 let wasNotFavorite = !isFavorite
                 isFavorite = newFavorite
@@ -2015,9 +2022,7 @@ struct PhotoGridCell: View {
     }
 
     private func loadThumbnailForce() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 200, height: 200)) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 }
 
@@ -2026,17 +2031,17 @@ struct PhotoGridCell: View {
 /// Sheet wrapper for photo detail view - presents PhotoDetailView in fullscreen
 struct PhotoDetailSheet: View {
     let photoId: String
-    let allAssets: [PHAsset]
+    let allRecords: [PhotoRecord]
     let onDismiss: () -> Void
     var onPhotoTagged: ((String) -> Void)?
 
     @State private var isPresented = true
 
     var body: some View {
-        if let asset = allAssets.first(where: { $0.localIdentifier == photoId }) {
+        if let record = allRecords.first(where: { $0.id.uuidString == photoId }) {
             PhotoDetailView(
-                asset: asset,
-                allAssets: allAssets,
+                record: record,
+                allRecords: allRecords,
                 isPresented: $isPresented,
                 onPhotoTagged: { procedure in
                     onPhotoTagged?(procedure)
@@ -2048,7 +2053,7 @@ struct PhotoDetailSheet: View {
                 }
             }
         } else {
-            // Asset was tagged and moved - dismiss gracefully
+            // Record was tagged and moved - dismiss gracefully
             Color.clear
                 .onAppear {
                     onDismiss()
@@ -2061,8 +2066,8 @@ struct PhotoDetailSheet: View {
 
 /// Full-screen photo viewer with swipe navigation and metadata editing
 struct PhotoDetailView: View {
-    let asset: PHAsset
-    let allAssets: [PHAsset]
+    let record: PhotoRecord
+    let allRecords: [PhotoRecord]
     @Binding var isPresented: Bool
     var onPhotoTagged: ((String) -> Void)?
 
@@ -2080,19 +2085,19 @@ struct PhotoDetailView: View {
     @State private var editedImage: UIImage?
     /// Counter to trigger refresh in ZoomablePhotoView
     @State private var imageRefreshTrigger: Int = 0
-    /// Local state to track favorite status (PHAsset.isFavorite doesn't trigger SwiftUI updates)
+    /// Local state to track favorite status
     @State private var isFavorite: Bool = false
     /// Animation state for heart pulse effect
     @State private var heartPulse: Bool = false
     /// Track if current photo is zoomed (disables page swiping when zoomed)
     @State private var isPhotoZoomed: Bool = false
 
-    var currentAsset: PHAsset {
-        allAssets.indices.contains(currentIndex) ? allAssets[currentIndex] : asset
+    var currentRecord: PhotoRecord {
+        allRecords.indices.contains(currentIndex) ? allRecords[currentIndex] : record
     }
 
     var currentMetadata: PhotoMetadata? {
-        metadataManager.getMetadata(for: currentAsset.localIdentifier)
+        metadataManager.getMetadata(for: currentRecord.id.uuidString)
     }
 
     var body: some View {
@@ -2126,17 +2131,17 @@ struct PhotoDetailView: View {
         }
         .statusBar(hidden: isImmersiveMode)
         .onAppear {
-            currentIndex = allAssets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier }) ?? 0
-            isFavorite = currentAsset.isFavorite
+            currentIndex = allRecords.firstIndex(where: { $0.id == record.id }) ?? 0
+            isFavorite = metadataManager.getMetadata(for: currentRecord.id.uuidString)?.isFavorite == true
             loadFullImage()
         }
         .onChange(of: currentIndex) { _ in
-            isFavorite = currentAsset.isFavorite
+            isFavorite = metadataManager.getMetadata(for: currentRecord.id.uuidString)?.isFavorite == true
             loadFullImage()
         }
         .sheet(isPresented: $showMetadataEditor) {
             PhotoMetadataEditSheet(
-                asset: currentAsset,
+                recordId: currentRecord.id.uuidString,
                 isPresented: $showMetadataEditor,
                 onPhotoTagged: { procedure in
                     // Show success toast via notification
@@ -2169,7 +2174,7 @@ struct PhotoDetailView: View {
         }
         .fullScreenCover(isPresented: $showPhotoEditor) {
             PhotoEditorView(
-                asset: currentAsset,
+                photoId: currentRecord.id,
                 isPresented: $showPhotoEditor,
                 onSave: { processedImage in
                     // Immediately display the edited image
@@ -2181,7 +2186,7 @@ struct PhotoDetailView: View {
                     NotificationCenter.default.post(
                         name: .photoEditSaved,
                         object: nil,
-                        userInfo: ["assetId": currentAsset.localIdentifier]
+                        userInfo: ["assetId": currentRecord.id.uuidString]
                     )
                 }
             )
@@ -2192,9 +2197,9 @@ struct PhotoDetailView: View {
 
     func photoView(geometry: GeometryProxy) -> some View {
         TabView(selection: $currentIndex) {
-            ForEach(Array(allAssets.enumerated()), id: \.element.localIdentifier) { index, photoAsset in
+            ForEach(Array(allRecords.enumerated()), id: \.element.id) { index, photoRecord in
                 ZoomablePhotoView(
-                    asset: photoAsset,
+                    record: photoRecord,
                     preloadedImage: index == currentIndex ? editedImage : nil,
                     refreshTrigger: index == currentIndex ? imageRefreshTrigger : 0,
                     isZoomed: index == currentIndex ? $isPhotoZoomed : nil
@@ -2254,7 +2259,7 @@ struct PhotoDetailView: View {
             Spacer()
 
             // Photo counter
-            Text("\(currentIndex + 1) / \(allAssets.count)")
+            Text("\(currentIndex + 1) / \(allRecords.count)")
                 .font(AppTheme.Typography.subheadline)
                 .foregroundStyle(.white)
                 .padding(.horizontal, AppTheme.Spacing.md)
@@ -2398,7 +2403,7 @@ struct PhotoDetailView: View {
                     rating: Binding(
                         get: { currentMetadata?.rating ?? 0 },
                         set: { newRating in
-                            metadataManager.setRating(newRating, for: currentAsset.localIdentifier)
+                            metadataManager.setRating(newRating, for: currentRecord.id.uuidString)
                         }
                     ),
                     starSize: 28,
@@ -2423,22 +2428,20 @@ struct PhotoDetailView: View {
             }
 
             // Date
-            if let date = currentAsset.creationDate {
-                HStack {
-                    Image(systemName: "calendar")
-                        .font(.system(size: AppTheme.IconSize.xs))
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
-                    Text(date, style: .date)
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Text("at")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
-                    Text(date, style: .time)
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Spacer()
-                }
+            HStack {
+                Image(systemName: "calendar")
+                    .font(.system(size: AppTheme.IconSize.xs))
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                Text(currentRecord.createdDate, style: .date)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                Text("at")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                Text(currentRecord.createdDate, style: .time)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                Spacer()
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
@@ -2453,56 +2456,45 @@ struct PhotoDetailView: View {
     // MARK: - Methods
 
     func loadFullImage() {
-        PhotoLibraryManager.shared.requestEditedImage(for: currentAsset) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadImage(id: currentRecord.id)
     }
 
     func toggleFavorite() {
         let newValue = !isFavorite
-        let assetId = currentAsset.localIdentifier
-        PHPhotoLibrary.shared().performChanges {
-            let request = PHAssetChangeRequest(for: self.currentAsset)
-            request.isFavorite = newValue
-        } completionHandler: { success, _ in
-            DispatchQueue.main.async {
-                if success {
-                    self.isFavorite = newValue
-                    // Trigger pulse animation when favoriting
-                    if newValue {
-                        self.heartPulse = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            self.heartPulse = false
-                        }
-                    }
-                    // Post notification for thumbnail refresh
-                    NotificationCenter.default.post(
-                        name: .photoFavoriteChanged,
-                        object: nil,
-                        userInfo: ["assetId": assetId, "isFavorite": newValue]
-                    )
-                }
+        let assetId = currentRecord.id.uuidString
+
+        var meta = metadataManager.getMetadata(for: assetId) ?? PhotoMetadata()
+        meta.isFavorite = newValue
+        metadataManager.assignMetadata(meta, to: assetId)
+
+        self.isFavorite = newValue
+        // Trigger pulse animation when favoriting
+        if newValue {
+            self.heartPulse = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.heartPulse = false
             }
         }
+        // Post notification for thumbnail refresh
+        NotificationCenter.default.post(
+            name: .photoFavoriteChanged,
+            object: nil,
+            userInfo: ["assetId": assetId, "isFavorite": newValue]
+        )
     }
 
     func deleteCurrentPhoto() {
-        let assetId = currentAsset.localIdentifier
-        PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.deleteAssets([self.currentAsset] as NSFastEnumeration)
-        } completionHandler: { success, error in
-            DispatchQueue.main.async {
-                if success {
-                    MetadataManager.shared.deleteMetadata(for: assetId)
-                    PhotoEditPersistenceService.shared.deleteEditState(for: assetId)
+        let recordId = currentRecord.id
+        let assetId = recordId.uuidString
 
-                    if allAssets.count == 1 {
-                        isPresented = false
-                    } else if currentIndex >= allAssets.count - 1 {
-                        currentIndex = max(0, currentIndex - 1)
-                    }
-                }
-            }
+        MetadataManager.shared.deleteMetadata(for: assetId)
+        PhotoEditPersistenceService.shared.deleteEditState(for: assetId)
+        PhotoStorageService.shared.deletePhoto(id: recordId)
+
+        if allRecords.count == 1 {
+            isPresented = false
+        } else if currentIndex >= allRecords.count - 1 {
+            currentIndex = max(0, currentIndex - 1)
         }
     }
 }
@@ -2511,10 +2503,18 @@ struct PhotoDetailView: View {
 
 /// Photo view with pinch-to-zoom and double-tap zoom support using UIScrollView
 struct ZoomablePhotoView: UIViewRepresentable {
-    let asset: PHAsset
+    /// PhotoRecord for app-owned photos
+    let record: PhotoRecord
     var preloadedImage: UIImage?
     var refreshTrigger: Int = 0
     var isZoomed: Binding<Bool>?
+
+    init(record: PhotoRecord, preloadedImage: UIImage? = nil, refreshTrigger: Int = 0, isZoomed: Binding<Bool>? = nil) {
+        self.record = record
+        self.preloadedImage = preloadedImage
+        self.refreshTrigger = refreshTrigger
+        self.isZoomed = isZoomed
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(isZoomed: isZoomed)
@@ -2558,7 +2558,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
             context.coordinator.updateImage(preloaded)
         } else {
             spinner.startAnimating()
-            context.coordinator.loadImage(for: asset)
+            context.coordinator.loadImage(for: record)
         }
 
         return scrollView
@@ -2574,7 +2574,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
 
         if refreshTrigger != coordinator.lastRefreshTrigger {
             coordinator.lastRefreshTrigger = refreshTrigger
-            coordinator.loadImage(for: asset)
+            coordinator.loadImage(for: record)
         }
 
         if isZoomed == nil && scrollView.zoomScale > 1.0 {
@@ -2698,11 +2698,9 @@ struct ZoomablePhotoView: UIViewRepresentable {
             centerImageInScrollView()
         }
 
-        func loadImage(for asset: PHAsset) {
-            PhotoLibraryManager.shared.requestEditedImage(for: asset) { [weak self] loadedImage in
-                if let image = loadedImage {
-                    self?.updateImage(image)
-                }
+        func loadImage(for record: PhotoRecord) {
+            if let loadedImage = PhotoStorageService.shared.loadImage(id: record.id) {
+                self.updateImage(loadedImage)
             }
         }
     }
@@ -2781,7 +2779,7 @@ struct RoundedCornerShape: Shape {
 
 /// Sheet for editing all photo metadata with change tracking
 struct PhotoMetadataEditSheet: View {
-    let asset: PHAsset
+    let recordId: String
     @Binding var isPresented: Bool
     var onPhotoTagged: ((String) -> Void)?  // Called with procedure name when untagged photo is tagged
 
@@ -3050,7 +3048,7 @@ struct PhotoMetadataEditSheet: View {
     }
 
     func loadCurrentMetadata() {
-        if let metadata = metadataManager.getMetadata(for: asset.localIdentifier) {
+        if let metadata = metadataManager.getMetadata(for: recordId) {
             selectedProcedure = metadata.procedure
             selectedToothNumber = metadata.toothNumber
             selectedToothDate = metadata.toothDate ?? Date()
@@ -3062,8 +3060,11 @@ struct PhotoMetadataEditSheet: View {
 
     func saveChanges() {
         // Check if this was previously untagged
-        let previousMetadata = metadataManager.getMetadata(for: asset.localIdentifier)
+        let previousMetadata = metadataManager.getMetadata(for: recordId)
         let wasUntagged = previousMetadata?.procedure == nil
+
+        // Preserve existing favorite status
+        let existingFavorite = previousMetadata?.isFavorite
 
         let metadata = PhotoMetadata(
             procedure: selectedProcedure,
@@ -3071,10 +3072,11 @@ struct PhotoMetadataEditSheet: View {
             toothDate: selectedToothDate,
             stage: selectedStage,
             angle: selectedAngle,
-            rating: selectedRating > 0 ? selectedRating : nil
+            rating: selectedRating > 0 ? selectedRating : nil,
+            isFavorite: existingFavorite
         )
 
-        metadataManager.assignMetadata(metadata, to: asset.localIdentifier)
+        metadataManager.assignMetadata(metadata, to: recordId)
 
         // If was untagged and now has a procedure, notify parent
         if wasUntagged, let procedure = selectedProcedure {
@@ -3154,15 +3156,15 @@ struct MetadataRow: View {
 /// Grid view showing all photos in the library
 struct AllPhotosGridView: View {
     @ObservedObject var viewModel: LibraryViewModel
-    @ObservedObject var library = PhotoLibraryManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
     @State private var selectedPhotoId: String? = nil
 
-    var filteredAssets: [PHAsset] {
-        viewModel.filteredAssets(
-            from: library.assets,
+    var filteredRecords: [PhotoRecord] {
+        viewModel.filteredRecords(
+            from: photoStorage.records,
             metadata: metadataManager,
             filter: router.libraryFilter
         )
@@ -3176,7 +3178,7 @@ struct AllPhotosGridView: View {
 
     var body: some View {
         Group {
-            if filteredAssets.isEmpty {
+            if filteredRecords.isEmpty {
                 emptyState
             } else {
                 if viewModel.displayMode == .grid {
@@ -3190,7 +3192,7 @@ struct AllPhotosGridView: View {
         .sheet(item: $selectedPhotoId) { photoId in
             PhotoDetailSheet(
                 photoId: photoId,
-                allAssets: filteredAssets,
+                allRecords: filteredRecords,
                 onDismiss: { selectedPhotoId = nil },
                 onPhotoTagged: { _ in
                     selectedPhotoId = nil
@@ -3234,7 +3236,7 @@ struct AllPhotosGridView: View {
         VStack(spacing: AppTheme.Spacing.sm) {
             // Results count
             HStack {
-                Text("\(filteredAssets.count) photo\(filteredAssets.count == 1 ? "" : "s")")
+                Text("\(filteredRecords.count) photo\(filteredRecords.count == 1 ? "" : "s")")
                     .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
@@ -3244,17 +3246,17 @@ struct AllPhotosGridView: View {
 
             // Photo grid with metadata cells
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(filteredAssets, id: \.localIdentifier) { asset in
+                ForEach(filteredRecords) { record in
                     PhotoGridCell(
-                        asset: asset,
-                        metadata: metadataManager.getMetadata(for: asset.localIdentifier),
-                        isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                        record: record,
+                        metadata: metadataManager.getMetadata(for: record.id.uuidString),
+                        isSelected: viewModel.selectedAssetIds.contains(record.id),
                         isSelectionMode: viewModel.isSelectionMode,
                         onTap: {
                             if viewModel.isSelectionMode {
-                                viewModel.toggleSelection(for: asset.localIdentifier)
+                                viewModel.toggleSelection(for: record.id)
                             } else {
-                                selectedPhotoId = asset.localIdentifier
+                                selectedPhotoId = record.id.uuidString
                             }
                         },
                         metadataManager: metadataManager
@@ -3272,7 +3274,7 @@ struct AllPhotosGridView: View {
         LazyVStack(spacing: AppTheme.Spacing.sm) {
             // Results count
             HStack {
-                Text("\(filteredAssets.count) photo\(filteredAssets.count == 1 ? "" : "s")")
+                Text("\(filteredRecords.count) photo\(filteredRecords.count == 1 ? "" : "s")")
                     .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
@@ -3281,17 +3283,17 @@ struct AllPhotosGridView: View {
             .padding(.horizontal, AppTheme.Spacing.md)
 
             // Photo list
-            ForEach(filteredAssets, id: \.localIdentifier) { asset in
+            ForEach(filteredRecords) { record in
                 PhotoListRow(
-                    asset: asset,
-                    metadata: metadataManager.getMetadata(for: asset.localIdentifier),
-                    isSelected: viewModel.selectedAssetIds.contains(asset.localIdentifier),
+                    record: record,
+                    metadata: metadataManager.getMetadata(for: record.id.uuidString),
+                    isSelected: viewModel.selectedAssetIds.contains(record.id),
                     isSelectionMode: viewModel.isSelectionMode
                 ) {
                     if viewModel.isSelectionMode {
-                        viewModel.toggleSelection(for: asset.localIdentifier)
+                        viewModel.toggleSelection(for: record.id)
                     } else {
-                        selectedPhotoId = asset.localIdentifier
+                        selectedPhotoId = record.id.uuidString
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
@@ -3306,7 +3308,7 @@ struct AllPhotosGridView: View {
 
 /// List row for displaying photo with metadata
 struct PhotoListRow: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     let metadata: PhotoMetadata?
     let isSelected: Bool
     let isSelectionMode: Bool
@@ -3357,11 +3359,9 @@ struct PhotoListRow: View {
                     }
 
                     // Date
-                    if let date = asset.creationDate {
-                        Text(date, style: .date)
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    }
+                    Text(record.createdDate, style: .date)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
 
                     // Rating
                     if let rating = metadata?.rating, rating > 0 {
@@ -3394,18 +3394,16 @@ struct PhotoListRow: View {
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 loadThumbnail()
             }
         }
     }
 
     private func loadThumbnail() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 120, height: 120)) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 }
 
@@ -3413,7 +3411,7 @@ struct PhotoListRow: View {
 
 /// Individual photo cell in the grid with selection support
 struct PhotoGridItem: View {
-    let asset: PHAsset
+    let record: PhotoRecord
     let isSelected: Bool
     let isSelectionMode: Bool
     let onTap: () -> Void
@@ -3462,7 +3460,7 @@ struct PhotoGridItem: View {
                     }
 
                     // Rating stars (bottom left)
-                    if let rating = metadataManager.getRating(for: asset.localIdentifier), rating > 0 {
+                    if let rating = metadataManager.getRating(for: record.id.uuidString), rating > 0 {
                         VStack {
                             Spacer()
                             HStack {
@@ -3497,18 +3495,16 @@ struct PhotoGridItem: View {
             loadThumbnail()
         }
         .onReceive(NotificationCenter.default.publisher(for: .photoEditSaved)) { notification in
-            // Refresh if this asset was edited
+            // Refresh if this record was edited
             if let editedAssetId = notification.userInfo?["assetId"] as? String,
-               editedAssetId == asset.localIdentifier {
+               editedAssetId == record.id.uuidString {
                 loadThumbnail()
             }
         }
     }
 
     private func loadThumbnail() {
-        PhotoLibraryManager.shared.requestEditedThumbnail(for: asset, size: CGSize(width: 200, height: 200)) { loadedImage in
-            self.image = loadedImage
-        }
+        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
     }
 }
 

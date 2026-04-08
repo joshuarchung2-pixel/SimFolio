@@ -30,7 +30,11 @@ struct ContentView: View {
 
     // MARK: - Observed Objects
 
-    @ObservedObject private var photoLibrary = PhotoLibraryManager.shared
+    @ObservedObject private var photoStorage = PhotoStorageService.shared
+
+    /// Legacy photo library reference -- kept for migration support only.
+    /// Not @ObservedObject because no view depends on its state.
+    private let photoLibrary = PhotoLibraryManager.shared
     @ObservedObject private var metadataManager = MetadataManager.shared
     @ObservedObject private var accessibilityManager = AccessibilityManager.shared
 
@@ -48,10 +52,14 @@ struct ContentView: View {
     @State private var showPostOnboardingPaywall: Bool = false
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
+    @State private var showFreeUnlockAnnouncement: Bool = false
+    @State private var isMigrating: Bool = false
+    @State private var migrationProgress: (Int, Int) = (0, 0)
 
     // MARK: - Persisted State
 
     @AppStorage("hasCompletedAppTour") private var hasCompletedAppTour = false
+    @AppStorage("hasSeenFreeUnlockAnnouncement") private var hasSeenFreeUnlockAnnouncement = false
 
     // MARK: - Environment
 
@@ -73,6 +81,8 @@ struct ContentView: View {
         ZStack {
             if isAppReady {
                 mainAppContent
+            } else if isMigrating {
+                migrationProgressView
             } else {
                 launchScreen
             }
@@ -90,6 +100,11 @@ struct ContentView: View {
             OnboardingView(isPresented: $showOnboarding) {
                 onOnboardingComplete()
             }
+        }
+        .fullScreenCover(isPresented: $showFreeUnlockAnnouncement, onDismiss: {
+            hasSeenFreeUnlockAnnouncement = true
+        }) {
+            FreeUnlockAnnouncementView()
         }
         .fullScreenCover(isPresented: $showPostOnboardingPaywall, onDismiss: {
             // After paywall dismisses, show tour if not completed
@@ -269,6 +284,47 @@ struct ContentView: View {
         .accessibilityLabel("SimFolio loading")
     }
 
+    // MARK: - Migration Progress View
+
+    private var migrationProgressView: some View {
+        ZStack {
+            AppTheme.Colors.background.ignoresSafeArea()
+
+            VStack(spacing: AppTheme.Spacing.lg) {
+                Image("AppIconImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+
+                Text("Updating Photo Storage")
+                    .font(AppTheme.Typography.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Text("Moving your photos to secure app storage...")
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+
+                if migrationProgress.1 > 0 {
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        ProgressView(value: Double(migrationProgress.0), total: Double(migrationProgress.1))
+                            .tint(AppTheme.Colors.primary)
+
+                        Text("\(migrationProgress.0) of \(migrationProgress.1) photos")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.xl)
+                } else {
+                    ProgressView()
+                        .tint(AppTheme.Colors.primary)
+                }
+            }
+        }
+    }
+
     // MARK: - Sheet Content
 
     @ViewBuilder
@@ -283,7 +339,7 @@ struct ContentView: View {
             // Photo detail with ID lookup
             PhotoDetailSheet(
                 photoId: id,
-                allAssets: photoLibrary.assets,
+                allRecords: PhotoStorageService.shared.records,
                 onDismiss: { router.dismissSheet() },
                 onPhotoTagged: { _ in
                     router.dismissSheet()
@@ -321,6 +377,26 @@ struct ContentView: View {
             // Load app data
             await loadAppData()
 
+            // Check if photo migration is needed
+            if PhotoMigrationService.needsMigration() {
+                await MainActor.run {
+                    isMigrating = true
+                }
+
+                let mapping = await PhotoMigrationService.migrate { completed, total in
+                    Task { @MainActor in
+                        migrationProgress = (completed, total)
+                    }
+                }
+
+                // Remap metadata keys
+                await MainActor.run {
+                    MetadataManager.shared.remapMetadataKeys(mapping)
+                    PhotoMigrationService.remapEditStates(using: mapping)
+                    isMigrating = false
+                }
+            }
+
             // Check permissions
             await appState.checkAllPermissions()
 
@@ -339,6 +415,11 @@ struct ContentView: View {
                 if !hasCompletedOnboarding {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         showOnboarding = true
+                    }
+                } else if FeatureGateService.allFeaturesUnlocked && !hasSeenFreeUnlockAnnouncement {
+                    // One-time announcement for existing users that all features are now free
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showFreeUnlockAnnouncement = true
                     }
                 }
             }
@@ -366,13 +447,13 @@ struct ContentView: View {
             showToast(type: .success, message: "Welcome to SimFolio!")
             AccessibilityManager.shared.announce("Onboarding complete. Welcome to SimFolio.")
 
-            // Show post-onboarding paywall for non-subscribers
-            if !subscriptionManager.isSubscribed {
+            // Show post-onboarding paywall for non-subscribers (skip when all features unlocked)
+            if !FeatureGateService.allFeaturesUnlocked && !subscriptionManager.isSubscribed {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showPostOnboardingPaywall = true
                 }
             } else if !hasCompletedAppTour {
-                // Already subscribed (restored during onboarding) — go straight to tour
+                // Subscribed, or all features unlocked — go straight to tour
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showAppTour = true
                 }
@@ -396,9 +477,6 @@ struct ContentView: View {
     }
 
     private func onAppBecameActive() {
-        // Refresh photo library
-        photoLibrary.fetchAssets()
-
         // Resume camera if on capture tab
         if router.selectedTab == .capture {
             cameraService.startSession()
