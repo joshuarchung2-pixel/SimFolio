@@ -168,21 +168,14 @@ struct CaptureSettingsView: View {
                 .labelsHidden()
             }
 
-            Divider().padding(.leading, AppTheme.Spacing.md)
-
             Toggle(isOn: $saveToCameraRoll) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Save to Camera Roll")
-                        .font(AppTheme.Typography.body)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                    Text("Also save a copy to the Photos app")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                }
+                SettingLabel(
+                    icon: "square.and.arrow.down",
+                    title: "Save to Camera Roll",
+                    subtitle: "Also save a copy to the Photos app"
+                )
             }
             .tint(AppTheme.Colors.primary)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, 10)
         } header: {
             Text("Saving")
         } footer: {

@@ -2440,10 +2440,10 @@ struct PhotoDetailView: View {
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .padding(.bottom, AppTheme.Spacing.lg)
-        .background(
-            AppTheme.Colors.surface
-                .cornerRadius(AppTheme.CornerRadius.xl, corners: [.topLeft, .topRight])
-        )
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(AppTheme.CornerRadius.xl, corners: [.topLeft, .topRight])
+        .padding(.bottom, -AppTheme.Spacing.lg)
+        .background(AppTheme.Colors.surface.ignoresSafeArea(.all, edges: .bottom))
     }
 
     // MARK: - Methods
@@ -2495,6 +2495,17 @@ struct PhotoDetailView: View {
 // MARK: - Zoomable Photo View
 
 /// Photo view with pinch-to-zoom and double-tap zoom support using UIScrollView
+/// UIScrollView subclass that notifies on layout so the image can be
+/// sized once the view has real bounds (fixes black-image-on-appear).
+class LayoutAwareScrollView: UIScrollView {
+    var onLayout: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
+    }
+}
+
 struct ZoomablePhotoView: UIViewRepresentable {
     /// PhotoRecord for app-owned photos
     let record: PhotoRecord
@@ -2513,8 +2524,8 @@ struct ZoomablePhotoView: UIViewRepresentable {
         Coordinator(isZoomed: isZoomed)
     }
 
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
+    func makeUIView(context: Context) -> LayoutAwareScrollView {
+        let scrollView = LayoutAwareScrollView()
         scrollView.minimumZoomScale = 1.0
         scrollView.maximumZoomScale = 4.0
         scrollView.showsHorizontalScrollIndicator = false
@@ -2524,6 +2535,10 @@ struct ZoomablePhotoView: UIViewRepresentable {
         scrollView.isScrollEnabled = false
         scrollView.delegate = context.coordinator
         scrollView.backgroundColor = .clear
+        let coordinator = context.coordinator
+        scrollView.onLayout = { [weak coordinator] in
+            coordinator?.layoutImageIfNeeded()
+        }
 
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
@@ -2557,7 +2572,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
         return scrollView
     }
 
-    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+    func updateUIView(_ scrollView: LayoutAwareScrollView, context: Context) {
         let coordinator = context.coordinator
         coordinator.isZoomed = isZoomed
 
