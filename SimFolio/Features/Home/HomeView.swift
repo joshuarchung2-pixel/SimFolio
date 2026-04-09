@@ -171,6 +171,9 @@ struct HomeView: View {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     ForEach(Array(photoStorage.records.prefix(20))) { record in
                         RecentThumbnailView(record: record)
+                            .onTapGesture {
+                                router.navigateToPhotoDetail(id: record.id.uuidString)
+                            }
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
@@ -250,7 +253,7 @@ struct HomeView: View {
 
 // MARK: - Recent Thumbnail View
 
-/// 60pt square thumbnail for recent captures horizontal scroll
+/// 120pt square thumbnail for recent captures horizontal scroll
 struct RecentThumbnailView: View {
     let record: PhotoRecord
     @State private var image: UIImage?
@@ -270,7 +273,7 @@ struct RecentThumbnailView: View {
                     )
             }
         }
-        .frame(width: 60, height: 60)
+        .frame(width: 120, height: 120)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
         .onAppear {
             image = PhotoStorageService.shared.loadThumbnail(id: record.id)

@@ -16,7 +16,7 @@ enum OnboardingPageType: Equatable {
 
 /// Model representing a single onboarding page
 struct OnboardingPage: Identifiable {
-    let id = UUID()
+    let id: OnboardingPageType
     let pageType: OnboardingPageType
     let title: String
     let subtitle: String
@@ -49,6 +49,7 @@ struct OnboardingView: View {
     let pages: [OnboardingPage] = [
         // Page 1: Sign In (optional)
         OnboardingPage(
+            id: .signIn,
             pageType: .signIn,
             title: "Welcome to SimFolio",
             subtitle: "Create a free account to keep your data safe and never lose your work."
@@ -56,6 +57,7 @@ struct OnboardingView: View {
 
         // Page 2: Profile Details (required)
         OnboardingPage(
+            id: .personalization,
             pageType: .personalization,
             title: "Let's personalize\nyour experience",
             subtitle: "Tell us about yourself to customize SimFolio for you."
@@ -607,6 +609,7 @@ struct OnboardingPersonalizationPageView_Previews: PreviewProvider {
     static var previews: some View {
         OnboardingPersonalizationPageView(
             page: OnboardingPage(
+                id: .personalization,
                 pageType: .personalization,
                 title: "Let's personalize\nyour experience",
                 subtitle: "Tell us about yourself to customize SimFolio for you."

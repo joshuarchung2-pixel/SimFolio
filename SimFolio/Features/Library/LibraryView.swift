@@ -2202,7 +2202,6 @@ struct PhotoDetailView: View {
             }
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-        .animation(.easeInOut(duration: 0.3), value: currentIndex)
         .offset(y: dragOffset.height)
         .simultaneousGesture(
             // Vertical drag to dismiss - only when not zoomed
@@ -2532,7 +2531,8 @@ struct ZoomablePhotoView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.bouncesZoom = true
         scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.isScrollEnabled = false
+        scrollView.isScrollEnabled = true
+        scrollView.panGestureRecognizer.isEnabled = false
         scrollView.delegate = context.coordinator
         scrollView.backgroundColor = .clear
         let coordinator = context.coordinator
@@ -2588,8 +2588,6 @@ struct ZoomablePhotoView: UIViewRepresentable {
         if isZoomed == nil && scrollView.zoomScale > 1.0 {
             scrollView.setZoomScale(1.0, animated: false)
         }
-
-        coordinator.layoutImageIfNeeded()
     }
 
     class Coordinator: NSObject, UIScrollViewDelegate {
@@ -2599,7 +2597,8 @@ struct ZoomablePhotoView: UIViewRepresentable {
         var isZoomed: Binding<Bool>?
         var currentImage: UIImage?
         var lastRefreshTrigger: Int = 0
-        private var lastBounds: CGRect = .zero
+        private static let zoomedThreshold: CGFloat = 1.01
+        private var lastBoundsSize: CGSize = .zero
 
         init(isZoomed: Binding<Bool>?) {
             self.isZoomed = isZoomed
@@ -2611,19 +2610,22 @@ struct ZoomablePhotoView: UIViewRepresentable {
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             centerImageInScrollView()
-            let zoomed = scrollView.zoomScale > 1.01
-            scrollView.isScrollEnabled = zoomed
-            isZoomed?.wrappedValue = zoomed
+        }
+
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            scrollView.panGestureRecognizer.isEnabled = true
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
-            isZoomed?.wrappedValue = scale > 1.01
+            let zoomed = scale > Self.zoomedThreshold
+            scrollView.panGestureRecognizer.isEnabled = zoomed
+            isZoomed?.wrappedValue = zoomed
         }
 
         @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
             guard let scrollView = scrollView else { return }
 
-            if scrollView.zoomScale > 1.01 {
+            if scrollView.zoomScale > Self.zoomedThreshold {
                 scrollView.setZoomScale(1.0, animated: true)
             } else {
                 let location = gesture.location(in: imageView)
@@ -2669,7 +2671,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
             guard let scrollView = scrollView, let imageView = imageView else { return }
 
             scrollView.setZoomScale(1.0, animated: false)
-            scrollView.isScrollEnabled = false
+            scrollView.panGestureRecognizer.isEnabled = false
             isZoomed?.wrappedValue = false
 
             let boundsSize = scrollView.bounds.size
@@ -2689,15 +2691,18 @@ struct ZoomablePhotoView: UIViewRepresentable {
             scrollView.contentSize = fitSize
 
             centerImageInScrollView()
-            lastBounds = scrollView.bounds
+            lastBoundsSize = scrollView.bounds.size
         }
 
         func layoutImageIfNeeded() {
             guard let scrollView = scrollView, let imageView = imageView,
                   let image = currentImage else { return }
             let bounds = scrollView.bounds
-            guard bounds != lastBounds, bounds.width > 0, bounds.height > 0 else { return }
-            lastBounds = bounds
+            // Compare size only — during zoom, bounds.origin (contentOffset) changes
+            // but frame size stays the same. Also skip while actively zoomed.
+            guard bounds.size != lastBoundsSize, bounds.width > 0, bounds.height > 0 else { return }
+            guard scrollView.zoomScale <= Self.zoomedThreshold else { return }
+            lastBoundsSize = bounds.size
 
             let ratio = min(bounds.width / image.size.width, bounds.height / image.size.height)
             let fitSize = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
