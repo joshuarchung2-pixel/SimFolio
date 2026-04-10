@@ -306,31 +306,17 @@ struct ActionButton: View {
                     .font(AppTheme.Typography.caption2)
             }
             .foregroundStyle(foregroundColor)
-            .frame(width: 60, height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(backgroundColor)
-            )
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
         }
     }
 
     private var foregroundColor: Color {
         switch style {
         case .primary:
-            return .white
-        case .secondary:
-            return .white
-        case .destructive:
-            return .white
-        }
-    }
-
-    private var backgroundColor: Color {
-        switch style {
-        case .primary:
             return AppTheme.Colors.primary
         case .secondary:
-            return Color.white.opacity(0.15)
+            return Color(hex: "C7C7CC")
         case .destructive:
             return AppTheme.Colors.error
         }
