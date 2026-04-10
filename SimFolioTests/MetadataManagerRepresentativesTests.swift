@@ -161,6 +161,30 @@ final class MetadataManagerRepresentativesTests: XCTestCase {
         XCTAssertEqual(result.first?.procedure, "Class 1")
     }
 
+    func testEmptyRequirements_returnsEmptyAndExitsEarly() {
+        // Portfolio with zero requirements — exercises the guard early-exit
+        // branch. TestData.createPortfolio injects a default requirement when
+        // passed an empty array, so we construct Portfolio directly.
+        let portfolio = Portfolio(
+            id: UUID().uuidString,
+            name: "Empty",
+            createdDate: Date(),
+            dueDate: nil,
+            requirements: [],
+            notes: nil
+        )
+
+        // Even with matching metadata and records in the store, an empty
+        // requirements list should return [] without scanning anything.
+        let id = UUID()
+        addMetadata(assetId: id.uuidString, procedure: "Class 1")
+        let records = [makeRecord(id: id, daysAgo: 1)]
+
+        let result = sut.getProcedureRepresentatives(for: portfolio, photoRecords: records)
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
     func testSameDateTie_lexicographicallySmallerAssetIdWins() {
         let portfolio = makePortfolio(procedures: ["Class 1"])
 
