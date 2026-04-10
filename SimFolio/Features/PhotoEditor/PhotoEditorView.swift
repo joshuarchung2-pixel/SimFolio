@@ -381,10 +381,6 @@ struct PhotoEditorView: View {
             hasSelection: viewModel.editState.markup.selectedElementId != nil,
             selectedElementType: viewModel.selectedMarkupElementType,
             isMarkupEmpty: !viewModel.editState.markup.hasMarkup,
-            canUndo: viewModel.history.canUndo,
-            onUndo: {
-                viewModel.undo()
-            },
             onDelete: {
                 viewModel.deleteSelectedMarkupElement()
             },

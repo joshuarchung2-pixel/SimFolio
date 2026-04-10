@@ -22,11 +22,7 @@ struct MarkupControlsView: View {
     let selectedElementType: MarkupElementType?
     let isMarkupEmpty: Bool
 
-    // Undo state
-    var canUndo: Bool = false
-
     // Action callbacks
-    var onUndo: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBringToFront: (() -> Void)?
     var onSendToBack: (() -> Void)?
