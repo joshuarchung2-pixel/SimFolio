@@ -285,6 +285,46 @@ struct RecentThumbnailView: View {
     }
 }
 
+// MARK: - Procedure Thumb View
+
+/// 44pt square thumbnail used inside PortfolioThumbStrip.
+/// Loads the thumbnail on appear and renders a procedure-colored border.
+/// On load failure, falls back to a solid procedure-color square.
+private struct ProcedureThumbView: View {
+    let assetId: String
+    let procedure: String
+    @State private var image: UIImage?
+    @State private var didAttemptLoad: Bool = false
+
+    var body: some View {
+        ZStack {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if didAttemptLoad {
+                // Load failed — fall back to solid procedure color
+                AppTheme.procedureBackgroundColor(for: procedure)
+            } else {
+                AppTheme.Colors.surface
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(AppTheme.procedureBorderColor(for: procedure), lineWidth: 2)
+        )
+        .onAppear {
+            guard !didAttemptLoad else { return }
+            didAttemptLoad = true
+            if let uuid = UUID(uuidString: assetId) {
+                image = PhotoStorageService.shared.loadThumbnail(id: uuid)
+            }
+        }
+    }
+}
+
 // MARK: - Portfolio Row Card
 
 /// Card row for a single portfolio with name, due date, percentage, and progress bar
