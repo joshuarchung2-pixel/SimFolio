@@ -328,6 +328,40 @@ private struct ProcedureThumbView: View {
     }
 }
 
+// MARK: - Portfolio Thumb Strip
+
+/// Horizontal strip of up to 4 ProcedureThumbView + optional "+N" overflow pill.
+/// Caller is responsible for slicing `visibleRepresentatives` to at most 4 entries.
+private struct PortfolioThumbStrip: View {
+    let visibleRepresentatives: [MetadataManager.ProcedureRepresentative]  // already capped at 4
+    let overflowCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(visibleRepresentatives, id: \.assetId) { rep in
+                ProcedureThumbView(assetId: rep.assetId, procedure: rep.procedure)
+            }
+            if overflowCount > 0 {
+                overflowPill
+            }
+        }
+    }
+
+    private var overflowPill: some View {
+        Text("+\(overflowCount)")
+            .font(AppTheme.Typography.caption.weight(.medium))
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+            .padding(.horizontal, 12)
+            .frame(height: portfolioCardThumbSize)
+            .background(AppTheme.Colors.surface)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+            )
+    }
+}
+
 // MARK: - Portfolio Row Card
 
 /// Card row for a single portfolio with name, due date, percentage, and progress bar
