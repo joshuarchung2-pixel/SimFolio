@@ -2064,6 +2064,10 @@ struct PhotoDetailView: View {
     @Binding var isPresented: Bool
     var onPhotoTagged: ((String) -> Void)?
 
+    /// Session-persistent collapsed state so it survives closing/reopening the detail view
+    /// within the same app launch (but resets on relaunch).
+    private static var persistedMetadataCollapsed: Bool = false
+
     @ObservedObject var metadataManager = MetadataManager.shared
     @State private var currentIndex: Int = 0
     @State private var image: UIImage?
@@ -2084,6 +2088,8 @@ struct PhotoDetailView: View {
     @State private var heartPulse: Bool = false
     /// Track if current photo is zoomed (disables page swiping when zoomed)
     @State private var isPhotoZoomed: Bool = false
+    /// Whether the bottom metadata card is collapsed (handle-only) or expanded
+    @State private var isMetadataCollapsed: Bool = PhotoDetailView.persistedMetadataCollapsed
 
     var currentRecord: PhotoRecord {
         allRecords.indices.contains(currentIndex) ? allRecords[currentIndex] : record
@@ -2099,22 +2105,26 @@ struct PhotoDetailView: View {
                 // Background
                 Color.black.ignoresSafeArea()
 
-                // Main content layout
+                // Main content layout — photo always at its larger size;
+                // the metadata card is a bottom overlay that covers the photo
+                // when expanded, rather than pushing it smaller.
                 VStack(spacing: 0) {
-                    // Top bar overlay
                     if !isImmersiveMode {
                         topBar
                             .transition(.opacity)
                     } else {
-                        // Reserve space for safe area when immersive
                         Color.clear.frame(height: geometry.safeAreaInsets.top + 60)
                     }
 
-                    // Photo with gestures - takes available space
                     photoView(geometry: geometry)
-                        .frame(maxHeight: isImmersiveMode ? .infinity : geometry.size.height - 180)
+                        .frame(maxHeight: .infinity)
 
-                    // Bottom metadata card (non-overlapping)
+                    if !isImmersiveMode {
+                        // Reserve space under the photo for the collapsed handle strip.
+                        Color.clear.frame(height: 60)
+                    }
+                }
+                .overlay(alignment: .bottom) {
                     if !isImmersiveMode {
                         metadataCard
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -2330,13 +2340,49 @@ struct PhotoDetailView: View {
     // MARK: - Metadata Card
 
     var metadataCard: some View {
-        VStack(spacing: AppTheme.Spacing.md) {
-            // Drag handle indicator
+        VStack(spacing: 0) {
+            // Drag handle (tap or drag to expand/collapse)
             RoundedRectangle(cornerRadius: 2.5)
                 .fill(AppTheme.Colors.textTertiary.opacity(AppTheme.Opacity.heavy))
                 .frame(width: 36, height: 5)
-                .padding(.top, AppTheme.Spacing.xs)
+                .padding(.vertical, AppTheme.Spacing.md)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture { toggleMetadataCollapsed() }
+                .gesture(collapseToggleDragGesture)
+                .accessibilityLabel(isMetadataCollapsed ? "Expand details" : "Collapse details")
+                .accessibilityAddTraits(.isButton)
 
+            if !isMetadataCollapsed {
+                expandedMetadataContent
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .padding(.bottom, isMetadataCollapsed ? 0 : -AppTheme.Spacing.lg)
+        .background {
+            metadataCardShape
+                .fill(AppTheme.Colors.surface)
+                .overlay {
+                    metadataCardShape
+                        .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
+                }
+                .ignoresSafeArea(.all, edges: .bottom)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var metadataCardShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: AppTheme.CornerRadius.medium,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: AppTheme.CornerRadius.medium,
+            style: .continuous
+        )
+    }
+
+    var expandedMetadataContent: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
             // Tags row
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppTheme.Spacing.sm) {
@@ -2410,7 +2456,7 @@ struct PhotoDetailView: View {
                 }) {
                     Image(systemName: isFavorite ? "heart.fill" : "heart")
                         .font(.system(size: AppTheme.IconSize.xl - 4))
-                        .foregroundStyle(isFavorite ? .red : .white.opacity(AppTheme.Opacity.medium))
+                        .foregroundStyle(isFavorite ? .red : AppTheme.Colors.textTertiary)
                         .scaleEffect(heartPulse ? 1.3 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.5), value: heartPulse)
                         .frame(width: 44, height: 44)
@@ -2438,10 +2484,25 @@ struct PhotoDetailView: View {
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .padding(.bottom, AppTheme.Spacing.lg)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(AppTheme.CornerRadius.xl, corners: [.topLeft, .topRight])
-        .padding(.bottom, -AppTheme.Spacing.lg)
-        .background(AppTheme.Colors.surface.ignoresSafeArea(.all, edges: .bottom))
+    }
+
+    var collapseToggleDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                let threshold: CGFloat = 20
+                if value.translation.height > threshold, !isMetadataCollapsed {
+                    toggleMetadataCollapsed()
+                } else if value.translation.height < -threshold, isMetadataCollapsed {
+                    toggleMetadataCollapsed()
+                }
+            }
+    }
+
+    func toggleMetadataCollapsed() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            isMetadataCollapsed.toggle()
+        }
+        PhotoDetailView.persistedMetadataCollapsed = isMetadataCollapsed
     }
 
     // MARK: - Methods
@@ -2738,7 +2799,7 @@ struct RatingStarsView: View {
                 }) {
                     Image(systemName: star <= rating ? "star.fill" : "star")
                         .font(.system(size: starSize))
-                        .foregroundStyle(star <= rating ? AppTheme.Colors.warning : .white.opacity(AppTheme.Opacity.medium))
+                        .foregroundStyle(star <= rating ? AppTheme.Colors.warning : AppTheme.Colors.textTertiary)
                 }
             }
         }
