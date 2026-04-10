@@ -52,7 +52,6 @@ struct ContentView: View {
     @State private var showPostOnboardingPaywall: Bool = false
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
-    @State private var showFreeUnlockAnnouncement: Bool = false
     @State private var showAccountNudge: Bool = false
     @State private var isMigrating: Bool = false
     @State private var migrationProgress: (Int, Int) = (0, 0)
@@ -60,7 +59,6 @@ struct ContentView: View {
     // MARK: - Persisted State
 
     @AppStorage("hasCompletedAppTour") private var hasCompletedAppTour = false
-    @AppStorage("hasSeenFreeUnlockAnnouncement") private var hasSeenFreeUnlockAnnouncement = false
     @AppStorage("hasSeenAccountNudge") private var hasSeenAccountNudge = false
 
     // MARK: - Environment
@@ -98,11 +96,6 @@ struct ContentView: View {
             OnboardingView(isPresented: $showOnboarding) {
                 onOnboardingComplete()
             }
-        }
-        .fullScreenCover(isPresented: $showFreeUnlockAnnouncement, onDismiss: {
-            hasSeenFreeUnlockAnnouncement = true
-        }) {
-            FreeUnlockAnnouncementView()
         }
         .fullScreenCover(isPresented: $showAccountNudge, onDismiss: {
             hasSeenAccountNudge = true
@@ -418,11 +411,6 @@ struct ContentView: View {
                 if !hasCompletedOnboarding {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         showOnboarding = true
-                    }
-                } else if FeatureGateService.allFeaturesUnlocked && !hasSeenFreeUnlockAnnouncement {
-                    // One-time announcement for existing users that all features are now free
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        showFreeUnlockAnnouncement = true
                     }
                 } else if !hasSeenAccountNudge
                     && AuthenticationService.shared.authState == .signedOut {
