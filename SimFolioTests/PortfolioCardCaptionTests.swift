@@ -44,14 +44,18 @@ final class PortfolioCardCaptionTests: XCTestCase {
     }
 
     func testZeroProcedures_dropsProcedureSegment() {
+        // With non-zero totalPhotos, the hide rule does not fire, so we can
+        // observe the procedure segment being dropped independently.
         let segments = portfolioCardCaptionSegments(
             dueDate: sampleDueDate,
-            photoCount: 0,
-            totalPhotos: 0,
+            photoCount: 5,
+            totalPhotos: 20,
             distinctProcedureCount: 0
         )
-        // Nothing to show for photos or procedures → caller expected to hide the row
-        XCTAssertTrue(segments.isEmpty)
+        XCTAssertEqual(segments.count, 2)
+        XCTAssertTrue(segments[0].hasPrefix("Due "))
+        XCTAssertEqual(segments[1], "5/20 photos")
+        XCTAssertFalse(segments.contains(where: { $0.contains("procedure") }))
     }
 
     func testZeroRequirementsWithDueDate_stillHidesRow() {

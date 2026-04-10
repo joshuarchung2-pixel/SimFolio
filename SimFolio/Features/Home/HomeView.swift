@@ -337,6 +337,13 @@ struct PortfolioRowCard: View {
 
 // MARK: - Portfolio Card Caption
 
+private let portfolioCardDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    return formatter
+}()
+
 /// Pure formatter for the portfolio card's caption row.
 /// Returns segment strings to join with " · ". Returns empty array if the row
 /// would be empty (caller should hide the row entirely).
@@ -349,10 +356,7 @@ func portfolioCardCaptionSegments(
     var segments: [String] = []
 
     if let dueDate = dueDate {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        segments.append("Due \(formatter.string(from: dueDate))")
+        segments.append("Due \(portfolioCardDateFormatter.string(from: dueDate))")
     }
 
     if totalPhotos > 0 {
