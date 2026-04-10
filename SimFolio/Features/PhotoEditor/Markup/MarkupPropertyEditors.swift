@@ -193,16 +193,13 @@ struct FontSizeOptionView: View {
     var body: some View {
         Text("Aa")
             .font(.system(size: size.pointSize * 0.8))
-            .foregroundStyle(isSelected ? .white : .gray)
+            .foregroundStyle(isSelected ? AppTheme.Colors.primary : Color(hex: "C7C7CC"))
             .frame(width: 50, height: 40)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.1))
-            )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                     .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 2)
             )
+            .contentShape(Rectangle())
     }
 }
 
