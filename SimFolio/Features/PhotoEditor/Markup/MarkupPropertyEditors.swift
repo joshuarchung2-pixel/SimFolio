@@ -284,8 +284,10 @@ struct PropertyEditorSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
             Text(title)
-                .font(AppTheme.Typography.caption)
-                .foregroundStyle(.gray)
+                .font(AppTheme.Typography.sectionLabel)
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundStyle(Color(hex: "8E8E93"))
 
             content()
         }
