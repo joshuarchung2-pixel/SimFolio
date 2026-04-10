@@ -49,6 +49,7 @@ struct MarkupControlsView: View {
 
             if subMode == .select && !hasSelection {
                 MarkupEmptyStateView(isMarkupEmpty: isMarkupEmpty)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 0) {
                     if hasSelection {
