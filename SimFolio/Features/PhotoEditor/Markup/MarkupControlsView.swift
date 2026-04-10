@@ -37,27 +37,32 @@ struct MarkupControlsView: View {
     var onClearAll: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.xs) {
-            // Sub-mode picker with undo button - no top padding to stay close to mode picker
+        VStack(spacing: 0) {
             subModePicker
+                .padding(.top, AppTheme.Spacing.xs)
+                .padding(.bottom, AppTheme.Spacing.sm)
 
-            // Property editors container with action buttons overlay
-            ZStack(alignment: .bottom) {
-                // Scrollable property editors - fills remaining space
-                ScrollView(.vertical, showsIndicators: false) {
-                    propertyEditors
-                        .padding(.bottom, hasSelection ? 60 : AppTheme.Spacing.sm)
+            // Hairline divider separating sub-mode row from panel
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 1)
+
+            if subMode == .select && !hasSelection {
+                MarkupEmptyStateView(isMarkupEmpty: isMarkupEmpty)
+            } else {
+                VStack(spacing: 0) {
+                    if hasSelection {
+                        actionButtons
+                            .padding(.top, AppTheme.Spacing.sm)
+                            .padding(.bottom, AppTheme.Spacing.xs)
+                    }
+
+                    ScrollView(.vertical, showsIndicators: false) {
+                        propertyEditors
+                            .padding(.vertical, AppTheme.Spacing.sm)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(uiColor: .systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium))
-                .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: -2)
-
-                // Action buttons overlay when element is selected
-                if hasSelection {
-                    actionButtons
-                        .padding(.bottom, AppTheme.Spacing.sm)
-                }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
@@ -66,29 +71,7 @@ struct MarkupControlsView: View {
     // MARK: - Sub-Mode Picker
 
     private var subModePicker: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
-            // Undo button
-            Button(action: {
-                onUndo?()
-            }) {
-                VStack(spacing: AppTheme.Spacing.xxs) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 18))
-                    Text("Undo")
-                        .font(AppTheme.Typography.caption2)
-                }
-                .foregroundStyle(canUndo ? .white : .gray.opacity(0.4))
-                .frame(width: 50, height: 50)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                        .fill(Color.white.opacity(0.1))
-                )
-            }
-            .disabled(!canUndo)
-
-            Spacer()
-
-            // Sub-mode buttons
+        HStack(spacing: 0) {
             ForEach(MarkupSubMode.allCases) { mode in
                 SubModeButton(
                     mode: mode,
@@ -214,7 +197,7 @@ struct MarkupControlsView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
+        HStack(spacing: 0) {
             // Delete button
             ActionButton(
                 title: "Delete",
@@ -242,12 +225,6 @@ struct MarkupControlsView: View {
                 onSendToBack?()
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.md)
-        .padding(.vertical, AppTheme.Spacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
-                .fill(Color(uiColor: .systemGray5))
-        )
     }
 }
 
