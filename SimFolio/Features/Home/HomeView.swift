@@ -318,6 +318,7 @@ private struct ProcedureThumbView: View {
             RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                 .strokeBorder(AppTheme.procedureBorderColor(for: procedure), lineWidth: 2)
         )
+        .accessibilityHidden(true)
         .onAppear {
             guard !didAttemptLoad else { return }
             didAttemptLoad = true
@@ -414,6 +415,7 @@ struct PortfolioRowCard: View {
 
     var body: some View {
         let strip = representativeStrip
+        let segments = captionSegments
         return VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             // Title row
             HStack {
@@ -427,8 +429,8 @@ struct PortfolioRowCard: View {
             }
 
             // Caption row (hidden if no segments)
-            if !captionSegments.isEmpty {
-                captionRow
+            if !segments.isEmpty {
+                captionRow(segments)
             }
 
             // Thumbnail strip (hidden if no representatives)
@@ -451,9 +453,9 @@ struct PortfolioRowCard: View {
         )
     }
 
-    private var captionRow: some View {
+    private func captionRow(_ segments: [String]) -> some View {
         HStack(spacing: 6) {
-            ForEach(Array(captionSegments.enumerated()), id: \.offset) { index, segment in
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                 if index > 0 {
                     Text("·")
                         .font(AppTheme.Typography.caption)
@@ -479,6 +481,9 @@ private let portfolioCardDateFormatter: DateFormatter = {
 /// Pure formatter for the portfolio card's caption row.
 /// Returns segment strings to join with " · ". Returns empty array if the row
 /// would be empty (caller should hide the row entirely).
+///
+/// Note: depends on the file-private `portfolioCardDateFormatter` constant —
+/// must remain in HomeView.swift unless the formatter is also moved.
 func portfolioCardCaptionSegments(
     dueDate: Date?,
     photoCount: Int,
@@ -500,9 +505,8 @@ func portfolioCardCaptionSegments(
         segments.append("\(distinctProcedureCount) \(noun)")
     }
 
-    // Hide row if only the due date is left — due date already gives context,
-    // but without any photo/procedure info the row would just repeat what's implicit.
-    // Spec: hide when totalPhotos == 0 AND distinctProcedureCount == 0.
+    // Portfolio with zero requirements: nothing useful to show.
+    // The spec explicitly hides the row in this case; "0/0 photos" is noise.
     if totalPhotos == 0 && distinctProcedureCount == 0 {
         return []
     }
