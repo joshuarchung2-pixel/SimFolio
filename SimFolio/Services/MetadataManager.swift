@@ -329,6 +329,9 @@ class MetadataManager: ObservableObject {
     /// Portfolio statistics tuple
     typealias PortfolioStats = (fulfilled: Int, total: Int)
 
+    /// One representative photo per distinct required procedure
+    typealias ProcedureRepresentative = (assetId: String, procedure: String)
+
     /// Get statistics for a portfolio (fulfilled vs total requirements)
     /// - Parameter portfolio: The portfolio to get stats for
     /// - Returns: Tuple of (fulfilled count, total required count)
@@ -355,6 +358,59 @@ class MetadataManager: ObservableObject {
         }
 
         return (fulfilled: fulfilledCount, total: totalRequired)
+    }
+
+    /// One representative photo per distinct procedure in the portfolio's requirements.
+    /// Returns all procedures that have at least one matching photo, ordered newest first.
+    /// Matching is procedure-only (stage/angle are ignored by design).
+    /// - Parameters:
+    ///   - portfolio: The portfolio whose required procedures define the search set.
+    ///   - photoRecords: The photo records whose createdDate is used for ordering.
+    ///     Pass `PhotoStorageService.shared.records` from view code.
+    /// - Returns: One `(assetId, procedure)` per procedure that has photos.
+    func getProcedureRepresentatives(
+        for portfolio: Portfolio,
+        photoRecords: [PhotoRecord]
+    ) -> [ProcedureRepresentative] {
+        let requiredProcedures = Set(portfolio.requirements.map(\.procedure))
+        guard !requiredProcedures.isEmpty else { return [] }
+
+        var photoDates: [String: Date] = [:]
+        for record in photoRecords {
+            photoDates[record.id.uuidString] = record.createdDate
+        }
+
+        // Group matching metadata entries by procedure, keeping the newest per procedure.
+        // Tie-break: lexicographically smaller assetId wins.
+        var bestPerProcedure: [String: (assetId: String, date: Date)] = [:]
+        for (assetId, metadata) in assetMetadata {
+            guard let procedure = metadata.procedure,
+                  requiredProcedures.contains(procedure),
+                  let date = photoDates[assetId]
+            else { continue }
+
+            if let current = bestPerProcedure[procedure] {
+                if date > current.date {
+                    bestPerProcedure[procedure] = (assetId, date)
+                } else if date == current.date && assetId < current.assetId {
+                    bestPerProcedure[procedure] = (assetId, date)
+                }
+            } else {
+                bestPerProcedure[procedure] = (assetId, date)
+            }
+        }
+
+        // Sort winners by date desc, tie-break on assetId asc.
+        let sorted = bestPerProcedure
+            .map { (procedure: $0.key, assetId: $0.value.assetId, date: $0.value.date) }
+            .sorted { lhs, rhs in
+                if lhs.date != rhs.date {
+                    return lhs.date > rhs.date
+                }
+                return lhs.assetId < rhs.assetId
+            }
+
+        return sorted.map { ProcedureRepresentative(assetId: $0.assetId, procedure: $0.procedure) }
     }
 
     /// Get completion percentage for a portfolio
