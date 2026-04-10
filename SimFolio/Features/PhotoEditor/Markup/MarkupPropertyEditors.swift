@@ -143,12 +143,7 @@ struct LineWidthOptionView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                .fill(isSelected ? AppTheme.Colors.primary.opacity(0.2) : Color.white.opacity(0.1))
-                .frame(width: optionSize, height: optionSize)
-
-            // Line preview
+            // Line preview — teal when selected, white otherwise
             RoundedRectangle(cornerRadius: width.pointWidth / 2)
                 .fill(isSelected ? AppTheme.Colors.primary : .white)
                 .frame(width: optionSize - 16, height: width.pointWidth)
@@ -160,6 +155,8 @@ struct LineWidthOptionView: View {
                     .frame(width: optionSize, height: optionSize)
             }
         }
+        .frame(width: optionSize, height: optionSize)
+        .contentShape(Rectangle())
     }
 }
 
