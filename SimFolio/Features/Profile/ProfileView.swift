@@ -174,6 +174,7 @@ struct ProfileView: View {
         .background(AppTheme.Colors.background)
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(isPresented: $showEditProfile)
         }
