@@ -166,19 +166,51 @@ struct HomeView: View {
             }
             .padding(.horizontal, AppTheme.Spacing.md)
 
-            // Horizontal thumbnail scroll
+            recentThumbnailScroll
+                .mask(trailingFadeMask)
+        }
+    }
+
+    @ViewBuilder
+    private var recentThumbnailScroll: some View {
+        if #available(iOS 17.0, *) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppTheme.Spacing.sm) {
-                    ForEach(Array(photoStorage.records.prefix(20))) { record in
-                        RecentThumbnailView(record: record)
-                            .onTapGesture {
-                                router.navigateToPhotoDetail(id: record.id.uuidString)
-                            }
-                    }
+                    recentThumbnailItems
+                }
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, AppTheme.Spacing.md, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    recentThumbnailItems
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
             }
         }
+    }
+
+    private var recentThumbnailItems: some View {
+        ForEach(Array(photoStorage.records.prefix(20))) { record in
+            RecentThumbnailView(record: record)
+                .onTapGesture {
+                    router.navigateToPhotoDetail(id: record.id.uuidString)
+                }
+        }
+    }
+
+    private var trailingFadeMask: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0.0),
+                .init(color: .black, location: 0.92),
+                .init(color: .clear, location: 1.0)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     // MARK: - Empty State
