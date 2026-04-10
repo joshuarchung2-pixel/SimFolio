@@ -275,12 +275,9 @@ struct SubModeButton: View {
                 Text(mode.rawValue)
                     .font(AppTheme.Typography.caption2)
             }
-            .foregroundStyle(isSelected ? .white : .gray)
-            .frame(width: 60, height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
-                    .fill(isSelected ? AppTheme.Colors.primary : Color.white.opacity(0.1))
-            )
+            .foregroundStyle(isSelected ? AppTheme.Colors.primary : Color(hex: "C7C7CC"))
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .contentShape(Rectangle())
         }
     }
 }
