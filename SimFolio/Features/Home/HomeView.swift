@@ -365,10 +365,13 @@ private struct PortfolioThumbStrip: View {
 
 // MARK: - Portfolio Row Card
 
-/// Card row for a single portfolio with name, due date, percentage, and progress bar
+/// Card row for a single portfolio with name, merged caption, thumbnail strip, and progress bar.
 struct PortfolioRowCard: View {
     let portfolio: Portfolio
     @ObservedObject var metadataManager = MetadataManager.shared
+    @ObservedObject var photoStorage = PhotoStorageService.shared
+
+    // MARK: - Derived
 
     private var stats: (fulfilled: Int, total: Int) {
         metadataManager.getPortfolioStats(portfolio)
@@ -383,24 +386,63 @@ struct PortfolioRowCard: View {
         Int(progress * 100)
     }
 
+    private var distinctProcedureCount: Int {
+        Set(portfolio.requirements.map(\.procedure)).count
+    }
+
+    private var allRepresentatives: [MetadataManager.ProcedureRepresentative] {
+        metadataManager.getProcedureRepresentatives(
+            for: portfolio,
+            photoRecords: photoStorage.records
+        )
+    }
+
+    private var visibleRepresentatives: [MetadataManager.ProcedureRepresentative] {
+        Array(allRepresentatives.prefix(4))
+    }
+
+    private var overflowCount: Int {
+        max(0, allRepresentatives.count - 4)
+    }
+
+    private var captionSegments: [String] {
+        portfolioCardCaptionSegments(
+            dueDate: portfolio.dueDate,
+            photoCount: stats.fulfilled,
+            totalPhotos: stats.total,
+            distinctProcedureCount: distinctProcedureCount
+        )
+    }
+
+    // MARK: - Body
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            // Title row
             HStack {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                    Text(portfolio.name)
-                        .font(AppTheme.Typography.headline)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                    if let dueDate = portfolio.dueDate {
-                        Text("Due \(dueDate, style: .date)")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    }
-                }
+                Text(portfolio.name)
+                    .font(AppTheme.Typography.headline)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
                 Spacer()
                 Text("\(completionPercentage)%")
                     .font(AppTheme.Typography.footnote.weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
             }
+
+            // Caption row (hidden if no segments)
+            if !captionSegments.isEmpty {
+                captionRow
+            }
+
+            // Thumbnail strip (hidden if no representatives)
+            if !visibleRepresentatives.isEmpty {
+                PortfolioThumbStrip(
+                    visibleRepresentatives: visibleRepresentatives,
+                    overflowCount: overflowCount
+                )
+            }
+
+            // Progress bar
             DPProgressBar(progress: progress)
         }
         .padding(AppTheme.Spacing.md)
@@ -410,6 +452,21 @@ struct PortfolioRowCard: View {
             RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
                 .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
         )
+    }
+
+    private var captionRow: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(captionSegments.enumerated()), id: \.offset) { index, segment in
+                if index > 0 {
+                    Text("·")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textTertiary)
+                }
+                Text(segment)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+        }
     }
 }
 
