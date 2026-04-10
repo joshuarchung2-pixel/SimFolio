@@ -166,51 +166,22 @@ struct HomeView: View {
             }
             .padding(.horizontal, AppTheme.Spacing.md)
 
-            recentThumbnailScroll
-                .mask(trailingFadeMask)
-        }
-    }
-
-    @ViewBuilder
-    private var recentThumbnailScroll: some View {
-        if #available(iOS 17.0, *) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.sm) {
-                    recentThumbnailItems
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+                    count: 3
+                ),
+                spacing: AppTheme.Spacing.sm
+            ) {
+                ForEach(Array(photoStorage.records.prefix(3))) { record in
+                    RecentThumbnailView(record: record)
+                        .onTapGesture {
+                            router.navigateToPhotoDetail(id: record.id.uuidString)
+                        }
                 }
-                .scrollTargetLayout()
             }
-            .contentMargins(.horizontal, AppTheme.Spacing.md, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.sm) {
-                    recentThumbnailItems
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-            }
+            .padding(.horizontal, AppTheme.Spacing.md)
         }
-    }
-
-    private var recentThumbnailItems: some View {
-        ForEach(Array(photoStorage.records.prefix(20))) { record in
-            RecentThumbnailView(record: record)
-                .onTapGesture {
-                    router.navigateToPhotoDetail(id: record.id.uuidString)
-                }
-        }
-    }
-
-    private var trailingFadeMask: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .black, location: 0.0),
-                .init(color: .black, location: 0.92),
-                .init(color: .clear, location: 1.0)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
     }
 
     // MARK: - Empty State
@@ -285,7 +256,7 @@ struct HomeView: View {
 
 // MARK: - Recent Thumbnail View
 
-/// 120pt square thumbnail for recent captures horizontal scroll
+/// Square thumbnail for recent captures grid — fills its cell width
 struct RecentThumbnailView: View {
     let record: PhotoRecord
     @State private var image: UIImage?
@@ -305,7 +276,8 @@ struct RecentThumbnailView: View {
                     )
             }
         }
-        .frame(width: 120, height: 120)
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
         .onAppear {
             image = PhotoStorageService.shared.loadThumbnail(id: record.id)
