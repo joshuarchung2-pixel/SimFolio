@@ -370,3 +370,49 @@ struct TextInputSheetView: View {
         .presentationDetents([.medium])
     }
 }
+
+// MARK: - Markup Empty State View
+
+/// Context-aware empty state for Select sub-mode when nothing is selected.
+/// Shows different copy depending on whether the photo has any markup elements.
+struct MarkupEmptyStateView: View {
+    let isMarkupEmpty: Bool
+
+    private var iconName: String {
+        isMarkupEmpty ? "scribble.variable" : "hand.point.up"
+    }
+
+    private var title: String {
+        isMarkupEmpty ? "No marks yet" : "Nothing selected"
+    }
+
+    private var hint: String {
+        isMarkupEmpty
+            ? "Switch to Draw, Measure, or Text to annotate your photo."
+            : "Tap a mark on the photo to edit its color or size."
+    }
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.sm) {
+            Image(systemName: iconName)
+                .font(.system(size: 22))
+                .foregroundStyle(Color(hex: "48484A"))
+                .accessibilityHidden(true)
+
+            Text(title)
+                .font(AppTheme.Typography.sectionLabel)
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundStyle(Color(hex: "8E8E93"))
+
+            Text(hint)
+                .font(AppTheme.Typography.caption)
+                .foregroundStyle(Color(hex: "8E8E93"))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(maxWidth: 240)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, AppTheme.Spacing.lg)
+    }
+}
