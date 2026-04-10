@@ -337,7 +337,7 @@ private struct PortfolioThumbStrip: View {
     let overflowCount: Int
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppTheme.Spacing.sm) {
             ForEach(visibleRepresentatives, id: \.assetId) { rep in
                 ProcedureThumbView(assetId: rep.assetId, procedure: rep.procedure)
             }
@@ -359,6 +359,7 @@ private struct PortfolioThumbStrip: View {
                 Capsule()
                     .strokeBorder(AppTheme.Colors.divider, lineWidth: 1)
             )
+            .accessibilityLabel("\(overflowCount) more procedure\(overflowCount == 1 ? "" : "s")")
     }
 }
 
