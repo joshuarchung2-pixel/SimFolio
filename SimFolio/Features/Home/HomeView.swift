@@ -390,19 +390,15 @@ struct PortfolioRowCard: View {
         Set(portfolio.requirements.map(\.procedure)).count
     }
 
-    private var allRepresentatives: [MetadataManager.ProcedureRepresentative] {
-        metadataManager.getProcedureRepresentatives(
+    /// Visible thumbnail representatives (capped at 4) and the overflow count.
+    /// Computed once per render via a local `let` in `body` so the underlying
+    /// `getProcedureRepresentatives` walk doesn't run more than once per frame.
+    private var representativeStrip: (visible: [MetadataManager.ProcedureRepresentative], overflow: Int) {
+        let all = metadataManager.getProcedureRepresentatives(
             for: portfolio,
             photoRecords: photoStorage.records
         )
-    }
-
-    private var visibleRepresentatives: [MetadataManager.ProcedureRepresentative] {
-        Array(allRepresentatives.prefix(4))
-    }
-
-    private var overflowCount: Int {
-        max(0, allRepresentatives.count - 4)
+        return (visible: Array(all.prefix(4)), overflow: max(0, all.count - 4))
     }
 
     private var captionSegments: [String] {
@@ -417,7 +413,8 @@ struct PortfolioRowCard: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+        let strip = representativeStrip
+        return VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             // Title row
             HStack {
                 Text(portfolio.name)
@@ -435,10 +432,10 @@ struct PortfolioRowCard: View {
             }
 
             // Thumbnail strip (hidden if no representatives)
-            if !visibleRepresentatives.isEmpty {
+            if !strip.visible.isEmpty {
                 PortfolioThumbStrip(
-                    visibleRepresentatives: visibleRepresentatives,
-                    overflowCount: overflowCount
+                    visibleRepresentatives: strip.visible,
+                    overflowCount: strip.overflow
                 )
             }
 
