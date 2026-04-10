@@ -131,6 +131,19 @@ struct PhotoEditorView: View {
             }
             .padding(.leading, AppTheme.Spacing.md)
 
+            // Undo button — markup mode only
+            if editorMode == .markup {
+                Button(action: { viewModel.undo() }) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(.white)
+                        .opacity(viewModel.history.canUndo ? 1.0 : 0.4)
+                }
+                .disabled(!viewModel.history.canUndo)
+                .padding(.leading, AppTheme.Spacing.md)
+                .accessibilityLabel("Undo")
+            }
+
             Spacer()
 
             // Title
