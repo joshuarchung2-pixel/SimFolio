@@ -28,8 +28,8 @@
 
 /* Begin PBXFileReference section */
 		572D6A3A2F3283A30078A0FD /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
-		57E137512F0FAE870043415F /* SimFolio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimFolio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57A1B0002F4A0001001109B6 /* SimFolioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimFolioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		57E137512F0FAE870043415F /* SimFolio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimFolio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -43,6 +43,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		57A1B0022F4A0001001109B6 /* SimFolioTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SimFolioTests;
+			sourceTree = "<group>";
+		};
 		57E137532F0FAE870043415F /* SimFolio */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -51,14 +56,16 @@
 			path = SimFolio;
 			sourceTree = "<group>";
 		};
-		57A1B0022F4A0001001109B6 /* SimFolioTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SimFolioTests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		57A1B0042F4A0001001109B6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57E1374E2F0FAE870043415F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -72,16 +79,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		57A1B0042F4A0001001109B6 /* Frameworks (SimFolioTests) */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		573CD8822F876D280046B998 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				57A1B0022F4A0001001109B6 /* SimFolioTests */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		57E137482F0FAE870043415F = {
 			isa = PBXGroup;
 			children = (
@@ -89,6 +97,7 @@
 				57E341132F231A0D001109B6 /* Frameworks */,
 				57E137522F0FAE870043415F /* Products */,
 				572D6A3A2F3283A30078A0FD /* Secrets.xcconfig */,
+				573CD8822F876D280046B998 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -116,7 +125,7 @@
 			buildConfigurationList = 57A1B00A2F4A0001001109B6 /* Build configuration list for PBXNativeTarget "SimFolioTests" */;
 			buildPhases = (
 				57A1B0052F4A0001001109B6 /* Sources */,
-				57A1B0042F4A0001001109B6 /* Frameworks (SimFolioTests) */,
+				57A1B0042F4A0001001109B6 /* Frameworks */,
 				57A1B0062F4A0001001109B6 /* Resources */,
 			);
 			buildRules = (
@@ -171,12 +180,12 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
-					57E137502F0FAE870043415F = {
-						CreatedOnToolsVersion = 26.2;
-					};
 					57A1B0032F4A0001001109B6 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 57E137502F0FAE870043415F;
+					};
+					57E137502F0FAE870043415F = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -205,6 +214,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		57A1B0062F4A0001001109B6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57E1374F2F0FAE870043415F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -213,32 +229,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		57A1B0062F4A0001001109B6 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section (SimFolioTests) */
-		57A1B0052F4A0001001109B6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section (SimFolioTests) */
-
-/* Begin PBXTargetDependency section */
-		57A1B0072F4A0001001109B6 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 57E137502F0FAE870043415F /* SimFolio */;
-			targetProxy = 57A1B0012F4A0001001109B6 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		57F1B0042F3A0001001109B6 /* Upload dSYMs to Crashlytics */ = {
@@ -268,6 +259,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		57A1B0052F4A0001001109B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57E1374D2F0FAE870043415F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -277,7 +275,59 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		57A1B0072F4A0001001109B6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 57E137502F0FAE870043415F /* SimFolio */;
+			targetProxy = 57A1B0012F4A0001001109B6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		57A1B0082F4A0001001109B6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B93BJQAH8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
+			};
+			name = Debug;
+		};
+		57A1B0092F4A0001001109B6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B93BJQAH8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
+			};
+			name = Release;
+		};
 		57E1375A2F0FAE880043415F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 572D6A3A2F3283A30078A0FD /* Secrets.xcconfig */;
@@ -427,7 +477,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -470,7 +520,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -487,53 +537,18 @@
 			};
 			name = Release;
 		};
-		57A1B0082F4A0001001109B6 /* Debug (SimFolioTests) */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B93BJQAH8B;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
-			};
-			name = Debug;
-		};
-		57A1B0092F4A0001001109B6 /* Release (SimFolioTests) */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B93BJQAH8B;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.joshuachung.simfolio.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimFolio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimFolio";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		57A1B00A2F4A0001001109B6 /* Build configuration list for PBXNativeTarget "SimFolioTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57A1B0082F4A0001001109B6 /* Debug */,
+				57A1B0092F4A0001001109B6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		57E1374C2F0FAE870043415F /* Build configuration list for PBXProject "SimFolio" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -548,15 +563,6 @@
 			buildConfigurations = (
 				57E1375D2F0FAE880043415F /* Debug */,
 				57E1375E2F0FAE880043415F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		57A1B00A2F4A0001001109B6 /* Build configuration list for PBXNativeTarget "SimFolioTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				57A1B0082F4A0001001109B6 /* Debug (SimFolioTests) */,
-				57A1B0092F4A0001001109B6 /* Release (SimFolioTests) */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
