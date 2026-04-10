@@ -335,6 +335,45 @@ struct PortfolioRowCard: View {
     }
 }
 
+// MARK: - Portfolio Card Caption
+
+/// Pure formatter for the portfolio card's caption row.
+/// Returns segment strings to join with " · ". Returns empty array if the row
+/// would be empty (caller should hide the row entirely).
+func portfolioCardCaptionSegments(
+    dueDate: Date?,
+    photoCount: Int,
+    totalPhotos: Int,
+    distinctProcedureCount: Int
+) -> [String] {
+    var segments: [String] = []
+
+    if let dueDate = dueDate {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        segments.append("Due \(formatter.string(from: dueDate))")
+    }
+
+    if totalPhotos > 0 {
+        segments.append("\(photoCount)/\(totalPhotos) photos")
+    }
+
+    if distinctProcedureCount > 0 {
+        let noun = distinctProcedureCount == 1 ? "procedure" : "procedures"
+        segments.append("\(distinctProcedureCount) \(noun)")
+    }
+
+    // Hide row if only the due date is left — due date already gives context,
+    // but without any photo/procedure info the row would just repeat what's implicit.
+    // Spec: hide when totalPhotos == 0 AND distinctProcedureCount == 0.
+    if totalPhotos == 0 && distinctProcedureCount == 0 {
+        return []
+    }
+
+    return segments
+}
+
 // MARK: - Preview Provider
 
 #if DEBUG
