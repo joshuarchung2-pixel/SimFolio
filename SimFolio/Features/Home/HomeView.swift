@@ -287,6 +287,9 @@ struct RecentThumbnailView: View {
 
 // MARK: - Procedure Thumb View
 
+/// Square dimension for the portfolio card's procedure thumbnails and overflow pill.
+private let portfolioCardThumbSize: CGFloat = 44
+
 /// 44pt square thumbnail used inside PortfolioThumbStrip.
 /// Loads the thumbnail on appear and renders a procedure-colored border.
 /// On load failure, falls back to a solid procedure-color square.
@@ -309,10 +312,10 @@ private struct ProcedureThumbView: View {
                 AppTheme.Colors.surface
             }
         }
-        .frame(width: 44, height: 44)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(width: portfolioCardThumbSize, height: portfolioCardThumbSize)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small)
                 .strokeBorder(AppTheme.procedureBorderColor(for: procedure), lineWidth: 2)
         )
         .onAppear {
