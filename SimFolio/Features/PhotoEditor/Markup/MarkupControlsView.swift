@@ -20,6 +20,7 @@ struct MarkupControlsView: View {
 
     let hasSelection: Bool
     let selectedElementType: MarkupElementType?
+    let isMarkupEmpty: Bool
 
     // Undo state
     var canUndo: Bool = false

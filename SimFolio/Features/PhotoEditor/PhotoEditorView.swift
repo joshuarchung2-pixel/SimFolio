@@ -367,6 +367,7 @@ struct PhotoEditorView: View {
             selectedFillColor: $viewModel.selectedFillColor,
             hasSelection: viewModel.editState.markup.selectedElementId != nil,
             selectedElementType: viewModel.selectedMarkupElementType,
+            isMarkupEmpty: !viewModel.editState.markup.hasMarkup,
             canUndo: viewModel.history.canUndo,
             onUndo: {
                 viewModel.undo()
