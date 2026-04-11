@@ -54,9 +54,15 @@ struct PortfolioDetailView: View {
 
     // MARK: - Computed Properties
 
+    /// Always read the latest portfolio from the manager so inline mutations
+    /// (add/edit/delete requirements) are reflected immediately throughout the view.
+    var currentPortfolio: Portfolio {
+        metadataManager.portfolios.first(where: { $0.id == portfolio.id }) ?? portfolio
+    }
+
     /// Portfolio statistics (fulfilled and total photo counts)
     var stats: (fulfilled: Int, total: Int) {
-        metadataManager.getPortfolioStats(portfolio)
+        metadataManager.getPortfolioStats(currentPortfolio)
     }
 
     /// Progress as a decimal (0.0 to 1.0)
@@ -73,7 +79,7 @@ struct PortfolioDetailView: View {
 
     /// Due status with text, color, and icon
     var dueStatus: (text: String, color: Color, icon: String) {
-        guard let dueDate = portfolio.dueDate else {
+        guard let dueDate = currentPortfolio.dueDate else {
             return ("No deadline", AppTheme.Colors.textTertiary, "calendar")
         }
 
@@ -106,7 +112,7 @@ struct PortfolioDetailView: View {
                 // Tab content
                 TabView(selection: $selectedTab) {
                     PortfolioOverviewTab(
-                        portfolio: portfolio,
+                        portfolio: currentPortfolio,
                         stats: stats,
                         progress: progress,
                         dueStatus: dueStatus,
@@ -119,17 +125,17 @@ struct PortfolioDetailView: View {
                     )
                     .tag(PortfolioTab.overview)
 
-                    PortfolioChecklistTab(portfolio: portfolio)
+                    PortfolioChecklistTab(portfolio: currentPortfolio)
                         .tag(PortfolioTab.checklist)
 
-                    PortfolioPhotosTab(portfolio: portfolio)
+                    PortfolioPhotosTab(portfolio: currentPortfolio)
                         .tag(PortfolioTab.photos)
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 .animation(.easeInOut(duration: 0.2), value: selectedTab)
             }
             .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle(portfolio.name)
+            .navigationTitle(currentPortfolio.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -168,10 +174,10 @@ struct PortfolioDetailView: View {
                 }
             }
             .sheet(isPresented: $showEditSheet) {
-                EditPortfolioSheet(portfolio: portfolio, isPresented: $showEditSheet)
+                EditPortfolioSheet(portfolio: currentPortfolio, isPresented: $showEditSheet)
             }
             .sheet(isPresented: $showExportSheet) {
-                PortfolioExportSheet(portfolio: portfolio, isPresented: $showExportSheet)
+                PortfolioExportSheet(portfolio: currentPortfolio, isPresented: $showExportSheet)
             }
             .alert("Delete Portfolio?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
@@ -239,16 +245,16 @@ struct PortfolioDetailView: View {
                 stage: firstIncomplete.stage,
                 angle: firstIncomplete.angle,
                 toothNumber: nil,
-                forPortfolioId: portfolio.id
+                forPortfolioId: currentPortfolio.id
             )
         } else {
-            router.navigateToCapture(forPortfolioId: portfolio.id)
+            router.navigateToCapture(forPortfolioId: currentPortfolio.id)
         }
     }
 
     /// Find the first incomplete requirement in the portfolio
     func findFirstIncompleteRequirement() -> (procedure: String, stage: String?, angle: String?)? {
-        for requirement in portfolio.requirements {
+        for requirement in currentPortfolio.requirements {
             for stage in requirement.stages {
                 for angle in requirement.angles {
                     let count = metadataManager.getMatchingPhotoCount(
@@ -268,7 +274,7 @@ struct PortfolioDetailView: View {
 
     /// Delete the portfolio and dismiss the view
     func deletePortfolio() {
-        metadataManager.deletePortfolio(portfolio.id)
+        metadataManager.deletePortfolio(currentPortfolio.id)
         dismiss()
     }
 }
@@ -286,25 +292,117 @@ struct PortfolioOverviewTab: View {
 
     @ObservedObject var metadataManager = MetadataManager.shared
 
+    // MARK: - Inline Edit State
+
+    @State private var showRequirementEditor: Bool = false
+    @State private var editingRequirement: PortfolioRequirement? = nil
+    @State private var showDeleteRequirementAlert: Bool = false
+    @State private var requirementToDelete: PortfolioRequirement? = nil
+    @State private var matchingPhotoCount: Int = 0
+
+    /// Always read the latest portfolio from the manager so inline edits
+    /// (add/edit/delete requirements) are reflected immediately.
+    var currentPortfolio: Portfolio {
+        metadataManager.portfolios.first(where: { $0.id == portfolio.id }) ?? portfolio
+    }
+
     var isComplete: Bool {
         stats.total > 0 && stats.fulfilled >= stats.total
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                // Large progress card
-                progressCard
+        List {
+            // Progress card
+            progressCard
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: AppTheme.Spacing.md, leading: 0, bottom: 0, trailing: 0))
 
-                // Quick actions
-                quickActionsSection
+            // Quick actions
+            quickActionsSection
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: AppTheme.Spacing.lg, leading: 0, bottom: 0, trailing: 0))
 
-                // Requirements summary
-                requirementsSummarySection
+            // Requirements section header
+            requirementsSectionHeader
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: AppTheme.Spacing.lg, leading: AppTheme.Spacing.md, bottom: AppTheme.Spacing.sm, trailing: AppTheme.Spacing.md))
 
-                Spacer(minLength: 50)
+            // Each requirement is its own row so swipe actions work
+            ForEach(currentPortfolio.requirements) { requirement in
+                RequirementSummaryRow(
+                    requirement: requirement,
+                    metadataManager: metadataManager
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: AppTheme.Spacing.xs, leading: AppTheme.Spacing.md, bottom: AppTheme.Spacing.xs, trailing: AppTheme.Spacing.md))
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    // Order matters: trailing swipeActions render right-to-left,
+                    // so the FIRST button is the rightmost — Delete on the screen edge,
+                    // matching iOS Notifications.
+                    Button(role: .destructive) {
+                        requirementToDelete = requirement
+                        matchingPhotoCount = computeMatchingPhotoCount(for: requirement)
+                        showDeleteRequirementAlert = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+
+                    Button {
+                        editingRequirement = requirement
+                        showRequirementEditor = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .tint(AppTheme.Colors.primary)
+                }
             }
-            .padding(.top, AppTheme.Spacing.md)
+
+            // Inline "Add Requirement" button at the bottom of the list
+            addRequirementButton
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: AppTheme.Spacing.sm, leading: AppTheme.Spacing.md, bottom: AppTheme.Spacing.md, trailing: AppTheme.Spacing.md))
+
+            // Bottom spacer to keep the last row clear of the tab bar
+            Color.clear
+                .frame(height: 50)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.Colors.background)
+        .sheet(isPresented: $showRequirementEditor) {
+            RequirementEditorSheet(
+                isPresented: $showRequirementEditor,
+                existingRequirement: editingRequirement,
+                onSave: { saved in
+                    saveRequirement(saved)
+                    editingRequirement = nil
+                }
+            )
+        }
+        .alert("Remove Requirement?", isPresented: $showDeleteRequirementAlert) {
+            Button("Cancel", role: .cancel) {
+                requirementToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let requirement = requirementToDelete {
+                    deleteRequirement(requirement)
+                }
+                requirementToDelete = nil
+            }
+        } message: {
+            if matchingPhotoCount > 0 {
+                Text("This requirement has \(matchingPhotoCount) matching photo\(matchingPhotoCount == 1 ? "" : "s"). The photos will remain in your library but will no longer count toward this portfolio.")
+            } else {
+                Text("This requirement will be removed from the portfolio.")
+            }
         }
     }
 
@@ -419,40 +517,86 @@ struct PortfolioOverviewTab: View {
         }
     }
 
-    // MARK: - Requirements Summary
+    // MARK: - Requirements
 
-    /// Section showing all requirements with progress
-    var requirementsSummarySection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+    /// Header row for the requirements section in the List
+    var requirementsSectionHeader: some View {
+        HStack {
             Text("Requirements")
                 .font(AppTheme.Typography.headline)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, AppTheme.Spacing.md)
+            Spacer()
+        }
+    }
 
-            if portfolio.requirements.isEmpty {
-                DPCard {
-                    HStack {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(AppTheme.Colors.textTertiary)
-                        Text("No requirements added yet")
-                            .font(AppTheme.Typography.subheadline)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                        Spacer()
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-            } else {
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    ForEach(portfolio.requirements) { requirement in
-                        RequirementSummaryRow(
-                            requirement: requirement,
-                            metadataManager: metadataManager
-                        )
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
+    /// Inline "Add Requirement" button shown at the bottom of the requirements list.
+    /// Opens the same `RequirementEditorSheet` used by the Edit Portfolio flow.
+    var addRequirementButton: some View {
+        Button {
+            editingRequirement = nil
+            showRequirementEditor = true
+        } label: {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 20))
+
+                Text("Add Requirement")
+                    .font(AppTheme.Typography.subheadline)
+                    .fontWeight(.medium)
+
+                Spacer()
+            }
+            .foregroundStyle(AppTheme.Colors.primary)
+            .padding(AppTheme.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.medium)
+                    .stroke(AppTheme.Colors.primary, style: StrokeStyle(lineWidth: 1, dash: [6]))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Mutation Helpers
+
+    /// Add or update a requirement and persist via `MetadataManager.updatePortfolio`.
+    /// Matched by `id` so the existing requirement is replaced in place when editing.
+    private func saveRequirement(_ requirement: PortfolioRequirement) {
+        var updated = currentPortfolio
+        let isNew: Bool
+        if let index = updated.requirements.firstIndex(where: { $0.id == requirement.id }) {
+            updated.requirements[index] = requirement
+            isNew = false
+        } else {
+            updated.requirements.append(requirement)
+            isNew = true
+        }
+        metadataManager.updatePortfolio(updated)
+        if isNew {
+            AnalyticsService.logEvent(.requirementAdded)
+        }
+    }
+
+    /// Remove a requirement from the portfolio and persist via `MetadataManager.updatePortfolio`.
+    private func deleteRequirement(_ requirement: PortfolioRequirement) {
+        var updated = currentPortfolio
+        updated.requirements.removeAll { $0.id == requirement.id }
+        metadataManager.updatePortfolio(updated)
+    }
+
+    /// Count photos in the library that match this requirement's procedure/stage/angle combinations.
+    /// Used to inform the user how many photos would be orphaned if they delete this requirement.
+    private func computeMatchingPhotoCount(for requirement: PortfolioRequirement) -> Int {
+        var count = 0
+        for stage in requirement.stages {
+            for angle in requirement.angles {
+                count += metadataManager.getMatchingPhotoCount(
+                    procedure: requirement.procedure,
+                    stage: stage,
+                    angle: angle
+                )
             }
         }
+        return count
     }
 }
 
