@@ -458,7 +458,7 @@ struct PortfolioPhotoThumbnail: View {
     }
 
     private func loadThumbnail() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 
 }
@@ -634,8 +634,8 @@ struct PortfolioPhotoDetailSheet: View {
     }
 
     func sharePhoto() {
-        // Load full image from app storage and share
-        guard let image = PhotoStorageService.shared.loadImage(id: currentRecord.id) else { return }
+        // Load full image (with persisted edits applied) and share
+        guard let image = PhotoStorageService.shared.loadEditedImage(id: currentRecord.id) else { return }
 
         let activityVC = UIActivityViewController(
             activityItems: [image],

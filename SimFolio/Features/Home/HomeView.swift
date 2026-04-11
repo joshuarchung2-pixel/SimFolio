@@ -280,7 +280,7 @@ struct RecentThumbnailView: View {
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
         .onAppear {
-            image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+            image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
         }
     }
 }
@@ -323,7 +323,7 @@ private struct ProcedureThumbView: View {
             guard !didAttemptLoad else { return }
             didAttemptLoad = true
             if let uuid = UUID(uuidString: assetId) {
-                image = PhotoStorageService.shared.loadThumbnail(id: uuid)
+                image = PhotoStorageService.shared.loadEditedThumbnail(id: uuid)
             }
         }
     }
