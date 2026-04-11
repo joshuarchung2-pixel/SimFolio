@@ -79,16 +79,37 @@ class PhotoStorageService: ObservableObject {
 
     // MARK: - Load
 
-    /// Load full-resolution image from disk
+    /// Load full-resolution image from disk (unedited original bytes)
     func loadImage(id: UUID) -> UIImage? {
         guard let data = try? Data(contentsOf: photoURL(for: id)) else { return nil }
         return UIImage(data: data)
     }
 
-    /// Load thumbnail image from disk
+    /// Load thumbnail image from disk (unedited original bytes)
     func loadThumbnail(id: UUID) -> UIImage? {
         guard let data = try? Data(contentsOf: thumbnailURL(for: id)) else { return nil }
         return UIImage(data: data)
+    }
+
+    /// Load full-resolution image with any persisted edits applied.
+    /// Use this for display. The editor should continue to use `loadImage`
+    /// so it operates on the unedited original.
+    func loadEditedImage(id: UUID) -> UIImage? {
+        guard let raw = loadImage(id: id) else { return nil }
+        return PhotoEditPersistenceService.shared.applyStoredEdits(
+            to: raw,
+            assetId: id.uuidString
+        )
+    }
+
+    /// Load thumbnail with any persisted edits applied.
+    /// Use this for display in grids and lists.
+    func loadEditedThumbnail(id: UUID) -> UIImage? {
+        guard let raw = loadThumbnail(id: id) else { return nil }
+        return PhotoEditPersistenceService.shared.applyStoredEditsForPreview(
+            to: raw,
+            assetId: id.uuidString
+        )
     }
 
     // MARK: - Delete

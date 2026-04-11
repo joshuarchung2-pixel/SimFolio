@@ -1235,7 +1235,7 @@ struct ThumbnailView: View {
     }
 
     private func loadThumbnail() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 }
 
@@ -1260,7 +1260,7 @@ struct RecordThumbnailView: View {
             }
         }
         .onAppear {
-            image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+            image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
         }
     }
 }
@@ -1838,7 +1838,7 @@ struct LibraryPhotoThumbnail: View {
     }
 
     private func loadThumbnail() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 }
 
@@ -2015,7 +2015,7 @@ struct PhotoGridCell: View {
     }
 
     private func loadThumbnailForce() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 }
 
@@ -2508,7 +2508,10 @@ struct PhotoDetailView: View {
     // MARK: - Methods
 
     func loadFullImage() {
-        image = PhotoStorageService.shared.loadImage(id: currentRecord.id)
+        // Clear any stale edited image from a previous photo so it doesn't
+        // leak across records when swiping between photos.
+        editedImage = nil
+        image = PhotoStorageService.shared.loadEditedImage(id: currentRecord.id)
     }
 
     func toggleFavorite() {
@@ -2772,7 +2775,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
         }
 
         func loadImage(for record: PhotoRecord) {
-            if let loadedImage = PhotoStorageService.shared.loadImage(id: record.id) {
+            if let loadedImage = PhotoStorageService.shared.loadEditedImage(id: record.id) {
                 self.updateImage(loadedImage)
             }
         }
@@ -3476,7 +3479,7 @@ struct PhotoListRow: View {
     }
 
     private func loadThumbnail() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 }
 
@@ -3577,7 +3580,7 @@ struct PhotoGridItem: View {
     }
 
     private func loadThumbnail() {
-        image = PhotoStorageService.shared.loadThumbnail(id: record.id)
+        image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
     }
 }
 

@@ -525,7 +525,7 @@ struct AsyncThumbnailView: View {
 
     private func loadThumbnail() {
         if let uuid = UUID(uuidString: assetId) {
-            image = PhotoStorageService.shared.loadThumbnail(id: uuid)
+            image = PhotoStorageService.shared.loadEditedThumbnail(id: uuid)
         }
     }
 }
