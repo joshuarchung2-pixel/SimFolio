@@ -38,6 +38,9 @@ import FirebaseStorage
 
 @main
 struct SimFolioApp: App {
+    /// Whether the app is running under a test harness
+    static let isTesting = ProcessInfo.processInfo.environment["SIMFOLIO_TESTING"] == "1"
+
     // MARK: - App Delegate
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -70,6 +73,11 @@ struct SimFolioApp: App {
 
         // Disable animations for faster UI tests
         if arguments.contains("--uitesting") {
+            UIView.setAnimationsEnabled(false)
+        }
+
+        // Also disable animations when running under test harness (unit tests)
+        if SimFolioApp.isTesting {
             UIView.setAnimationsEnabled(false)
         }
 
@@ -233,6 +241,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Skip heavy initialization during tests
+        guard !SimFolioApp.isTesting else { return true }
+
         // Configure Firebase (Analytics + Crashlytics + Auth + Firestore + Storage)
         #if canImport(FirebaseCore)
         FirebaseApp.configure()
