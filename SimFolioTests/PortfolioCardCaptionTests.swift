@@ -6,9 +6,8 @@ import XCTest
 
 final class PortfolioCardCaptionTests: XCTestCase {
 
-    private let sampleDueDate = Calendar.current.date(
-        from: DateComponents(year: 2026, month: 4, day: 24)
-    )!
+    // Apr 24 2026 — a deterministic future date relative to referenceDate (Jan 15 2025)
+    private let sampleDueDate = TestData.date(daysFromReference: 464) // ~15 months ahead
 
     func testAllSegmentsPresent() {
         let segments = portfolioCardCaptionSegments(
@@ -44,8 +43,6 @@ final class PortfolioCardCaptionTests: XCTestCase {
     }
 
     func testZeroProcedures_dropsProcedureSegment() {
-        // With non-zero totalPhotos, the hide rule does not fire, so we can
-        // observe the procedure segment being dropped independently.
         let segments = portfolioCardCaptionSegments(
             dueDate: sampleDueDate,
             photoCount: 5,
@@ -59,7 +56,6 @@ final class PortfolioCardCaptionTests: XCTestCase {
     }
 
     func testZeroRequirementsWithDueDate_stillHidesRow() {
-        // Consistent with spec: caption row hides entirely when there's nothing useful to show
         let segments = portfolioCardCaptionSegments(
             dueDate: sampleDueDate,
             photoCount: 0,
@@ -79,9 +75,7 @@ final class PortfolioCardCaptionTests: XCTestCase {
         XCTAssertEqual(segments, ["0/30 photos", "5 procedures"])
     }
 
-    func testDueDateFormatIsMediumish() {
-        // We don't assert the exact locale-dependent formatting here,
-        // only that it starts with "Due " and contains a month indicator.
+    func testDueDateFormatStartsWithDue() {
         let segments = portfolioCardCaptionSegments(
             dueDate: sampleDueDate,
             photoCount: 1,
@@ -89,6 +83,6 @@ final class PortfolioCardCaptionTests: XCTestCase {
             distinctProcedureCount: 1
         )
         XCTAssertTrue(segments[0].hasPrefix("Due "))
-        XCTAssertTrue(segments[0].count > "Due ".count)
+        XCTAssertGreaterThan(segments[0].count, "Due ".count)
     }
 }
