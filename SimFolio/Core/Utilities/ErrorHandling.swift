@@ -8,6 +8,7 @@ import Foundation
 import SwiftUI
 import Photos
 import Combine
+import os
 
 // MARK: - App Error Types
 
@@ -244,15 +245,13 @@ class ErrorHandler: ObservableObject {
         showError = false
     }
 
-    /// Log error (debug builds only)
+    /// Log error via structured logger
     private func logError(_ error: AppError, context: String) {
-        #if DEBUG
         let contextString = context.isEmpty ? "" : " [\(context)]"
-        print("❌ Error\(contextString): \(error.localizedDescription)")
+        AppLogger.app.error("Error\(contextString): \(error.localizedDescription)")
         if let recovery = error.recoverySuggestion {
-            print("   Recovery: \(recovery)")
+            AppLogger.app.debug("Recovery: \(recovery)")
         }
-        #endif
     }
 
     /// Open device settings
@@ -371,13 +370,11 @@ extension Result {
 
 // MARK: - Debug Logging Utility
 
-/// Debug-only print function that includes file and line info
-/// Use this instead of print() for debug output that should not appear in production
+/// Debug logging function that includes file and line info
+/// Use this instead of print() for debug output
 func debugLog(_ message: String, file: String = #file, line: Int = #line) {
-    #if DEBUG
     let filename = (file as NSString).lastPathComponent
-    print("[\(filename):\(line)] \(message)")
-    #endif
+    AppLogger.app.debug("[\(filename):\(line)] \(message)")
 }
 
 // MARK: - Error Logging Utility
@@ -385,30 +382,24 @@ func debugLog(_ message: String, file: String = #file, line: Int = #line) {
 struct ErrorLogger {
     /// Log a non-fatal error for debugging
     static func log(_ message: String, error: Error? = nil, file: String = #file, line: Int = #line) {
-        #if DEBUG
         let filename = (file as NSString).lastPathComponent
-        var logMessage = "⚠️ [\(filename):\(line)] \(message)"
         if let error = error {
-            logMessage += " - \(error.localizedDescription)"
+            AppLogger.app.warning("[\(filename):\(line)] \(message) - \(error.localizedDescription)")
+        } else {
+            AppLogger.app.warning("[\(filename):\(line)] \(message)")
         }
-        print(logMessage)
-        #endif
     }
 
     /// Log an informational message
     static func info(_ message: String, file: String = #file, line: Int = #line) {
-        #if DEBUG
         let filename = (file as NSString).lastPathComponent
-        print("ℹ️ [\(filename):\(line)] \(message)")
-        #endif
+        AppLogger.app.info("[\(filename):\(line)] \(message)")
     }
 
     /// Log a success message
     static func success(_ message: String, file: String = #file, line: Int = #line) {
-        #if DEBUG
         let filename = (file as NSString).lastPathComponent
-        print("✅ [\(filename):\(line)] \(message)")
-        #endif
+        AppLogger.app.info("[\(filename):\(line)] \(message)")
     }
 }
 
