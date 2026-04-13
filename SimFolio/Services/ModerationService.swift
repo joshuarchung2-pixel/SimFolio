@@ -14,7 +14,7 @@ class ModerationService: ObservableObject {
 
     @Published var blockedUserIds: [String] = []
 
-    private let db = Firestore.firestore()
+    private lazy var db = Firestore.firestore()
 
     private init() {}
 
