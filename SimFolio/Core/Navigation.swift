@@ -280,7 +280,7 @@ struct LibraryFilter: Equatable {
 
 /// Central navigation state manager for the app
 /// Use as @EnvironmentObject throughout the app for consistent navigation
-class NavigationRouter: ObservableObject {
+class NavigationRouter: ObservableObject, NavigationRouting {
     // MARK: - Tab State
 
     /// Currently selected tab

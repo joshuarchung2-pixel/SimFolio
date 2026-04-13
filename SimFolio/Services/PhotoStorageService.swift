@@ -8,7 +8,7 @@ import UIKit
 import Combine
 
 @MainActor
-class PhotoStorageService: ObservableObject {
+class PhotoStorageService: ObservableObject, PhotoStoring {
     static let shared = PhotoStorageService()
 
     // MARK: - Directories

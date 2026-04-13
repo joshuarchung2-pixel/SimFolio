@@ -63,7 +63,7 @@ import Photos
 
 /// Central manager for photo metadata and portfolio storage
 /// Singleton accessible via MetadataManager.shared
-class MetadataManager: ObservableObject {
+class MetadataManager: ObservableObject, MetadataManaging {
 
     // MARK: - Singleton
 
