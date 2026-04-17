@@ -247,17 +247,35 @@ struct ImportFlowView: View {
             ReviewPromptService.requestIfEligible(for: .firstPhotoCaptured)
         }
 
-        let message = toastMessage(for: result, total: total)
+        let importedOk = result.imported > 0
+        let toastMessage: String
+        if importedOk {
+            toastMessage = "\(result.imported) imported · Tap to tag"
+        } else {
+            toastMessage = self.toastMessage(for: result, total: total)
+        }
+
         dismissFlow()
 
+        let router = self.router
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            var userInfo: [AnyHashable: Any] = [
+                "message": toastMessage,
+                "type": importedOk ? "success" : "info"
+            ]
+            if importedOk {
+                let onTap: () -> Void = {
+                    AnalyticsService.logImportNudgeTapped()
+                    var filter = LibraryFilter()
+                    filter.showUntaggedOnly = true
+                    router.navigateToLibrary(filter: filter)
+                }
+                userInfo["onTap"] = onTap
+            }
             NotificationCenter.default.post(
                 name: .showGlobalToast,
                 object: nil,
-                userInfo: [
-                    "message": message,
-                    "type": result.imported > 0 ? "success" : "info"
-                ]
+                userInfo: userInfo
             )
         }
     }
