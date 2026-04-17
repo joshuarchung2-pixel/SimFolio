@@ -646,6 +646,7 @@ struct LibraryProcedureDetailWrapper: View {
     let onFavorite: () -> Void
 
     @EnvironmentObject var router: NavigationRouter
+    @State private var showBulkTagSheet = false
 
     var body: some View {
         ScrollView {
@@ -661,7 +662,8 @@ struct LibraryProcedureDetailWrapper: View {
                     selectedCount: viewModel.selectedAssetIds.count,
                     onDelete: { showDeleteConfirmation = true },
                     onShare: onShare,
-                    onFavorite: onFavorite
+                    onFavorite: onFavorite,
+                    onTag: { showBulkTagSheet = true }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -724,6 +726,22 @@ struct LibraryProcedureDetailWrapper: View {
         } message: {
             Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
         }
+        .sheet(isPresented: $showBulkTagSheet) {
+            BulkTagSheet(
+                selectedAssetIds: viewModel.selectedAssetIds,
+                onApplied: { appliedCount in
+                    viewModel.exitSelectionMode()
+                    NotificationCenter.default.post(
+                        name: .showGlobalToast,
+                        object: nil,
+                        userInfo: [
+                            "message": "Tagged \(appliedCount) photo\(appliedCount == 1 ? "" : "s")",
+                            "type": "success"
+                        ]
+                    )
+                }
+            )
+        }
         .premiumGate(for: .batchOperations, showPaywall: $showBatchPaywall)
     }
 }
@@ -742,6 +760,7 @@ struct LibraryAllPhotosWrapper: View {
     let untaggedCount: Int
 
     @EnvironmentObject var router: NavigationRouter
+    @State private var showBulkTagSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -763,7 +782,8 @@ struct LibraryAllPhotosWrapper: View {
                     selectedCount: viewModel.selectedAssetIds.count,
                     onDelete: { showDeleteConfirmation = true },
                     onShare: onShare,
-                    onFavorite: onFavorite
+                    onFavorite: onFavorite,
+                    onTag: { showBulkTagSheet = true }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -825,6 +845,22 @@ struct LibraryAllPhotosWrapper: View {
             }
         } message: {
             Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
+        }
+        .sheet(isPresented: $showBulkTagSheet) {
+            BulkTagSheet(
+                selectedAssetIds: viewModel.selectedAssetIds,
+                onApplied: { appliedCount in
+                    viewModel.exitSelectionMode()
+                    NotificationCenter.default.post(
+                        name: .showGlobalToast,
+                        object: nil,
+                        userInfo: [
+                            "message": "Tagged \(appliedCount) photo\(appliedCount == 1 ? "" : "s")",
+                            "type": "success"
+                        ]
+                    )
+                }
+            )
         }
         .premiumGate(for: .batchOperations, showPaywall: $showBatchPaywall)
     }
@@ -3636,6 +3672,7 @@ struct SelectionActionBar: View {
     let onDelete: () -> Void
     let onShare: () -> Void
     let onFavorite: () -> Void
+    let onTag: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3651,6 +3688,14 @@ struct SelectionActionBar: View {
                 .padding(.top, AppTheme.Spacing.sm)
 
             HStack(spacing: AppTheme.Spacing.lg) {
+                // Tag button
+                ActionBarButton(
+                    icon: "tag",
+                    label: "Tag",
+                    isDisabled: selectedCount == 0,
+                    action: onTag
+                )
+
                 // Share button
                 ActionBarButton(
                     icon: "square.and.arrow.up",
