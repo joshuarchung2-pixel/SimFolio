@@ -14,7 +14,7 @@ import FirebaseFirestore
 class SocialInteractionService: ObservableObject {
     static let shared = SocialInteractionService()
 
-    private let db = Firestore.firestore()
+    private lazy var db = Firestore.firestore()
 
     private init() {}
 

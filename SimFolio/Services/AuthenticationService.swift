@@ -50,6 +50,11 @@ class AuthenticationService: ObservableObject {
     private var authStateHandle: AuthStateDidChangeListenerHandle?
 
     private init() {
+        // Skip Firebase Auth setup during tests (FirebaseApp not configured)
+        guard !SimFolioApp.isTesting else {
+            authState = .signedOut
+            return
+        }
         // Listen to auth state changes
         authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in

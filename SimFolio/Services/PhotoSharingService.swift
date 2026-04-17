@@ -12,8 +12,8 @@ class PhotoSharingService: ObservableObject {
     @Published var isUploading = false
     @Published var uploadProgress: Double = 0
 
-    private let db = Firestore.firestore()
-    private let storage = Storage.storage()
+    private lazy var db = Firestore.firestore()
+    private lazy var storage = Storage.storage()
 
     /// Local cache of shared asset local identifiers
     private var sharedAssetIds: Set<String> = []

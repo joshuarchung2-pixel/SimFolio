@@ -518,6 +518,24 @@ struct CaptureSetupView: View {
                     ) {
                         captureState.startCapturing()
                     }
+
+                    Button {
+                        router.presentSheet(.importPhotos(
+                            procedure: captureState.selectedProcedure,
+                            stage: captureState.selectedStage,
+                            angle: captureState.selectedAngle,
+                            toothNumber: captureState.selectedToothNumber,
+                            portfolioId: captureState.sourcePortfolioId
+                        ))
+                    } label: {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("Import from Photos")
+                        }
+                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                    .accessibilityIdentifier("capture-import-from-photos")
                 }
                 .padding(AppTheme.Spacing.md)
                 .background(AppTheme.Colors.surface)

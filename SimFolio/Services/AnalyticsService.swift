@@ -38,6 +38,7 @@ enum AnalyticsEvent: String {
     case photoEdited = "photo_edited"
     case photoDeleted = "photo_deleted"
     case photoFavorited = "photo_favorited"
+    case photoImported = "photo_imported"
 
     // Requirement
     case requirementFulfilled = "requirement_fulfilled"
@@ -351,6 +352,39 @@ extension AnalyticsService {
             params["tooth_number"] = tooth
         }
         logEvent(.photoCaptured, parameters: params.isEmpty ? nil : params)
+    }
+
+    /// Log a completed Photos-library import batch
+    static func logPhotoImported(
+        count: Int,
+        duplicatesSkipped: Int,
+        failed: Int,
+        prefilled: Bool = false
+    ) {
+        logEvent(.photoImported, parameters: [
+            "count": count,
+            "duplicates_skipped": duplicatesSkipped,
+            "failed": failed,
+            "prefilled": prefilled
+        ])
+    }
+
+    /// Fired when a bulk-tag apply commits tags to a multi-selection in the Library.
+    static func logBulkTagApplied(photoCount: Int, fieldsChanged: [String]) {
+        logCustomEvent("bulk_tag_applied", parameters: [
+            "photo_count": photoCount,
+            "fields_changed": fieldsChanged.joined(separator: ",")
+        ])
+    }
+
+    /// Fired when the user taps the "Needs Tagging" chip in the Library.
+    static func logUntaggedFilterViewed() {
+        logCustomEvent("untagged_filter_viewed")
+    }
+
+    /// Fired when the user taps the post-import toast to deep-link to the inbox.
+    static func logImportNudgeTapped() {
+        logCustomEvent("import_to_library_nudge_tapped")
     }
 
     /// Log photo tagging

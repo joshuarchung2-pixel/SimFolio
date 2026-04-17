@@ -12,7 +12,7 @@ import UIKit
 // MARK: - Photo Edit Persistence Service
 
 /// Service for persisting photo edit states
-final class PhotoEditPersistenceService {
+final class PhotoEditPersistenceService: EditStatePersisting {
 
     // MARK: - Singleton
 

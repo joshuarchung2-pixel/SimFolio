@@ -49,6 +49,7 @@ struct ContentView: View {
     @State private var showGlobalToast: Bool = false
     @State private var globalToastMessage: String = ""
     @State private var globalToastType: DPToast.ToastType = .info
+    @State private var globalToastTapAction: (() -> Void)?
     @State private var showPostOnboardingPaywall: Bool = false
     @State private var previousTab: MainTab = .home
     @State private var showAppTour: Bool = false
@@ -134,8 +135,10 @@ struct ContentView: View {
                     .padding(.top, AppTheme.Spacing.md)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onTapGesture {
+                        globalToastTapAction?()
                         withAnimation {
                             showGlobalToast = false
+                            globalToastTapAction = nil
                         }
                     }
                     .zIndex(1000)
@@ -157,7 +160,8 @@ struct ContentView: View {
                 case "error": type = .error
                 default: type = .info
                 }
-                showToast(type: type, message: message)
+                let tapAction = userInfo["onTap"] as? () -> Void
+                showToast(type: type, message: message, onTap: tapAction)
             }
         }
     }
@@ -190,6 +194,7 @@ struct ContentView: View {
                 .tabItem {
                     Label("Library", systemImage: router.selectedTab == .library ? "photo.on.rectangle.fill" : "photo.on.rectangle")
                 }
+                .badge(metadataManager.incompleteAssetCount)
                 .tag(MainTab.library)
 
                 if FeatureGateService.socialFeedEnabled {
@@ -363,6 +368,16 @@ struct ContentView: View {
 
         case .signIn:
             SignInView()
+
+        case .importPhotos(let procedure, let stage, let angle, let toothNumber, let portfolioId):
+            ImportFlowView(
+                prefilledProcedure: procedure,
+                prefilledStage: stage,
+                prefilledAngle: angle,
+                prefilledToothNumber: toothNumber,
+                portfolioId: portfolioId
+            )
+            .environmentObject(router)
         }
     }
 
@@ -568,9 +583,10 @@ struct ContentView: View {
 
     // MARK: - Toast Helper
 
-    func showToast(type: DPToast.ToastType, message: String, duration: Double = 3.0) {
+    func showToast(type: DPToast.ToastType, message: String, duration: Double = 3.0, onTap: (() -> Void)? = nil) {
         globalToastType = type
         globalToastMessage = message
+        globalToastTapAction = onTap
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             showGlobalToast = true
@@ -580,6 +596,7 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
             withAnimation(.easeOut(duration: 0.2)) {
                 showGlobalToast = false
+                globalToastTapAction = nil
             }
         }
     }

@@ -13,7 +13,7 @@ import CoreImage.CIFilterBuiltins
 // MARK: - Image Processing Service
 
 /// Service for applying image adjustments and transforms using CoreImage
-final class ImageProcessingService {
+final class ImageProcessingService: ImageProcessing {
 
     // MARK: - Singleton
 

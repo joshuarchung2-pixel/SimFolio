@@ -102,6 +102,14 @@ class LibraryViewModel: ObservableObject {
     ) -> [PhotoRecord] {
         var result = records
 
+        // Filter by "Needs Tagging" chip — applied before other filters so an
+        // untagged inbox view can still be refined by date/portfolio etc.
+        if filter.showUntaggedOnly {
+            result = result.filter { record in
+                metadata.isIncomplete(assetId: record.id.uuidString)
+            }
+        }
+
         // Filter by procedure
         if !filter.procedures.isEmpty {
             result = result.filter { record in
@@ -386,7 +394,8 @@ struct LibraryView: View {
                         showBatchPaywall: $showBatchPaywall,
                         onDelete: handleDeleteSelected,
                         onShare: handleShareSelected,
-                        onFavorite: handleFavoriteSelected
+                        onFavorite: handleFavoriteSelected,
+                        untaggedCount: metadataManager.incompleteAssetCount
                     )
                 }
             }
@@ -637,6 +646,7 @@ struct LibraryProcedureDetailWrapper: View {
     let onFavorite: () -> Void
 
     @EnvironmentObject var router: NavigationRouter
+    @State private var showBulkTagSheet = false
 
     var body: some View {
         ScrollView {
@@ -652,7 +662,8 @@ struct LibraryProcedureDetailWrapper: View {
                     selectedCount: viewModel.selectedAssetIds.count,
                     onDelete: { showDeleteConfirmation = true },
                     onShare: onShare,
-                    onFavorite: onFavorite
+                    onFavorite: onFavorite,
+                    onTag: { showBulkTagSheet = true }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -714,6 +725,22 @@ struct LibraryProcedureDetailWrapper: View {
             }
         } message: {
             Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
+        }
+        .sheet(isPresented: $showBulkTagSheet) {
+            BulkTagSheet(
+                selectedAssetIds: viewModel.selectedAssetIds,
+                onApplied: { appliedCount in
+                    viewModel.exitSelectionMode()
+                    NotificationCenter.default.post(
+                        name: .showGlobalToast,
+                        object: nil,
+                        userInfo: [
+                            "message": "Tagged \(appliedCount) photo\(appliedCount == 1 ? "" : "s")",
+                            "type": "success"
+                        ]
+                    )
+                }
+            )
         }
         .premiumGate(for: .batchOperations, showPaywall: $showBatchPaywall)
     }
@@ -730,14 +757,22 @@ struct LibraryAllPhotosWrapper: View {
     let onDelete: () -> Void
     let onShare: () -> Void
     let onFavorite: () -> Void
+    let untaggedCount: Int
 
     @EnvironmentObject var router: NavigationRouter
+    @State private var showBulkTagSheet = false
 
     var body: some View {
-        ScrollView {
-            AllPhotosGridView(viewModel: viewModel)
+        VStack(spacing: 0) {
+            NeedsTaggingChipBar(
+                showUntaggedOnly: $router.libraryFilter.showUntaggedOnly,
+                untaggedCount: untaggedCount
+            )
+            ScrollView {
+                AllPhotosGridView(viewModel: viewModel)
+            }
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
         .background(AppTheme.Colors.background)
         .navigationTitle("All Photos")
         .navigationBarTitleDisplayMode(.large)
@@ -747,7 +782,8 @@ struct LibraryAllPhotosWrapper: View {
                     selectedCount: viewModel.selectedAssetIds.count,
                     onDelete: { showDeleteConfirmation = true },
                     onShare: onShare,
-                    onFavorite: onFavorite
+                    onFavorite: onFavorite,
+                    onTag: { showBulkTagSheet = true }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -809,6 +845,22 @@ struct LibraryAllPhotosWrapper: View {
             }
         } message: {
             Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
+        }
+        .sheet(isPresented: $showBulkTagSheet) {
+            BulkTagSheet(
+                selectedAssetIds: viewModel.selectedAssetIds,
+                onApplied: { appliedCount in
+                    viewModel.exitSelectionMode()
+                    NotificationCenter.default.post(
+                        name: .showGlobalToast,
+                        object: nil,
+                        userInfo: [
+                            "message": "Tagged \(appliedCount) photo\(appliedCount == 1 ? "" : "s")",
+                            "type": "success"
+                        ]
+                    )
+                }
+            )
         }
         .premiumGate(for: .batchOperations, showPaywall: $showBatchPaywall)
     }
@@ -3283,14 +3335,42 @@ struct AllPhotosGridView: View {
         VStack {
             Spacer()
 
-            if router.libraryFilter.isEmpty {
-                DPEmptyState(
-                    icon: "photo.on.rectangle",
-                    title: "No Photos",
-                    message: "Your captured photos will appear here.",
-                    actionTitle: "Start Capturing"
-                ) {
-                    router.selectedTab = .capture
+            if router.libraryFilter.showUntaggedOnly {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(AppTheme.Colors.success)
+                    Text("All caught up")
+                        .font(AppTheme.Typography.headline)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Tap All to see your library")
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .padding(AppTheme.Spacing.xl)
+            } else if router.libraryFilter.isEmpty {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    DPEmptyState(
+                        icon: "photo.on.rectangle",
+                        title: "No Photos",
+                        message: "Capture your first photo or import from your Photos library.",
+                        actionTitle: "Start Capturing"
+                    ) {
+                        router.selectedTab = .capture
+                    }
+
+                    Button {
+                        router.presentSheet(.importPhotos())
+                    } label: {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("Import from Photos")
+                        }
+                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                    .accessibilityIdentifier("library-import-from-photos")
+                    .padding(.bottom, AppTheme.Spacing.md)
                 }
             } else {
                 DPEmptyState(
@@ -3592,6 +3672,7 @@ struct SelectionActionBar: View {
     let onDelete: () -> Void
     let onShare: () -> Void
     let onFavorite: () -> Void
+    let onTag: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3607,6 +3688,14 @@ struct SelectionActionBar: View {
                 .padding(.top, AppTheme.Spacing.sm)
 
             HStack(spacing: AppTheme.Spacing.lg) {
+                // Tag button
+                ActionBarButton(
+                    icon: "tag",
+                    label: "Tag",
+                    isDisabled: selectedCount == 0,
+                    action: onTag
+                )
+
                 // Share button
                 ActionBarButton(
                     icon: "square.and.arrow.up",

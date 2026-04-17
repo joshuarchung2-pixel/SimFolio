@@ -74,4 +74,14 @@ struct Portfolio: Codable, Identifiable, Hashable {
         guard let days = daysUntilDue else { return false }
         return days >= 0 && days <= 7
     }
+
+    // MARK: - Hashable / Equatable
+
+    static func == (lhs: Portfolio, rhs: Portfolio) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }

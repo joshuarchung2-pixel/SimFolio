@@ -10,7 +10,7 @@ class UserProfileService: ObservableObject {
     @Published var userProfile: FirestoreUserProfile?
     @Published var isLoading = false
 
-    private let db = Firestore.firestore()
+    private lazy var db = Firestore.firestore()
 
     struct FirestoreUserProfile: Codable {
         let userId: String

@@ -60,4 +60,14 @@ struct PortfolioRequirement: Codable, Identifiable, Hashable {
         let angleText = angles.count == 7 ? "All Angles" : angles.joined(separator: ", ")
         return "\(procedure) · \(stageText) · \(angleText)"
     }
+
+    // MARK: - Hashable / Equatable
+
+    static func == (lhs: PortfolioRequirement, rhs: PortfolioRequirement) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }

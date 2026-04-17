@@ -1,544 +1,248 @@
-// MockServices.swift
-// SimFolioTests - Mock Service Classes
-//
-// Provides mock implementations of app services for unit testing.
-// These mocks track method calls and allow controlled test scenarios.
-
-import Foundation
-import Photos
-import SwiftUI
+import UIKit
 @testable import SimFolio
 
 // MARK: - Mock Metadata Manager
 
-class MockMetadataManager: ObservableObject {
-    // MARK: - Published State
+final class MockMetadataManager: MetadataManaging {
+    var portfolios: [Portfolio] = []
+    var procedureConfigs: [ProcedureConfig] = []
+    var stageConfigs: [StageConfig] = []
+    var assetMetadata: [String: PhotoMetadata] = [:]
+    var importedAssetIds: Set<String> = []
 
-    @Published var photoMetadata: [String: PhotoMetadata] = [:]
-    @Published var portfolios: [Portfolio] = []
-    @Published var procedureConfigs: [ProcedureConfig] = []
-    @Published var procedures: [String] = []
-    @Published var toothHistory: [String: [ToothEntry]] = [:]
-
-    // MARK: - Call Tracking
-
-    var saveMetadataCalled = false
-    var savePortfoliosCalled = false
-    var loadProceduresCalled = false
-    var resetToDefaultsCalled = false
-    var lastSavedMetadata: PhotoMetadata?
-    var lastSavedPortfolio: Portfolio?
-
-    // MARK: - Metadata Methods
-
-    func saveMetadata(_ metadata: PhotoMetadata, for assetId: String) {
-        photoMetadata[assetId] = metadata
-        lastSavedMetadata = metadata
-        saveMetadataCalled = true
-    }
-
-    func getMetadata(for assetId: String) -> PhotoMetadata? {
-        photoMetadata[assetId]
-    }
-
-    func deleteMetadata(for assetId: String) {
-        photoMetadata.removeValue(forKey: assetId)
-    }
-
-    func getRating(for assetId: String) -> Int? {
-        photoMetadata[assetId]?.rating
-    }
-
-    func setRating(_ rating: Int?, for assetId: String) {
-        if var metadata = photoMetadata[assetId] {
-            metadata.rating = rating
-            photoMetadata[assetId] = metadata
-        } else {
-            var metadata = PhotoMetadata()
-            metadata.rating = rating
-            photoMetadata[assetId] = metadata
-        }
-    }
-
-    func photoCount(for procedure: String) -> Int {
-        photoMetadata.values.filter { $0.procedure == procedure }.count
-    }
-
-    func getMatchingPhotoCount(procedure: String, stage: String, angle: String) -> Int {
-        photoMetadata.values.filter { metadata in
-            metadata.procedure == procedure &&
-            metadata.stage == stage &&
-            metadata.angle == angle
-        }.count
-    }
-
-    // MARK: - Portfolio Methods
+    var addPortfolioCalls: [Portfolio] = []
+    var updatePortfolioCalls: [Portfolio] = []
+    var deletePortfolioCalls: [String] = []
+    var assignMetadataCalls: [(metadata: PhotoMetadata, assetId: String)] = []
+    var deleteMetadataCalls: [String] = []
+    var setRatingCalls: [(rating: Int?, assetId: String)] = []
+    var markImportedCalls: [String] = []
 
     func addPortfolio(_ portfolio: Portfolio) {
+        addPortfolioCalls.append(portfolio)
         portfolios.append(portfolio)
-        lastSavedPortfolio = portfolio
-        savePortfoliosCalled = true
     }
 
     func updatePortfolio(_ portfolio: Portfolio) {
+        updatePortfolioCalls.append(portfolio)
         if let index = portfolios.firstIndex(where: { $0.id == portfolio.id }) {
             portfolios[index] = portfolio
         }
     }
 
     func deletePortfolio(_ portfolioId: String) {
+        deletePortfolioCalls.append(portfolioId)
         portfolios.removeAll { $0.id == portfolioId }
     }
 
-    func getPortfolio(by portfolioId: String) -> Portfolio? {
-        portfolios.first { $0.id == portfolioId }
+    func getPortfolio(by id: String) -> Portfolio? {
+        portfolios.first { $0.id == id }
+    }
+
+    func assignMetadata(_ metadata: PhotoMetadata, to assetId: String) {
+        assignMetadataCalls.append((metadata, assetId))
+        assetMetadata[assetId] = metadata
+    }
+
+    func getMetadata(for assetId: String) -> PhotoMetadata? {
+        assetMetadata[assetId]
+    }
+
+    func deleteMetadata(for assetId: String) {
+        deleteMetadataCalls.append(assetId)
+        assetMetadata.removeValue(forKey: assetId)
     }
 
     func getPortfolioStats(_ portfolio: Portfolio) -> (fulfilled: Int, total: Int) {
-        var totalRequired = 0
-        var fulfilledCount = 0
-
-        for requirement in portfolio.requirements {
-            let requiredForThis = requirement.totalRequired
-            totalRequired += requiredForThis
-
-            for stage in requirement.stages {
-                for angle in requirement.angles {
-                    let count = requirement.angleCounts[angle] ?? 1
-                    let matchingPhotos = getMatchingPhotoCount(
-                        procedure: requirement.procedure,
-                        stage: stage,
-                        angle: angle
-                    )
-                    fulfilledCount += min(matchingPhotos, count)
-                }
-            }
-        }
-
-        return (fulfilled: fulfilledCount, total: totalRequired)
+        let total = portfolio.requirements.reduce(0) { $0 + $1.totalRequired }
+        return (0, total)
     }
 
     func getPortfolioCompletionPercentage(_ portfolio: Portfolio) -> Double {
         let stats = getPortfolioStats(portfolio)
-        guard stats.total > 0 else { return 0.0 }
+        guard stats.total > 0 else { return 0 }
         return Double(stats.fulfilled) / Double(stats.total)
     }
 
-    // MARK: - Procedure Methods
-
-    func loadProcedures() {
-        loadProceduresCalled = true
-        if procedureConfigs.isEmpty {
-            procedureConfigs = ProcedureConfig.defaultProcedures
-        }
-        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
-    }
-
-    func addProcedure(_ procedure: ProcedureConfig) {
-        var newProcedure = procedure
-        newProcedure.sortOrder = (procedureConfigs.map { $0.sortOrder }.max() ?? -1) + 1
-        procedureConfigs.append(newProcedure)
-        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
-    }
-
-    func updateProcedure(_ procedure: ProcedureConfig) {
-        if let index = procedureConfigs.firstIndex(where: { $0.id == procedure.id }) {
-            procedureConfigs[index] = procedure
-            procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
-        }
-    }
-
-    func deleteProcedure(_ procedureId: String) {
-        procedureConfigs.removeAll { $0.id == procedureId }
-        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
-    }
-
-    func resetToDefaults() {
-        resetToDefaultsCalled = true
-        procedureConfigs = ProcedureConfig.defaultProcedures
-        procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
-    }
-
-    func getEnabledProcedures() -> [ProcedureConfig] {
-        procedureConfigs.filter { $0.isEnabled }.sorted { $0.sortOrder < $1.sortOrder }
+    func getMatchingPhotoCount(procedure: String, stage: String, angle: String) -> Int {
+        assetMetadata.values.filter {
+            $0.procedure == procedure && $0.stage == stage && $0.angle == angle
+        }.count
     }
 
     func getEnabledProcedureNames() -> [String] {
-        getEnabledProcedures().map { $0.name }
+        procedureConfigs.filter { $0.isEnabled }.map { $0.name }
     }
 
-    func procedureColor(for procedureName: String) -> Color {
-        if let config = procedureConfigs.first(where: { $0.name.lowercased() == procedureName.lowercased() }) {
-            return config.color
-        }
-        return .blue
+    func getEnabledStageNames() -> [String] {
+        stageConfigs.map { $0.name }
     }
 
-    // MARK: - Reset
+    func getRating(for assetId: String) -> Int? {
+        assetMetadata[assetId]?.rating
+    }
 
-    func reset() {
-        photoMetadata = [:]
-        portfolios = []
-        procedureConfigs = []
-        procedures = []
-        toothHistory = [:]
-        saveMetadataCalled = false
-        savePortfoliosCalled = false
-        loadProceduresCalled = false
-        resetToDefaultsCalled = false
-        lastSavedMetadata = nil
-        lastSavedPortfolio = nil
+    func setRating(_ rating: Int?, for assetId: String) {
+        setRatingCalls.append((rating, assetId))
+        assetMetadata[assetId]?.rating = rating
+    }
+
+    func photoCount(for procedure: String) -> Int {
+        assetMetadata.values.filter { $0.procedure == procedure }.count
+    }
+
+    func hasImported(assetId: String) -> Bool {
+        importedAssetIds.contains(assetId)
+    }
+
+    func markImported(assetId: String) {
+        markImportedCalls.append(assetId)
+        importedAssetIds.insert(assetId)
+    }
+}
+
+// MARK: - Mock Photo Storage
+
+final class MockPhotoStorage: PhotoStoring {
+    var records: [PhotoRecord] = []
+    var storedImages: [UUID: UIImage] = [:]
+
+    var savePhotoCalls: [UIImage] = []
+    var savePhotoWithDateCalls: [(image: UIImage, createdDate: Date)] = []
+    var deletePhotoCalls: [UUID] = []
+
+    func savePhoto(_ image: UIImage, compressionQuality: CGFloat) -> PhotoRecord {
+        savePhotoCalls.append(image)
+        let record = PhotoRecord(id: UUID(), createdDate: TestData.referenceDate, fileSize: 1024)
+        records.append(record)
+        storedImages[record.id] = image
+        return record
+    }
+
+    func savePhoto(_ image: UIImage, createdDate: Date, compressionQuality: CGFloat) -> PhotoRecord {
+        savePhotoCalls.append(image)
+        savePhotoWithDateCalls.append((image, createdDate))
+        let record = PhotoRecord(id: UUID(), createdDate: createdDate, fileSize: 1024)
+        records.append(record)
+        storedImages[record.id] = image
+        return record
+    }
+
+    func loadImage(id: UUID) -> UIImage? { storedImages[id] }
+    func loadThumbnail(id: UUID) -> UIImage? { storedImages[id] }
+    func loadEditedImage(id: UUID) -> UIImage? { storedImages[id] }
+    func loadEditedThumbnail(id: UUID) -> UIImage? { storedImages[id] }
+
+    func deletePhoto(id: UUID) {
+        deletePhotoCalls.append(id)
+        records.removeAll { $0.id == id }
+        storedImages.removeValue(forKey: id)
+    }
+
+    func deletePhotos(ids: [UUID]) {
+        ids.forEach { deletePhoto(id: $0) }
+    }
+}
+
+// MARK: - Mock Edit State Persistence
+
+final class MockEditStatePersistence: EditStatePersisting {
+    var editStates: [String: EditState] = [:]
+
+    var saveCalls: [(editState: EditState, assetId: String)] = []
+    var deleteCalls: [String] = []
+
+    func saveEditState(_ editState: EditState, for assetId: String) {
+        saveCalls.append((editState, assetId))
+        editStates[assetId] = editState
+    }
+
+    func getEditState(for assetId: String) -> EditState? { editStates[assetId] }
+    func hasEditState(for assetId: String) -> Bool { editStates[assetId] != nil }
+
+    func deleteEditState(for assetId: String) {
+        deleteCalls.append(assetId)
+        editStates.removeValue(forKey: assetId)
+    }
+
+    func getEditSummary(for assetId: String) -> String? {
+        guard let state = editStates[assetId], state.hasChanges else { return nil }
+        return "Edited"
+    }
+}
+
+// MARK: - Mock Image Processing
+
+final class MockImageProcessing: ImageProcessing {
+    var applyEditsCalls = 0
+    var generatePreviewCalls = 0
+
+    func applyEdits(to image: UIImage, editState: EditState) -> UIImage? {
+        applyEditsCalls += 1
+        return image
+    }
+
+    func generatePreview(from image: UIImage, editState: EditState, maxDimension: CGFloat) -> UIImage? {
+        generatePreviewCalls += 1
+        return image
+    }
+
+    func applyAdjustmentsOnly(to image: UIImage, adjustments: ImageAdjustments) -> UIImage? {
+        return image
     }
 }
 
 // MARK: - Mock Navigation Router
 
-class MockNavigationRouter: ObservableObject {
-    // MARK: - Published State
+final class MockNavigationRouter: NavigationRouting {
+    var selectedTab: MainTab = .home
+    var isTabBarVisible: Bool = true
+    var activeSheet: NavigationRouter.SheetType?
+    var captureFlowActive: Bool = false
+    var libraryFilter: LibraryFilter = LibraryFilter()
 
-    @Published var selectedTab: MainTab = .home
-    @Published var isTabBarVisible: Bool = true
-    @Published var showAlert: Bool = false
-    @Published var alertTitle: String = ""
-    @Published var alertMessage: String = ""
-    @Published var captureFlowActive: Bool = false
-    @Published var capturePrefilledProcedure: String?
-    @Published var capturePrefilledStage: String?
-    @Published var capturePrefilledAngle: String?
-    @Published var capturePrefilledToothNumber: Int?
-    @Published var captureFromPortfolioId: String?
-    @Published var libraryFilter: LibraryFilter = LibraryFilter()
-    @Published var selectedPortfolioId: String?
-    @Published var activeSheet: NavigationRouter.SheetType?
-
-    // MARK: - Call Tracking
-
-    var navigateToCaptureCallCount = 0
-    var navigateToPortfolioCallCount = 0
-    var navigateToLibraryCallCount = 0
-    var showAlertCallCount = 0
-    var previousTab: MainTab = .home
-
-    // MARK: - Navigation Methods
+    var navigateToHomeCalls = 0
+    var navigateToCaptureCalls: [(procedure: String?, stage: String?)] = []
+    var navigateToLibraryCalls = 0
+    var navigateToPortfolioCalls: [String] = []
+    var presentSheetCalls: [NavigationRouter.SheetType] = []
 
     func navigateToHome() {
-        previousTab = selectedTab
+        navigateToHomeCalls += 1
         selectedTab = .home
     }
 
-    func navigateToCapture(
-        procedure: String? = nil,
-        stage: String? = nil,
-        angle: String? = nil,
-        toothNumber: Int? = nil,
-        forPortfolioId: String? = nil
-    ) {
-        capturePrefilledProcedure = procedure
-        capturePrefilledStage = stage
-        capturePrefilledAngle = angle
-        capturePrefilledToothNumber = toothNumber
-        captureFromPortfolioId = forPortfolioId
-        previousTab = selectedTab
+    func navigateToCapture(procedure: String?, stage: String?, angle: String?, toothNumber: Int?, forPortfolioId: String?) {
+        navigateToCaptureCalls.append((procedure, stage))
         selectedTab = .capture
         captureFlowActive = true
-        navigateToCaptureCallCount += 1
     }
 
-    func navigateToLibrary(filter: LibraryFilter? = nil) {
-        if let filter = filter {
-            libraryFilter = filter
-        }
-        previousTab = selectedTab
+    func navigateToLibrary(filter: LibraryFilter?) {
+        navigateToLibraryCalls += 1
+        if let filter = filter { libraryFilter = filter }
         selectedTab = .library
-        navigateToLibraryCallCount += 1
     }
 
     func navigateToPortfolio(id: String) {
-        selectedPortfolioId = id
-        activeSheet = .portfolioDetail(id: id)
-        navigateToPortfolioCallCount += 1
-    }
-
-    func navigateToPhotoDetail(id: String) {
-        activeSheet = .photoDetail(id: id)
-    }
-
-    func switchTab(to tab: MainTab) {
-        previousTab = selectedTab
-        selectedTab = tab
-    }
-
-    func goBack() {
-        selectedTab = previousTab
-    }
-
-    func resetCaptureState() {
-        captureFlowActive = false
-        capturePrefilledProcedure = nil
-        capturePrefilledStage = nil
-        capturePrefilledAngle = nil
-        capturePrefilledToothNumber = nil
-        captureFromPortfolioId = nil
-    }
-
-    func clearCapturePresets() {
-        resetCaptureState()
+        navigateToPortfolioCalls.append(id)
     }
 
     func presentSheet(_ sheet: NavigationRouter.SheetType) {
+        presentSheetCalls.append(sheet)
         activeSheet = sheet
     }
 
-    func dismissSheet() {
-        activeSheet = nil
-    }
-
-    func showTabBar() {
-        isTabBarVisible = true
-    }
-
-    func hideTabBar() {
-        isTabBarVisible = false
-    }
-
-    func setTabBarVisible(_ visible: Bool) {
-        isTabBarVisible = visible
-    }
-
-    func showAlertDialog(
-        title: String,
-        message: String,
-        primaryAction: (() -> Void)? = nil,
-        secondaryAction: (() -> Void)? = nil
-    ) {
-        alertTitle = title
-        alertMessage = message
-        showAlert = true
-        showAlertCallCount += 1
-    }
-
-    func dismissAlert() {
-        showAlert = false
-        alertTitle = ""
-        alertMessage = ""
-    }
+    func dismissSheet() { activeSheet = nil }
+    func showTabBar() { isTabBarVisible = true }
+    func hideTabBar() { isTabBarVisible = false }
+    func resetCaptureState() { captureFlowActive = false }
 
     func resetAll() {
         selectedTab = .home
         resetCaptureState()
         libraryFilter.reset()
-        selectedPortfolioId = nil
         activeSheet = nil
         isTabBarVisible = true
-        dismissAlert()
-    }
-
-    // MARK: - Reset for Testing
-
-    func reset() {
-        selectedTab = .home
-        previousTab = .home
-        isTabBarVisible = true
-        showAlert = false
-        alertTitle = ""
-        alertMessage = ""
-        captureFlowActive = false
-        capturePrefilledProcedure = nil
-        capturePrefilledStage = nil
-        capturePrefilledAngle = nil
-        capturePrefilledToothNumber = nil
-        captureFromPortfolioId = nil
-        libraryFilter = LibraryFilter()
-        selectedPortfolioId = nil
-        activeSheet = nil
-        navigateToCaptureCallCount = 0
-        navigateToPortfolioCallCount = 0
-        navigateToLibraryCallCount = 0
-        showAlertCallCount = 0
-    }
-}
-
-// MARK: - Mock Camera Service
-
-class MockCameraService: ObservableObject {
-    // MARK: - Published State
-
-    @Published var isSessionRunning = false
-    @Published var capturedImage: UIImage?
-    @Published var flashMode: Int = 0 // 0 = auto, 1 = on, 2 = off
-    @Published var isAuthorized = true
-    @Published var error: Error?
-
-    // MARK: - Call Tracking
-
-    var startSessionCallCount = 0
-    var stopSessionCallCount = 0
-    var capturePhotoCallCount = 0
-    var switchCameraCallCount = 0
-    var setFlashModeCallCount = 0
-
-    // MARK: - Methods
-
-    func startSession() {
-        if isAuthorized {
-            isSessionRunning = true
-        }
-        startSessionCallCount += 1
-    }
-
-    func stopSession() {
-        isSessionRunning = false
-        stopSessionCallCount += 1
-    }
-
-    func capturePhoto() -> UIImage? {
-        capturePhotoCallCount += 1
-        capturedImage = TestUtilities.generateTestImage()
-        return capturedImage
-    }
-
-    func switchCamera() {
-        switchCameraCallCount += 1
-    }
-
-    func setFlashMode(_ mode: Int) {
-        flashMode = mode
-        setFlashModeCallCount += 1
-    }
-
-    func requestAuthorization() async -> Bool {
-        return isAuthorized
-    }
-
-    // MARK: - Reset
-
-    func reset() {
-        isSessionRunning = false
-        capturedImage = nil
-        flashMode = 0
-        isAuthorized = true
-        error = nil
-        startSessionCallCount = 0
-        stopSessionCallCount = 0
-        capturePhotoCallCount = 0
-        switchCameraCallCount = 0
-        setFlashModeCallCount = 0
-    }
-}
-
-// MARK: - Mock Photo Library Manager
-
-class MockPhotoLibraryManager: ObservableObject {
-    // MARK: - Published State
-
-    @Published var authorizationStatus: PHAuthorizationStatus = .authorized
-    @Published var assetCount: Int = 0
-
-    // MARK: - Call Tracking
-
-    var fetchAssetsCallCount = 0
-    var requestAuthorizationCallCount = 0
-    var saveImageCallCount = 0
-    var deleteAssetsCallCount = 0
-
-    // MARK: - Mock Data
-
-    var mockAssetIds: [String] = []
-
-    // MARK: - Methods
-
-    func requestAuthorization() async -> PHAuthorizationStatus {
-        requestAuthorizationCallCount += 1
-        return authorizationStatus
-    }
-
-    func fetchAssets() async -> [String] {
-        fetchAssetsCallCount += 1
-        return mockAssetIds
-    }
-
-    func saveImage(_ image: UIImage) async -> String? {
-        saveImageCallCount += 1
-        let newId = UUID().uuidString
-        mockAssetIds.append(newId)
-        assetCount = mockAssetIds.count
-        return newId
-    }
-
-    func deleteAssets(_ assetIds: [String]) async -> Bool {
-        deleteAssetsCallCount += 1
-        mockAssetIds.removeAll { assetIds.contains($0) }
-        assetCount = mockAssetIds.count
-        return true
-    }
-
-    // MARK: - Reset
-
-    func reset() {
-        authorizationStatus = .authorized
-        assetCount = 0
-        fetchAssetsCallCount = 0
-        requestAuthorizationCallCount = 0
-        saveImageCallCount = 0
-        deleteAssetsCallCount = 0
-        mockAssetIds = []
-    }
-
-    // MARK: - Test Helpers
-
-    func addMockAssets(count: Int) {
-        for _ in 0..<count {
-            mockAssetIds.append(UUID().uuidString)
-        }
-        assetCount = mockAssetIds.count
-    }
-}
-
-// MARK: - Mock Notification Manager
-
-class MockNotificationManager: ObservableObject {
-    // MARK: - Published State
-
-    @Published var isAuthorized = false
-    @Published var pendingNotifications: [String] = []
-
-    // MARK: - Call Tracking
-
-    var requestAuthorizationCallCount = 0
-    var scheduleNotificationCallCount = 0
-    var cancelNotificationCallCount = 0
-    var cancelAllNotificationsCallCount = 0
-
-    // MARK: - Methods
-
-    func requestAuthorization() async -> Bool {
-        requestAuthorizationCallCount += 1
-        return isAuthorized
-    }
-
-    func scheduleNotification(identifier: String, title: String, body: String, date: Date) {
-        scheduleNotificationCallCount += 1
-        pendingNotifications.append(identifier)
-    }
-
-    func cancelNotification(identifier: String) {
-        cancelNotificationCallCount += 1
-        pendingNotifications.removeAll { $0 == identifier }
-    }
-
-    func cancelAllNotifications() {
-        cancelAllNotificationsCallCount += 1
-        pendingNotifications.removeAll()
-    }
-
-    // MARK: - Reset
-
-    func reset() {
-        isAuthorized = false
-        pendingNotifications = []
-        requestAuthorizationCallCount = 0
-        scheduleNotificationCallCount = 0
-        cancelNotificationCallCount = 0
-        cancelAllNotificationsCallCount = 0
     }
 }
