@@ -1,15 +1,15 @@
 // PortfolioDetailView.swift
 // SimFolio - Portfolio Detail View with Tabs
 //
-// This view displays the full details of a single portfolio with three tabs:
-// - Overview: Progress stats, quick actions, and requirements summary
-// - Checklist: Detailed checklist of all requirements (Prompt 5.3)
-// - Photos: Grid of portfolio photos (Prompt 5.4)
+// This view displays the full details of a single portfolio with two tabs:
+// - Overview: Progress stats, quick actions, and expandable requirement checklist
+// - Photos: Grid of portfolio photos
 //
 // Features:
 // - Tab-based navigation with swipe support
 // - Large progress ring with statistics
 // - Quick action buttons for common tasks
+// - Expandable requirement cards inline in Overview with Expand/Collapse All toggle
 // - Menu with edit, export, capture, and delete options
 // - Smart capture navigation with pre-filled metadata
 
@@ -17,10 +17,9 @@ import SwiftUI
 
 // MARK: - PortfolioTab
 
-/// Enum representing the three tabs in the portfolio detail view
+/// Enum representing the tabs in the portfolio detail view
 enum PortfolioTab: String, CaseIterable, Identifiable {
     case overview = "Overview"
-    case checklist = "Checklist"
     case photos = "Photos"
 
     var id: String { rawValue }
@@ -28,7 +27,6 @@ enum PortfolioTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: return "chart.pie"
-        case .checklist: return "checklist"
         case .photos: return "photo.on.rectangle"
         }
     }
@@ -111,6 +109,7 @@ struct PortfolioDetailView: View {
                         progress: progress,
                         dueStatus: dueStatus,
                         onCapturePressed: navigateToCapture,
+                        onRequirementCapturePressed: navigateToCapture(procedure:stage:angle:),
                         onExportPressed: {
                             requirePremium(.portfolioExport, showPaywall: $showPremiumPaywall) {
                                 showExportSheet = true
@@ -118,9 +117,6 @@ struct PortfolioDetailView: View {
                         }
                     )
                     .tag(PortfolioTab.overview)
-
-                    PortfolioChecklistTab(portfolio: portfolio)
-                        .tag(PortfolioTab.checklist)
 
                     PortfolioPhotosTab(portfolio: portfolio)
                         .tag(PortfolioTab.photos)
@@ -246,6 +242,18 @@ struct PortfolioDetailView: View {
         }
     }
 
+    /// Navigate to capture flow pre-filled with the given procedure/stage/angle
+    func navigateToCapture(procedure: String, stage: String, angle: String) {
+        dismiss()
+        router.navigateToCapture(
+            procedure: procedure,
+            stage: stage,
+            angle: angle,
+            toothNumber: nil,
+            forPortfolioId: portfolio.id
+        )
+    }
+
     /// Find the first incomplete requirement in the portfolio
     func findFirstIncompleteRequirement() -> (procedure: String, stage: String?, angle: String?)? {
         for requirement in portfolio.requirements {
@@ -275,19 +283,46 @@ struct PortfolioDetailView: View {
 
 // MARK: - PortfolioOverviewTab
 
-/// Overview tab showing progress, quick actions, and requirements summary
+/// Overview tab showing progress, quick actions, and expandable requirement checklist
 struct PortfolioOverviewTab: View {
     let portfolio: Portfolio
     let stats: (fulfilled: Int, total: Int)
     let progress: Double
     let dueStatus: (text: String, color: Color, icon: String)
     let onCapturePressed: () -> Void
+    let onRequirementCapturePressed: (String, String, String) -> Void
     let onExportPressed: () -> Void
 
     @ObservedObject var metadataManager = MetadataManager.shared
 
+    @State private var expandedRequirements: Set<String> = []
+
     var isComplete: Bool {
         stats.total > 0 && stats.fulfilled >= stats.total
+    }
+
+    var allExpanded: Bool {
+        expandedRequirements.count == portfolio.requirements.count && !portfolio.requirements.isEmpty
+    }
+
+    func toggleExpansion(for requirementId: String) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            if expandedRequirements.contains(requirementId) {
+                expandedRequirements.remove(requirementId)
+            } else {
+                expandedRequirements.insert(requirementId)
+            }
+        }
+    }
+
+    func toggleAllExpansion() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            if expandedRequirements.count == portfolio.requirements.count {
+                expandedRequirements.removeAll()
+            } else {
+                expandedRequirements = Set(portfolio.requirements.map { $0.id })
+            }
+        }
     }
 
     var body: some View {
@@ -421,13 +456,25 @@ struct PortfolioOverviewTab: View {
 
     // MARK: - Requirements Summary
 
-    /// Section showing all requirements with progress
+    /// Section showing all requirements as expandable checklist cards
     var requirementsSummarySection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("Requirements")
-                .font(AppTheme.Typography.headline)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, AppTheme.Spacing.md)
+            HStack {
+                Text("Requirements")
+                    .font(AppTheme.Typography.headline)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Spacer()
+
+                if !portfolio.requirements.isEmpty {
+                    Button(action: toggleAllExpansion) {
+                        Text(allExpanded ? "Collapse All" : "Expand All")
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
 
             if portfolio.requirements.isEmpty {
                 DPCard {
@@ -444,9 +491,15 @@ struct PortfolioOverviewTab: View {
             } else {
                 VStack(spacing: AppTheme.Spacing.sm) {
                     ForEach(portfolio.requirements) { requirement in
-                        RequirementSummaryRow(
+                        RequirementChecklistCard(
                             requirement: requirement,
-                            metadataManager: metadataManager
+                            isExpanded: expandedRequirements.contains(requirement.id),
+                            onToggleExpand: {
+                                toggleExpansion(for: requirement.id)
+                            },
+                            onCapturePressed: { stage, angle in
+                                onRequirementCapturePressed(requirement.procedure, stage, angle)
+                            }
                         )
                     }
                 }
@@ -514,72 +567,9 @@ struct QuickActionButton: View {
     }
 }
 
-// MARK: - RequirementSummaryRow
-
-/// Row showing a single requirement with progress indicator
-struct RequirementSummaryRow: View {
-    let requirement: PortfolioRequirement
-    @ObservedObject var metadataManager: MetadataManager
-
-    /// Calculate fulfilled and total counts for this requirement
-    var stats: (fulfilled: Int, total: Int) {
-        var fulfilled = 0
-        var total = 0
-
-        for stage in requirement.stages {
-            for angle in requirement.angles {
-                let count = metadataManager.getMatchingPhotoCount(
-                    procedure: requirement.procedure,
-                    stage: stage,
-                    angle: angle
-                )
-                let needed = requirement.angleCounts[angle] ?? 1
-                fulfilled += min(count, needed)
-                total += needed
-            }
-        }
-
-        return (fulfilled, total)
-    }
-
-    var progress: Double {
-        guard stats.total > 0 else { return 0 }
-        return Double(stats.fulfilled) / Double(stats.total)
-    }
-
-    var isComplete: Bool {
-        stats.fulfilled >= stats.total
-    }
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            // Procedure color indicator
-            Circle()
-                .fill(AppTheme.procedureColor(for: requirement.procedure))
-                .frame(width: 12, height: 12)
-
-            // Procedure name
-            Text(requirement.procedure)
-                .font(AppTheme.Typography.subheadline)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-
-            Spacer()
-
-            // Fraction text
-            Text("\(stats.fulfilled)/\(stats.total)")
-                .font(AppTheme.Typography.caption)
-                .foregroundStyle(isComplete ? AppTheme.Colors.success : AppTheme.Colors.textSecondary)
-                .frame(width: 40, alignment: .trailing)
-        }
-        .padding(AppTheme.Spacing.md)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(AppTheme.CornerRadius.medium)
-    }
-}
-
 // MARK: - Notes
 
-// NOTE: PortfolioChecklistTab is now implemented in PortfolioChecklistTab.swift
+// NOTE: RequirementChecklistCard and related components live in PortfolioChecklistTab.swift
 // NOTE: PortfolioPhotosTab is now implemented in PortfolioPhotosTab.swift
 // NOTE: PortfolioExportSheet is now implemented in PortfolioExportSheet.swift
 // NOTE: EditPortfolioSheet is now implemented in CreatePortfolioSheet.swift
