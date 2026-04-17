@@ -49,12 +49,14 @@ struct ImportFlowView: View {
                 case .review:
                     ImportReviewView(
                         importState: importState,
+                        isPrefilledFromPortfolio: prefilledProcedure != nil,
                         onCancel: { dismissFlow() },
                         onStartImport: { runImport() }
                     )
                 case .importing:
                     ImportReviewView(
                         importState: importState,
+                        isPrefilledFromPortfolio: prefilledProcedure != nil,
                         onCancel: { },
                         onStartImport: { }
                     )

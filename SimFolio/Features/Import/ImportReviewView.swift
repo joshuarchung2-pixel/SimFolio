@@ -12,6 +12,11 @@ struct ImportReviewView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @EnvironmentObject var router: NavigationRouter
 
+    /// Whether the import was launched from a portfolio requirement's "Add Photos"
+    /// CTA. When true, keep the existing tag summary + editor; when false, import is
+    /// tagless (the Library's Needs Tagging flow handles tagging later).
+    var isPrefilledFromPortfolio: Bool = false
+
     var onCancel: () -> Void
     var onStartImport: () -> Void
 
@@ -31,7 +36,9 @@ struct ImportReviewView: View {
 
             VStack(spacing: 0) {
                 header
-                tagSummaryBar
+                if isPrefilledFromPortfolio {
+                    tagSummaryBar
+                }
                 ScrollView {
                     photoGrid
                         .padding(AppTheme.Spacing.md)
@@ -41,8 +48,12 @@ struct ImportReviewView: View {
             }
         }
         .sheet(isPresented: $showTagEditor) {
-            ImportTagEditorSheet(importState: importState)
-                .presentationDetents([.medium])
+            if isPrefilledFromPortfolio {
+                ImportTagEditorSheet(importState: importState)
+                    .presentationDetents([.medium])
+            } else {
+                EmptyView()
+            }
         }
     }
 
