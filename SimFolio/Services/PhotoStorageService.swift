@@ -56,6 +56,13 @@ class PhotoStorageService: ObservableObject, PhotoStoring {
     /// Save an image to app storage and generate a thumbnail. Returns the new PhotoRecord.
     @discardableResult
     func savePhoto(_ image: UIImage, compressionQuality: CGFloat = 0.85) -> PhotoRecord {
+        savePhoto(image, createdDate: Date(), compressionQuality: compressionQuality)
+    }
+
+    /// Save an image with an explicit createdDate (used when importing existing photos whose
+    /// original capture date must be preserved — e.g. from PHAsset.creationDate).
+    @discardableResult
+    func savePhoto(_ image: UIImage, createdDate: Date, compressionQuality: CGFloat = 0.85) -> PhotoRecord {
         let id = UUID()
 
         let data = image.jpegData(compressionQuality: compressionQuality) ?? Data()
@@ -67,14 +74,19 @@ class PhotoStorageService: ObservableObject, PhotoStoring {
 
         let record = PhotoRecord(
             id: id,
-            createdDate: Date(),
+            createdDate: createdDate,
             fileSize: Int64(data.count)
         )
 
         records.insert(record, at: 0)
+        sortRecordsByCreatedDate()
         saveRecords()
 
         return record
+    }
+
+    private func sortRecordsByCreatedDate() {
+        records.sort { $0.createdDate > $1.createdDate }
     }
 
     // MARK: - Load

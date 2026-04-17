@@ -13,6 +13,15 @@ struct HomeView: View {
     @ObservedObject var metadataManager = MetadataManager.shared
     @ObservedObject var photoStorage = PhotoStorageService.shared
     @State private var showingCreatePortfolio = false
+    @State private var dismissedUntaggedCardThisSession = false
+
+    // MARK: - Untagged Card
+
+    private var shouldShowUntaggedCard: Bool {
+        !dismissedUntaggedCardThisSession &&
+        !UntaggedCardDismissal.isSuppressed &&
+        metadataManager.incompleteAssetCount > 0
+    }
 
     // MARK: - Greeting
 
@@ -65,6 +74,28 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                 // 1. Header
                 headerSection
+
+                // 1b. Untagged photos prompt (shown when untagged imports exist)
+                if shouldShowUntaggedCard {
+                    UntaggedPhotosCard(
+                        count: metadataManager.incompleteAssetCount,
+                        onTagNow: {
+                            AnalyticsService.logImportNudgeTapped()
+                            var filter = LibraryFilter()
+                            filter.showUntaggedOnly = true
+                            router.navigateToLibrary(filter: filter)
+                        },
+                        onDismiss: {
+                            UntaggedCardDismissal.dismiss()
+                            withAnimation {
+                                dismissedUntaggedCardThisSession = true
+                            }
+                        }
+                    )
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                    .padding(.bottom, AppTheme.Spacing.sm)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 // 2. Stats Row
                 statsRowSection
@@ -199,13 +230,20 @@ struct HomeView: View {
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("Capture your first dental procedure\nto begin tracking progress")
+            Text("Capture your first dental procedure\nor import existing photos")
                 .font(AppTheme.Typography.subheadline)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
 
-            DPButton("Take Photo", icon: "camera") {
-                router.navigateToCapture()
+            HStack(spacing: AppTheme.Spacing.sm) {
+                DPButton("Take Photo", icon: "camera") {
+                    router.navigateToCapture()
+                }
+
+                DPButton("Import", icon: "photo.on.rectangle.angled", style: .secondary) {
+                    router.presentSheet(.importPhotos())
+                }
+                .accessibilityIdentifier("home-import-from-photos")
             }
         }
         .frame(maxWidth: .infinity)

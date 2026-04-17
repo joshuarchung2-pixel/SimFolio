@@ -63,6 +63,10 @@ struct SimFolioApp: App {
 
         // Initialize theme-aware UIKit appearance
         ThemeManager.shared.updateUIKitAppearance()
+
+        // Decrement the "Untagged photos" card dismissal counter once per launch so
+        // the card re-emerges after the user has skipped it for two sessions.
+        UntaggedCardDismissal.tickDownOnLaunch()
     }
 
     // MARK: - Testing Support
@@ -101,6 +105,33 @@ struct SimFolioApp: App {
         // Add sample data for testing with data
         if arguments.contains("--with-sample-data") {
             addSampleDataForTesting()
+        }
+
+        // Inject deterministic canned candidates for the Import flow.
+        // Lets ImportFlowUITests exercise select → review → import without triggering
+        // the real PhotosPicker (which can't be driven from a UI test harness).
+        if arguments.contains("--mock-photos-picker") {
+            ImportFlowPickerOverride.mockCandidates = makeMockImportCandidates()
+        }
+    }
+
+    private func makeMockImportCandidates() -> [ImportCandidate] {
+        let size = CGSize(width: 200, height: 200)
+        let colors: [UIColor] = [.systemRed, .systemBlue, .systemGreen]
+
+        return colors.enumerated().map { index, color in
+            let renderer = UIGraphicsImageRenderer(size: size)
+            let image = renderer.image { context in
+                color.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+            }
+            return ImportCandidate(
+                pickerItemId: "mock-\(index)",
+                image: image,
+                pHAssetId: "mock-asset-\(index)",
+                originalCapturedDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index * 86_400)),
+                loadError: nil
+            )
         }
     }
 

@@ -8,6 +8,7 @@ final class MockMetadataManager: MetadataManaging {
     var procedureConfigs: [ProcedureConfig] = []
     var stageConfigs: [StageConfig] = []
     var assetMetadata: [String: PhotoMetadata] = [:]
+    var importedAssetIds: Set<String> = []
 
     var addPortfolioCalls: [Portfolio] = []
     var updatePortfolioCalls: [Portfolio] = []
@@ -15,6 +16,7 @@ final class MockMetadataManager: MetadataManaging {
     var assignMetadataCalls: [(metadata: PhotoMetadata, assetId: String)] = []
     var deleteMetadataCalls: [String] = []
     var setRatingCalls: [(rating: Int?, assetId: String)] = []
+    var markImportedCalls: [String] = []
 
     func addPortfolio(_ portfolio: Portfolio) {
         addPortfolioCalls.append(portfolio)
@@ -88,6 +90,15 @@ final class MockMetadataManager: MetadataManaging {
     func photoCount(for procedure: String) -> Int {
         assetMetadata.values.filter { $0.procedure == procedure }.count
     }
+
+    func hasImported(assetId: String) -> Bool {
+        importedAssetIds.contains(assetId)
+    }
+
+    func markImported(assetId: String) {
+        markImportedCalls.append(assetId)
+        importedAssetIds.insert(assetId)
+    }
 }
 
 // MARK: - Mock Photo Storage
@@ -97,11 +108,21 @@ final class MockPhotoStorage: PhotoStoring {
     var storedImages: [UUID: UIImage] = [:]
 
     var savePhotoCalls: [UIImage] = []
+    var savePhotoWithDateCalls: [(image: UIImage, createdDate: Date)] = []
     var deletePhotoCalls: [UUID] = []
 
     func savePhoto(_ image: UIImage, compressionQuality: CGFloat) -> PhotoRecord {
         savePhotoCalls.append(image)
         let record = PhotoRecord(id: UUID(), createdDate: TestData.referenceDate, fileSize: 1024)
+        records.append(record)
+        storedImages[record.id] = image
+        return record
+    }
+
+    func savePhoto(_ image: UIImage, createdDate: Date, compressionQuality: CGFloat) -> PhotoRecord {
+        savePhotoCalls.append(image)
+        savePhotoWithDateCalls.append((image, createdDate))
+        let record = PhotoRecord(id: UUID(), createdDate: createdDate, fileSize: 1024)
         records.append(record)
         storedImages[record.id] = image
         return record

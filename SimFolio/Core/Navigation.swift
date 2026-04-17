@@ -198,6 +198,10 @@ struct LibraryFilter: Equatable {
     /// Filter to specific portfolio
     var portfolioId: String?
 
+    /// Restrict the grid to photos with nil procedure/stage/angle (the "Needs Tagging" chip).
+    /// Treated as a separate surface from the filter sheet; isEmpty/activeFilterCount ignore it.
+    var showUntaggedOnly: Bool = false
+
     /// Date range options
     enum DateRange: Equatable {
         case lastWeek
@@ -273,6 +277,7 @@ struct LibraryFilter: Equatable {
         favoritesOnly = false
         dateRange = nil
         portfolioId = nil
+        showUntaggedOnly = false
     }
 }
 
@@ -350,6 +355,7 @@ class NavigationRouter: ObservableObject, NavigationRouting {
         case shareSheet(photoIds: [String])
         case notificationSettings
         case signIn
+        case importPhotos(procedure: String? = nil, stage: String? = nil, angle: String? = nil, toothNumber: Int? = nil, portfolioId: String? = nil)
 
         var id: String {
             switch self {
@@ -360,6 +366,7 @@ class NavigationRouter: ObservableObject, NavigationRouting {
             case .shareSheet(let ids): return "shareSheet-\(ids.joined())"
             case .notificationSettings: return "notificationSettings"
             case .signIn: return "signIn"
+            case .importPhotos: return "importPhotos"
             }
         }
     }
