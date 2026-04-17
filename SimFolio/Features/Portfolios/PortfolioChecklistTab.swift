@@ -1,19 +1,9 @@
 // PortfolioChecklistTab.swift
 // SimFolio - Requirement Checklist Components
 //
-// This file hosts the reusable expandable requirement card and its child components.
-// They are driven by the portfolio Overview tab (see `PortfolioDetailView.swift`), which
-// owns the expansion state and capture navigation.
-//
-// Components:
-// - RequirementChecklistCard: Expandable card with progress indicator
-// - StageChecklistSection: Stage header with its angle rows
-// - AngleChecklistRow: Angle row with status icon, thumbnails, and capture button
-// - ThumbnailStack: Overlapping thumbnail preview
-// - AsyncThumbnailView: Lazily loaded thumbnail
-//
-// Filename retained to avoid `project.pbxproj` churn — there is no longer a standalone
-// checklist tab.
+// Reusable expandable requirement card and its child components. Driven by the
+// portfolio Overview tab (see `PortfolioDetailView.swift`), which owns expansion
+// state and capture navigation.
 
 import SwiftUI
 

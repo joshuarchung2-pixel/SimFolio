@@ -109,9 +109,7 @@ struct PortfolioDetailView: View {
                         progress: progress,
                         dueStatus: dueStatus,
                         onCapturePressed: navigateToCapture,
-                        onRequirementCapturePressed: { requirement, stage, angle in
-                            navigateToCapture(procedure: requirement.procedure, stage: stage, angle: angle)
-                        },
+                        onRequirementCapturePressed: navigateToCapture(procedure:stage:angle:),
                         onExportPressed: {
                             requirePremium(.portfolioExport, showPaywall: $showPremiumPaywall) {
                                 showExportSheet = true
@@ -292,7 +290,7 @@ struct PortfolioOverviewTab: View {
     let progress: Double
     let dueStatus: (text: String, color: Color, icon: String)
     let onCapturePressed: () -> Void
-    let onRequirementCapturePressed: (PortfolioRequirement, String, String) -> Void
+    let onRequirementCapturePressed: (String, String, String) -> Void
     let onExportPressed: () -> Void
 
     @ObservedObject var metadataManager = MetadataManager.shared
@@ -500,7 +498,7 @@ struct PortfolioOverviewTab: View {
                                 toggleExpansion(for: requirement.id)
                             },
                             onCapturePressed: { stage, angle in
-                                onRequirementCapturePressed(requirement, stage, angle)
+                                onRequirementCapturePressed(requirement.procedure, stage, angle)
                             }
                         )
                     }
