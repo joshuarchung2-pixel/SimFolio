@@ -102,6 +102,14 @@ class LibraryViewModel: ObservableObject {
     ) -> [PhotoRecord] {
         var result = records
 
+        // Filter by "Needs Tagging" chip — applied before other filters so an
+        // untagged inbox view can still be refined by date/portfolio etc.
+        if filter.showUntaggedOnly {
+            result = result.filter { record in
+                metadata.isIncomplete(assetId: record.id.uuidString)
+            }
+        }
+
         // Filter by procedure
         if !filter.procedures.isEmpty {
             result = result.filter { record in
@@ -386,7 +394,8 @@ struct LibraryView: View {
                         showBatchPaywall: $showBatchPaywall,
                         onDelete: handleDeleteSelected,
                         onShare: handleShareSelected,
-                        onFavorite: handleFavoriteSelected
+                        onFavorite: handleFavoriteSelected,
+                        untaggedCount: metadataManager.incompleteAssetCount
                     )
                 }
             }
@@ -730,14 +739,21 @@ struct LibraryAllPhotosWrapper: View {
     let onDelete: () -> Void
     let onShare: () -> Void
     let onFavorite: () -> Void
+    let untaggedCount: Int
 
     @EnvironmentObject var router: NavigationRouter
 
     var body: some View {
-        ScrollView {
-            AllPhotosGridView(viewModel: viewModel)
+        VStack(spacing: 0) {
+            NeedsTaggingChipBar(
+                showUntaggedOnly: $router.libraryFilter.showUntaggedOnly,
+                untaggedCount: untaggedCount
+            )
+            ScrollView {
+                AllPhotosGridView(viewModel: viewModel)
+            }
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
         .background(AppTheme.Colors.background)
         .navigationTitle("All Photos")
         .navigationBarTitleDisplayMode(.large)
@@ -3283,7 +3299,20 @@ struct AllPhotosGridView: View {
         VStack {
             Spacer()
 
-            if router.libraryFilter.isEmpty {
+            if router.libraryFilter.showUntaggedOnly {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(AppTheme.Colors.success)
+                    Text("All caught up")
+                        .font(AppTheme.Typography.headline)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Tap All to see your library")
+                        .font(AppTheme.Typography.subheadline)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .padding(AppTheme.Spacing.xl)
+            } else if router.libraryFilter.isEmpty {
                 VStack(spacing: AppTheme.Spacing.sm) {
                     DPEmptyState(
                         icon: "photo.on.rectangle",
