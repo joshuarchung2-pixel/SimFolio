@@ -89,6 +89,10 @@ class MetadataManager: ObservableObject, MetadataManaging {
     /// Tooth history by procedure type
     @Published var toothHistory: [String: [ToothEntry]] = [:]
 
+    /// Set of PHAsset localIdentifiers that have already been imported into the app.
+    /// Used to dedupe repeat imports of the same system photo.
+    @Published private(set) var importedAssetIds: Set<String> = []
+
     // MARK: - Constants
 
     /// Base procedure types that cannot be deleted (legacy)
@@ -128,6 +132,9 @@ class MetadataManager: ObservableObject, MetadataManaging {
 
         // Load tooth history
         loadToothHistory()
+
+        // Load imported asset identifiers (for dedupe of PhotosPicker imports)
+        loadImportedAssetIds()
 
         // Update legacy procedures array for backward compatibility
         procedures = procedureConfigs.filter { $0.isEnabled }.map { $0.name }
@@ -305,6 +312,34 @@ class MetadataManager: ObservableObject, MetadataManaging {
                 await NotificationManager.shared.rescheduleAllReminders()
             }
         }
+    }
+
+    // MARK: - Imported Asset Tracking
+
+    private static let importedAssetIdsKey = "importedPhotoAssetIds"
+
+    /// Load the set of previously imported PHAsset identifiers from UserDefaults.
+    private func loadImportedAssetIds() {
+        if let stored = UserDefaults.standard.array(forKey: Self.importedAssetIdsKey) as? [String] {
+            importedAssetIds = Set(stored)
+        }
+    }
+
+    /// Persist the imported asset ID set to UserDefaults.
+    private func saveImportedAssetIds() {
+        UserDefaults.standard.set(Array(importedAssetIds), forKey: Self.importedAssetIdsKey)
+    }
+
+    /// Returns true if the given PHAsset identifier has already been imported.
+    func hasImported(assetId: String) -> Bool {
+        importedAssetIds.contains(assetId)
+    }
+
+    /// Record that a PHAsset has been imported so subsequent imports of the same asset are skipped.
+    func markImported(assetId: String) {
+        guard !assetId.isEmpty, !importedAssetIds.contains(assetId) else { return }
+        importedAssetIds.insert(assetId)
+        saveImportedAssetIds()
     }
 
     // MARK: - Tooth History Persistence
@@ -856,10 +891,12 @@ class MetadataManager: ObservableObject, MetadataManaging {
     func clearAllMetadata() {
         assetMetadata.removeAll()
         toothHistory.removeAll()
+        importedAssetIds.removeAll()
 
         // Clear from UserDefaults
         UserDefaults.standard.removeObject(forKey: "assetMetadata")
         UserDefaults.standard.removeObject(forKey: "toothHistory")
+        UserDefaults.standard.removeObject(forKey: Self.importedAssetIdsKey)
     }
 
     /// Reset all app data to defaults
@@ -867,6 +904,7 @@ class MetadataManager: ObservableObject, MetadataManaging {
         // Clear metadata
         assetMetadata.removeAll()
         toothHistory.removeAll()
+        importedAssetIds.removeAll()
 
         // Clear portfolios
         portfolios.removeAll()
@@ -885,6 +923,7 @@ class MetadataManager: ObservableObject, MetadataManaging {
         defaults.removeObject(forKey: "portfolios")
         defaults.removeObject(forKey: "procedureConfigs")
         defaults.removeObject(forKey: "stageConfigs")
+        defaults.removeObject(forKey: Self.importedAssetIdsKey)
 
         // Clear profile data
         defaults.removeObject(forKey: "userFirstName")

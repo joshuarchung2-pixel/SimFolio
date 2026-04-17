@@ -199,13 +199,20 @@ struct HomeView: View {
                 .font(.system(.title3, design: .serif).weight(.semibold))
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("Capture your first dental procedure\nto begin tracking progress")
+            Text("Capture your first dental procedure\nor import existing photos")
                 .font(AppTheme.Typography.subheadline)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
 
-            DPButton("Take Photo", icon: "camera") {
-                router.navigateToCapture()
+            HStack(spacing: AppTheme.Spacing.sm) {
+                DPButton("Take Photo", icon: "camera") {
+                    router.navigateToCapture()
+                }
+
+                DPButton("Import", icon: "photo.on.rectangle.angled", style: .secondary) {
+                    router.presentSheet(.importPhotos())
+                }
+                .accessibilityIdentifier("home-import-from-photos")
             }
         }
         .frame(maxWidth: .infinity)

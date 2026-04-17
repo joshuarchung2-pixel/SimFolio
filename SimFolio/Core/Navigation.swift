@@ -350,6 +350,7 @@ class NavigationRouter: ObservableObject, NavigationRouting {
         case shareSheet(photoIds: [String])
         case notificationSettings
         case signIn
+        case importPhotos(procedure: String? = nil, stage: String? = nil, angle: String? = nil, toothNumber: Int? = nil, portfolioId: String? = nil)
 
         var id: String {
             switch self {
@@ -360,6 +361,7 @@ class NavigationRouter: ObservableObject, NavigationRouting {
             case .shareSheet(let ids): return "shareSheet-\(ids.joined())"
             case .notificationSettings: return "notificationSettings"
             case .signIn: return "signIn"
+            case .importPhotos: return "importPhotos"
             }
         }
     }

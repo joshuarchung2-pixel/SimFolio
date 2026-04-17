@@ -3284,13 +3284,28 @@ struct AllPhotosGridView: View {
             Spacer()
 
             if router.libraryFilter.isEmpty {
-                DPEmptyState(
-                    icon: "photo.on.rectangle",
-                    title: "No Photos",
-                    message: "Your captured photos will appear here.",
-                    actionTitle: "Start Capturing"
-                ) {
-                    router.selectedTab = .capture
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    DPEmptyState(
+                        icon: "photo.on.rectangle",
+                        title: "No Photos",
+                        message: "Capture your first photo or import from your Photos library.",
+                        actionTitle: "Start Capturing"
+                    ) {
+                        router.selectedTab = .capture
+                    }
+
+                    Button {
+                        router.presentSheet(.importPhotos())
+                    } label: {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("Import from Photos")
+                        }
+                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                    .accessibilityIdentifier("library-import-from-photos")
+                    .padding(.bottom, AppTheme.Spacing.md)
                 }
             } else {
                 DPEmptyState(

@@ -5,6 +5,7 @@ protocol MetadataManaging: AnyObject {
     var procedureConfigs: [ProcedureConfig] { get }
     var stageConfigs: [StageConfig] { get }
     var assetMetadata: [String: PhotoMetadata] { get }
+    var importedAssetIds: Set<String> { get }
 
     func addPortfolio(_ portfolio: Portfolio)
     func updatePortfolio(_ portfolio: Portfolio)
@@ -26,4 +27,7 @@ protocol MetadataManaging: AnyObject {
     func setRating(_ rating: Int?, for assetId: String)
 
     func photoCount(for procedure: String) -> Int
+
+    func hasImported(assetId: String) -> Bool
+    func markImported(assetId: String)
 }

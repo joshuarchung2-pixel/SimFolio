@@ -363,6 +363,16 @@ struct ContentView: View {
 
         case .signIn:
             SignInView()
+
+        case .importPhotos(let procedure, let stage, let angle, let toothNumber, let portfolioId):
+            ImportFlowView(
+                prefilledProcedure: procedure,
+                prefilledStage: stage,
+                prefilledAngle: angle,
+                prefilledToothNumber: toothNumber,
+                portfolioId: portfolioId
+            )
+            .environmentObject(router)
         }
     }
 

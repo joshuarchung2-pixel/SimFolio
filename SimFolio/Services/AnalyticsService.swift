@@ -38,6 +38,7 @@ enum AnalyticsEvent: String {
     case photoEdited = "photo_edited"
     case photoDeleted = "photo_deleted"
     case photoFavorited = "photo_favorited"
+    case photoImported = "photo_imported"
 
     // Requirement
     case requirementFulfilled = "requirement_fulfilled"
@@ -351,6 +352,15 @@ extension AnalyticsService {
             params["tooth_number"] = tooth
         }
         logEvent(.photoCaptured, parameters: params.isEmpty ? nil : params)
+    }
+
+    /// Log a completed Photos-library import batch
+    static func logPhotoImported(count: Int, duplicatesSkipped: Int, failed: Int) {
+        logEvent(.photoImported, parameters: [
+            "count": count,
+            "duplicates_skipped": duplicatesSkipped,
+            "failed": failed
+        ])
     }
 
     /// Log photo tagging
