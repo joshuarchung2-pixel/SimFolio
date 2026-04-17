@@ -170,9 +170,8 @@ final class PortfolioUITests: XCTestCase {
         // Navigate to portfolio detail
         navigateToPortfolioDetail()
 
-        // Look for tab options (Overview, Checklist, Photos)
+        // Look for tab options (Overview, Photos)
         let overviewTab = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Overview'")).firstMatch
-        let checklistTab = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Checklist'")).firstMatch
         let photosTab = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Photos'")).firstMatch
 
         // At least one tab section should exist
@@ -339,78 +338,3 @@ final class PortfolioUITests: XCTestCase {
     }
 }
 
-// MARK: - Portfolio Checklist UI Tests
-
-final class PortfolioChecklistUITests: XCTestCase {
-
-    var app: XCUIApplication!
-
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-
-        app = XCUIApplication()
-        app.launchArguments = ["--uitesting", "--skip-onboarding"]
-        app.launch()
-    }
-
-    override func tearDown() {
-        app = nil
-        super.tearDown()
-    }
-
-    func testChecklistTabNavigation() {
-        // Navigate to portfolio detail
-        navigateToPortfolioDetail()
-
-        // Find and tap checklist tab
-        let checklistTab = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Checklist'")
-        ).firstMatch
-
-        if checklistTab.waitForExistence(timeout: 2) {
-            checklistTab.tap()
-            sleep(1)
-
-            // Then - Checklist content should display
-        }
-    }
-
-    func testRequirementExpansion() {
-        // Navigate to portfolio detail checklist
-        navigateToPortfolioDetail()
-
-        // Find a requirement row
-        let requirementRows = app.cells.allElementsBoundByIndex
-        if requirementRows.count > 0 {
-            // Tap to expand
-            requirementRows[0].tap()
-            sleep(1)
-        }
-    }
-
-    // MARK: - Helper Methods
-
-    private func navigateToPortfolioDetail() {
-        // First go to profile
-        let profileTab = app.tabBars.buttons["Profile"]
-        if profileTab.waitForExistence(timeout: 3) {
-            profileTab.tap()
-            sleep(1)
-        }
-
-        // Find portfolios
-        let portfolioButton = app.buttons["Manage Portfolios"]
-        if portfolioButton.waitForExistence(timeout: 2) {
-            portfolioButton.tap()
-            sleep(1)
-        }
-
-        // Tap first portfolio
-        let cells = app.cells.allElementsBoundByIndex
-        if cells.count > 0 {
-            cells[0].tap()
-            sleep(1)
-        }
-    }
-}
