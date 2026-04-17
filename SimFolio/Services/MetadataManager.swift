@@ -545,6 +545,21 @@ class MetadataManager: ObservableObject, MetadataManaging {
         }
     }
 
+    /// Whether a given photo asset should be treated as "Needs Tagging".
+    /// True if there is no metadata row for the asset, or the row is missing
+    /// procedure / stage / angle. Matches the chip-bar filter semantics.
+    func isIncomplete(assetId: String) -> Bool {
+        guard let metadata = assetMetadata[assetId] else { return true }
+        return metadata.procedure == nil || metadata.stage == nil || metadata.angle == nil
+    }
+
+    /// Count of stored metadata rows whose procedure / stage / angle is incomplete.
+    /// Does NOT include PhotoRecord ids that have no metadata row at all — use this
+    /// for the tab-bar badge where the storage layer drives the full set.
+    var incompleteAssetCount: Int {
+        getIncompleteAssetIds().count
+    }
+
     /// Get asset IDs matching a procedure, optionally prioritizing a specific tooth number
     /// - Parameters:
     ///   - procedure: Procedure type to match
