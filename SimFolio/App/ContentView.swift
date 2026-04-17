@@ -190,6 +190,7 @@ struct ContentView: View {
                 .tabItem {
                     Label("Library", systemImage: router.selectedTab == .library ? "photo.on.rectangle.fill" : "photo.on.rectangle")
                 }
+                .badge(metadataManager.incompleteAssetCount)
                 .tag(MainTab.library)
 
                 if FeatureGateService.socialFeedEnabled {
