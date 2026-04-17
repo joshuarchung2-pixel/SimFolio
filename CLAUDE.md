@@ -139,24 +139,50 @@ The app supports launch arguments for UI testing:
 
 Build and test using `xcodebuild` via Bash. The primary scheme is `SimFolio`.
 
-### Build for simulator
+### Dev loop: build once, re-test fast (DEFAULT)
+
+A full `xcodebuild test` invocation spends 90%+ of its time on rebuild + sign + install + simulator boot, NOT on the tests themselves (the SimFolioTests suite runs in <1s). For iterative work, build once and reuse the bundle:
+
+**Step 1 — build the test bundle once (slow, ~2-3 min):**
+```bash
+xcodebuild build-for-testing -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -20
+```
+
+**Step 2 — run tests against the prebuilt bundle (fast, ~10-30s):**
+```bash
+xcodebuild test-without-building -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
+```
+
+Re-run step 2 as often as you like. Re-run step 1 only when source files change.
+
+### One-shot test runs (slow but self-contained)
+
+Use these only when you don't want to manage the build cache:
+
+```bash
+# Unit tests
+xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
+
+# UI tests (requires SimFolioUITests target in the Xcode project — not currently wired)
+xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioUITests 2>&1 | tail -40
+```
+
+### Build only (no tests)
 ```bash
 xcodebuild -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' build 2>&1 | tail -20
-```
-
-### Run unit tests
-```bash
-xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
-```
-
-### Run UI tests
-```bash
-xcodebuild test -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioUITests 2>&1 | tail -40
 ```
 
 ### Clean build
 ```bash
 xcodebuild clean -project SimFolio.xcodeproj -scheme SimFolio
+```
+
+### Simulator hangs / "Application failed preflight checks"
+
+If `xcodebuild test` reports `TEST FAILED` even though the test summary shows 0 failures, the simulator's app-launch preflight is failing intermittently. Reset and retry:
+
+```bash
+xcrun simctl shutdown all; killall Simulator 2>/dev/null; xcrun simctl erase all
 ```
 
 ## Code Style Guidelines
