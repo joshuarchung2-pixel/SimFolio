@@ -63,6 +63,10 @@ struct SimFolioApp: App {
 
         // Initialize theme-aware UIKit appearance
         ThemeManager.shared.updateUIKitAppearance()
+
+        // Decrement the "Untagged photos" card dismissal counter once per launch so
+        // the card re-emerges after the user has skipped it for two sessions.
+        UntaggedCardDismissal.tickDownOnLaunch()
     }
 
     // MARK: - Testing Support
