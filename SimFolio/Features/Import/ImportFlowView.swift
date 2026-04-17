@@ -49,14 +49,14 @@ struct ImportFlowView: View {
                 case .review:
                     ImportReviewView(
                         importState: importState,
-                        isPrefilledFromPortfolio: prefilledProcedure != nil,
+                        isPrefilledFromPortfolio: importState.isFromPortfolio,
                         onCancel: { dismissFlow() },
                         onStartImport: { runImport() }
                     )
                 case .importing:
                     ImportReviewView(
                         importState: importState,
-                        isPrefilledFromPortfolio: prefilledProcedure != nil,
+                        isPrefilledFromPortfolio: importState.isFromPortfolio,
                         onCancel: { },
                         onStartImport: { }
                     )
@@ -239,7 +239,8 @@ struct ImportFlowView: View {
         AnalyticsService.logPhotoImported(
             count: result.imported,
             duplicatesSkipped: result.skipped,
-            failed: result.failed
+            failed: result.failed,
+            prefilled: importState.isFromPortfolio
         )
 
         if result.imported > 0 {

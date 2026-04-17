@@ -91,6 +91,13 @@ final class ImportFlowState: ObservableObject {
 
     // MARK: Derived
 
+    /// True when this import flow was launched with a prefilled portfolio/procedure context
+    /// (e.g., from a portfolio requirement's "Add Photos" CTA). False for Library-inbox
+    /// backfill imports.
+    var isFromPortfolio: Bool {
+        sourcePortfolioId != nil
+    }
+
     var candidatesToImport: [ImportCandidate] {
         candidates.filter { $0.shouldKeep && $0.loadError == nil }
     }
