@@ -121,4 +121,41 @@ final class LibraryFilterTests: XCTestCase {
         XCTAssertEqual(range.dates.start, start)
         XCTAssertEqual(range.dates.end,   end)
     }
+
+    // MARK: - showUntaggedOnly
+
+    func testDefault_showUntaggedOnly_isFalse() {
+        let filter = LibraryFilter()
+        XCTAssertFalse(filter.showUntaggedOnly)
+    }
+
+    func testIsEmpty_withUntaggedOnly_isTrue() {
+        // The chip bar is a separate surface from the filter sheet; the filter icon
+        // should not light up just because the inbox chip is active.
+        var filter = LibraryFilter()
+        filter.showUntaggedOnly = true
+        XCTAssertTrue(filter.isEmpty)
+    }
+
+    func testActiveFilterCount_withUntaggedOnly_isZero() {
+        var filter = LibraryFilter()
+        filter.showUntaggedOnly = true
+        XCTAssertEqual(filter.activeFilterCount, 0)
+    }
+
+    func testReset_clearsUntaggedOnly() {
+        var filter = LibraryFilter()
+        filter.showUntaggedOnly = true
+        filter.reset()
+        XCTAssertFalse(filter.showUntaggedOnly)
+    }
+
+    func testIsEmpty_withUntaggedOnlyAndProcedures_isFalse() {
+        // Chip bar is a separate surface, but isEmpty should still return false
+        // when a real filter field is set, regardless of the chip state.
+        var filter = LibraryFilter()
+        filter.showUntaggedOnly = true
+        filter.procedures.insert("Class 1")
+        XCTAssertFalse(filter.isEmpty)
+    }
 }
