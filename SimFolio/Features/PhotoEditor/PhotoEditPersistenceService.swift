@@ -160,21 +160,31 @@ extension PhotoEditPersistenceService {
         return ImageProcessingService.shared.applyEdits(to: image, editState: editState) ?? image
     }
 
-    /// Get a preview with stored edits applied
+    /// Get a display-ready thumbnail with all stored edits applied, including markup.
+    /// Downscales first for performance, then bakes in adjustments, transforms, and markup.
     /// - Parameters:
     ///   - image: The original image
     ///   - assetId: The asset identifier
-    /// - Returns: The edited preview if edits exist, otherwise the original
+    /// - Returns: The edited thumbnail if edits exist, otherwise the original
     func applyStoredEditsForPreview(to image: UIImage, assetId: String) -> UIImage {
         guard let editState = getEditState(for: assetId) else {
             return image
         }
 
-        return ImageProcessingService.shared.generatePreview(
-            from: image,
-            editState: editState,
-            maxDimension: 400
-        ) ?? image
+        let maxDimension: CGFloat = 400
+        let scale = min(maxDimension / max(image.size.width, image.size.height), 1.0)
+        let targetSize = CGSize(
+            width: image.size.width * scale,
+            height: image.size.height * scale
+        )
+
+        UIGraphicsBeginImageContextWithOptions(targetSize, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: targetSize))
+        let resized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        guard let resized = resized else { return image }
+        return ImageProcessingService.shared.applyEdits(to: resized, editState: editState) ?? image
     }
 }
 

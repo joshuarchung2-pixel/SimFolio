@@ -70,6 +70,16 @@ struct PhotoEditorView: View {
                     // Controls for current mode
                     controlsView
                         .frame(height: 230)
+
+                    // Shared revert action, visible whenever the photo has any edits
+                    if viewModel.editState.hasChanges {
+                        Button(action: { viewModel.resetAll() }) {
+                            Text("Revert All Edits")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.Colors.primary)
+                        }
+                        .padding(.top, AppTheme.Spacing.xs)
+                    }
                 }
 
                 // Saving overlay
@@ -157,9 +167,9 @@ struct PhotoEditorView: View {
             Button(action: { saveEdits() }) {
                 Text("Done")
                     .font(AppTheme.Typography.bodyBold)
-                    .foregroundStyle(viewModel.editState.hasChanges ? AppTheme.Colors.primary : .gray)
+                    .foregroundStyle(viewModel.hasUnsavedChanges ? AppTheme.Colors.primary : .gray)
             }
-            .disabled(!viewModel.editState.hasChanges || isSaving)
+            .disabled(!viewModel.hasUnsavedChanges || isSaving)
             .padding(.trailing, AppTheme.Spacing.md)
         }
         .padding(.vertical, AppTheme.Spacing.md)
@@ -436,7 +446,7 @@ struct PhotoEditorView: View {
     }
 
     private func handleCancel() {
-        if viewModel.editState.hasChanges {
+        if viewModel.hasUnsavedChanges {
             showCancelConfirmation = true
         } else {
             isPresented = false
@@ -562,6 +572,17 @@ class PhotoEditorViewModel: ObservableObject {
 
     @Published private(set) var history = EditHistory()
 
+    /// Snapshot of the edit state when the editor opened, used to detect unsaved changes
+    /// (including deletions that bring state back to "empty").
+    private let initialEditState: EditState
+
+    /// Whether the current state differs from what was loaded when the editor opened.
+    /// Unlike `editState.hasChanges`, this is true when the user deletes all markup from
+    /// a photo that had saved markup — so they can commit the deletion.
+    var hasUnsavedChanges: Bool {
+        editState != initialEditState
+    }
+
     private var processingTask: Task<Void, Never>?
     private var cropPreviewTask: Task<Void, Never>?
 
@@ -578,15 +599,18 @@ class PhotoEditorViewModel: ObservableObject {
 
     init(assetId: String) {
         // Load existing edit state if available
+        let loadedState: EditState
         if let savedState = PhotoEditPersistenceService.shared.getEditState(for: assetId) {
-            self.editState = savedState
+            loadedState = savedState
             // Initialize tempCropRect from saved state if crop exists
             if let savedCrop = savedState.transform.cropRect {
                 self.tempCropRect = savedCrop
             }
         } else {
-            self.editState = EditState(assetId: assetId)
+            loadedState = EditState(assetId: assetId)
         }
+        self.editState = loadedState
+        self.initialEditState = loadedState
     }
 
     // MARK: - Image Management
@@ -1353,16 +1377,6 @@ struct AdjustControlsView: View {
                 )
             }
             .padding(.horizontal, AppTheme.Spacing.md)
-
-            // Reset button
-            if viewModel.editState.adjustments.hasChanges {
-                Button(action: { viewModel.resetAdjustments() }) {
-                    Text("Reset All Adjustments")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.primary)
-                }
-                .padding(.top, AppTheme.Spacing.xs)
-            }
         }
     }
 
