@@ -214,7 +214,12 @@ struct PortfolioExportSheet: View {
             } message: {
                 Text(exportError ?? "An unknown error occurred")
             }
-            .sheet(isPresented: $showShareSheet) {
+            .sheet(isPresented: $showShareSheet, onDismiss: {
+                // Close the export sheet once the user is done with the share
+                // sheet (whether they shared or cancelled — the export itself
+                // still succeeded, and they've seen the share options).
+                isPresented = false
+            }) {
                 if let url = exportedURL {
                     ExportShareSheet(items: [url])
                 }
