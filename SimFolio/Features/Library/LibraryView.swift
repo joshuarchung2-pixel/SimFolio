@@ -1458,48 +1458,57 @@ struct ProcedureDetailView: View {
 
     // MARK: - Stats Header
     var statsHeader: some View {
-        DPCard {
-            if isUntagged {
-                // Simplified stats for untagged photos
-                StatItem(
-                    value: "\(procedureRecords.count)",
-                    label: "Photos",
-                    color: AppTheme.procedureColor(for: procedure)
-                )
-                .frame(maxWidth: .infinity)
-            } else {
-                // Full stats for regular procedures
-                HStack(spacing: AppTheme.Spacing.lg) {
+        VStack(spacing: AppTheme.Spacing.sm) {
+            DPCard {
+                if isUntagged {
+                    // Simplified stats for untagged photos
                     StatItem(
                         value: "\(procedureRecords.count)",
                         label: "Photos",
                         color: AppTheme.procedureColor(for: procedure)
                     )
+                    .frame(maxWidth: .infinity)
+                } else {
+                    // Full stats for regular procedures
+                    HStack(spacing: AppTheme.Spacing.lg) {
+                        StatItem(
+                            value: "\(procedureRecords.count)",
+                            label: "Photos",
+                            color: AppTheme.procedureColor(for: procedure)
+                        )
 
-                    Divider()
-                        .frame(height: 40)
+                        Divider()
+                            .frame(height: 40)
 
-                    StatItem(
-                        value: "\(recordsByTooth.count)",
-                        label: "Teeth",
-                        color: AppTheme.Colors.success
-                    )
+                        StatItem(
+                            value: "\(recordsByTooth.count)",
+                            label: "Teeth",
+                            color: AppTheme.Colors.success
+                        )
 
-                    // Dynamic stage counts (show up to 3 stages)
-                    ForEach(sortedProcedureStages.prefix(3), id: \.self) { stage in
-                        if let count = stageAssetCounts[stage], count > 0 {
-                            Divider()
-                                .frame(height: 40)
+                        // Dynamic stage counts (show up to 3 stages)
+                        ForEach(sortedProcedureStages.prefix(3), id: \.self) { stage in
+                            if let count = stageAssetCounts[stage], count > 0 {
+                                Divider()
+                                    .frame(height: 40)
 
-                            StatItem(
-                                value: "\(count)",
-                                label: PhotoMetadata.stageAbbreviation(for: stage),
-                                color: metadataManager.stageColor(for: stage)
-                            )
+                                StatItem(
+                                    value: "\(count)",
+                                    label: PhotoMetadata.stageAbbreviation(for: stage),
+                                    color: metadataManager.stageColor(for: stage)
+                                )
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+            }
+
+            if isUntagged {
+                Text("tap a photo to add tags")
+                    .font(AppTheme.Typography.footnote)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
@@ -2497,16 +2506,23 @@ struct PhotoDetailView: View {
                     }
 
                     // Edit tags button
+                    let hasNoTags = currentMetadata == nil ||
+                        (currentMetadata?.procedure == nil &&
+                         currentMetadata?.toothNumber == nil &&
+                         currentMetadata?.stage == nil &&
+                         currentMetadata?.angle == nil)
+                    let buttonColor = hasNoTags ? AppTheme.Colors.error : AppTheme.Colors.primary
+
                     Button(action: { showMetadataEditor = true }) {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil")
-                            Text("Edit")
+                            Text(hasNoTags ? "add tags" : "Edit")
                         }
                         .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.Colors.primary)
+                        .foregroundStyle(buttonColor)
                         .padding(.horizontal, AppTheme.Spacing.sm)
                         .padding(.vertical, AppTheme.Spacing.xs)
-                        .background(AppTheme.Colors.primary.opacity(0.15))
+                        .background(buttonColor.opacity(0.15))
                         .cornerRadius(AppTheme.CornerRadius.full)
                     }
                 }

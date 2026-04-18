@@ -156,6 +156,12 @@ class MetadataManager: ObservableObject, MetadataManaging {
                 existingIds.insert(asset.localIdentifier)
             }
 
+            // In-app-captured photos are keyed by PhotoRecord UUID, not PHAsset localIdentifier.
+            // Without this, their metadata would be misclassified as orphaned and deleted on launch.
+            for record in PhotoStorageService.shared.records {
+                existingIds.insert(record.id.uuidString)
+            }
+
             let orphanedMetadataIds = Set(assetMetadata.keys).subtracting(existingIds)
             guard !orphanedMetadataIds.isEmpty else {
                 PhotoEditPersistenceService.shared.cleanupOrphanedEditStates(existingAssetIds: existingIds)
