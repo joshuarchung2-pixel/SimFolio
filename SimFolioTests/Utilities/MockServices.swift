@@ -177,11 +177,13 @@ final class MockImageProcessing: ImageProcessing {
     var applyEditsCalls = 0
     var generatePreviewCalls = 0
 
+    @MainActor
     func applyEdits(to image: UIImage, editState: EditState) -> UIImage? {
         applyEditsCalls += 1
         return image
     }
 
+    @MainActor
     func generatePreview(from image: UIImage, editState: EditState, maxDimension: CGFloat) -> UIImage? {
         generatePreviewCalls += 1
         return image

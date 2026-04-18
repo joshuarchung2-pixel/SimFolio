@@ -280,10 +280,10 @@ class PhotoLibraryManager: ObservableObject {
                 return
             }
 
-            // Apply edits on background thread
-            DispatchQueue.global(qos: .userInitiated).async {
-                let editedImage = ImageProcessingService.shared.applyEdits(to: image, editState: editState)
-                DispatchQueue.main.async {
+            // Apply edits: adjustments/transforms off main, markup on main.
+            Task {
+                let editedImage = await ImageProcessingService.shared.applyEditsAsync(to: image, editState: editState)
+                await MainActor.run {
                     completion(editedImage ?? image)
                 }
             }

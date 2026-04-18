@@ -589,11 +589,14 @@ struct PortfolioExportSheet: View {
             throw ExportError.failedToLoadImage
         }
 
-        // Apply saved edits
-        let editedImage = PhotoEditPersistenceService.shared.applyStoredEdits(
-            to: image,
-            assetId: assetId
-        )
+        // Apply saved edits. `applyStoredEdits` is `@MainActor` because markup
+        // baking uses SwiftUI's `ImageRenderer`.
+        let editedImage = await MainActor.run {
+            PhotoEditPersistenceService.shared.applyStoredEdits(
+                to: image,
+                assetId: assetId
+            )
+        }
         return editedImage
     }
 

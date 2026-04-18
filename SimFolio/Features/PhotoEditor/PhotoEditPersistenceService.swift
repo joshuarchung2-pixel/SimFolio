@@ -147,11 +147,17 @@ final class PhotoEditPersistenceService: EditStatePersisting {
 
 extension PhotoEditPersistenceService {
 
-    /// Apply saved edits to a newly loaded image
+    /// Apply saved edits to a newly loaded image.
+    ///
+    /// `@MainActor` because markup compositing uses SwiftUI's `ImageRenderer`.
+    /// For background-queue callers, use the async API on
+    /// `ImageProcessingService` directly, or wrap this call in
+    /// `await MainActor.run { ... }`.
     /// - Parameters:
     ///   - image: The original image
     ///   - assetId: The asset identifier
     /// - Returns: The edited image if edits exist, otherwise the original
+    @MainActor
     func applyStoredEdits(to image: UIImage, assetId: String) -> UIImage {
         guard let editState = getEditState(for: assetId) else {
             return image
@@ -162,10 +168,13 @@ extension PhotoEditPersistenceService {
 
     /// Get a display-ready thumbnail with all stored edits applied, including markup.
     /// Downscales first for performance, then bakes in adjustments, transforms, and markup.
+    ///
+    /// `@MainActor` for the same reason as `applyStoredEdits(to:assetId:)`.
     /// - Parameters:
     ///   - image: The original image
     ///   - assetId: The asset identifier
     /// - Returns: The edited thumbnail if edits exist, otherwise the original
+    @MainActor
     func applyStoredEditsForPreview(to image: UIImage, assetId: String) -> UIImage {
         guard let editState = getEditState(for: assetId) else {
             return image

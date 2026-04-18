@@ -460,18 +460,18 @@ struct PhotoEditorView: View {
 
         let editStateSnapshot = viewModel.editState
 
-        // Process at full quality
-        DispatchQueue.global(qos: .userInitiated).async {
-            let processedImage = ImageProcessingService.shared.applyEdits(
+        // Adjustments + transforms run off the main actor inside
+        // `applyEditsAsync`; markup compositing hops to main internally.
+        Task {
+            let processedImage = await ImageProcessingService.shared.applyEditsAsync(
                 to: originalImage,
                 editState: editStateSnapshot
             )
 
-            DispatchQueue.main.async {
+            await MainActor.run {
                 isSaving = false
 
                 if let processedImage = processedImage {
-                    // Save edit state for persistence
                     PhotoEditPersistenceService.shared.saveEditState(
                         editStateSnapshot,
                         for: photoId.uuidString

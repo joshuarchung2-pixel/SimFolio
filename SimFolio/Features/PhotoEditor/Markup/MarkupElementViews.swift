@@ -74,13 +74,14 @@ struct FreeformLineShape: Shape {
 struct FreeformLineView: View {
     let line: FreeformLine
     let canvasSize: CGSize
+    var pixelScale: CGFloat = 1.0
 
     var body: some View {
         FreeformLineShape(points: line.points.map { $0.cgPoint })
             .stroke(
                 line.color.color,
                 style: StrokeStyle(
-                    lineWidth: line.lineWidth.pointWidth,
+                    lineWidth: line.lineWidth.pointWidth * pixelScale,
                     lineCap: .round,
                     lineJoin: .round
                 )
@@ -162,6 +163,7 @@ struct MeasurementLineShape: Shape {
 struct MeasurementLineView: View {
     let line: MeasurementLine
     let canvasSize: CGSize
+    var pixelScale: CGFloat = 1.0
 
     var body: some View {
         MeasurementLineShape(
@@ -172,7 +174,7 @@ struct MeasurementLineView: View {
         .stroke(
             line.color.color,
             style: StrokeStyle(
-                lineWidth: line.lineWidth.pointWidth,
+                lineWidth: line.lineWidth.pointWidth * pixelScale,
                 lineCap: .square,
                 lineJoin: .miter
             )
@@ -187,6 +189,7 @@ struct MeasurementLineView: View {
 struct TextBoxView: View {
     let textBox: TextBox
     let canvasSize: CGSize
+    var pixelScale: CGFloat = 1.0
 
     var body: some View {
         let position = CGPoint(
@@ -200,16 +203,16 @@ struct TextBoxView: View {
         )
 
         Text(textBox.text)
-            .font(.system(size: textBox.fontSize.pointSize))
+            .font(.system(size: textBox.fontSize.pointSize * pixelScale))
             .foregroundStyle(textBox.fontColor.color)
             .multilineTextAlignment(.center)
             .lineLimit(nil)
-            .padding(AppTheme.Spacing.xs)
-            .frame(width: max(size.width, 50), height: max(size.height, 24))
+            .padding(AppTheme.Spacing.xs * pixelScale)
+            .frame(width: max(size.width, 50 * pixelScale), height: max(size.height, 24 * pixelScale))
             .background(
                 Group {
                     if let fillColor = textBox.fillColor {
-                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs)
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xs * pixelScale)
                             .fill(fillColor.color)
                     }
                 }
@@ -225,16 +228,41 @@ struct TextBoxView: View {
 struct MarkupElementView: View {
     let element: MarkupElement
     let canvasSize: CGSize
+    var pixelScale: CGFloat = 1.0
 
     var body: some View {
         switch element {
         case .freeformLine(let line):
-            FreeformLineView(line: line, canvasSize: canvasSize)
+            FreeformLineView(line: line, canvasSize: canvasSize, pixelScale: pixelScale)
         case .measurementLine(let line):
-            MeasurementLineView(line: line, canvasSize: canvasSize)
+            MeasurementLineView(line: line, canvasSize: canvasSize, pixelScale: pixelScale)
         case .textBox(let box):
-            TextBoxView(textBox: box, canvasSize: canvasSize)
+            TextBoxView(textBox: box, canvasSize: canvasSize, pixelScale: pixelScale)
         }
+    }
+}
+
+// MARK: - Baked Markup Layer
+
+/// Flattened, non-interactive view of all markup elements used by the baker (ImageRenderer).
+/// No selection handles, no drawing-in-progress previews — just the committed elements
+/// composed exactly as the editor canvas composes them.
+struct BakedMarkupLayer: View {
+    let markupState: MarkupState
+    let canvasSize: CGSize
+    var pixelScale: CGFloat = 1.0
+
+    var body: some View {
+        ZStack {
+            ForEach(markupState.sortedElements) { element in
+                MarkupElementView(
+                    element: element,
+                    canvasSize: canvasSize,
+                    pixelScale: pixelScale
+                )
+            }
+        }
+        .frame(width: canvasSize.width, height: canvasSize.height)
     }
 }
 

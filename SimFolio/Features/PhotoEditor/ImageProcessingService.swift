@@ -46,49 +46,63 @@ final class ImageProcessingService: ImageProcessing {
 
     // MARK: - Main Processing Method
 
-    /// Apply all edits to an image
+    /// Apply all edits to an image.
+    ///
+    /// `@MainActor` because markup compositing uses SwiftUI's `ImageRenderer`,
+    /// which is main-actor-bound. Callers running on background queues should
+    /// use `applyEditsAsync(to:editState:)` instead.
     /// - Parameters:
-    ///   - image: The original UIImage
-    ///   - editState: The edit state containing adjustments, transforms, and markup
-    /// - Returns: The processed UIImage, or nil if processing failed
+    ///   - image: The original UIImage.
+    ///   - editState: The edit state containing adjustments, transforms, and markup.
+    /// - Returns: The processed UIImage, or nil if processing failed.
+    @MainActor
     func applyEdits(to image: UIImage, editState: EditState) -> UIImage? {
-        guard let ciImage = CIImage(image: image) else { return nil }
-
-        var processedImage = ciImage
-
-        // Apply adjustments first
-        processedImage = applyAdjustments(to: processedImage, adjustments: editState.adjustments)
-
-        // Apply transforms
-        processedImage = applyTransform(to: processedImage, transform: editState.transform, originalSize: image.size)
-
-        // Render to UIImage
-        guard var resultImage = renderToUIImage(processedImage, originalOrientation: image.imageOrientation) else {
+        guard let adjusted = applyAdjustmentsAndTransforms(to: image, editState: editState) else {
             return nil
         }
-
-        // Apply markup if present
-        if editState.markup.hasMarkup {
-            if let markupImage = MarkupRenderingService.shared.renderMarkup(onto: resultImage, markupState: editState.markup) {
-                resultImage = markupImage
-            }
-        }
-
-        return resultImage
+        return applyMarkup(to: adjusted, markupState: editState.markup)
     }
 
-    /// Apply edits asynchronously
+    /// Apply all edits to an image, async. Runs the CoreImage adjustments and
+    /// transforms on a background queue, then hops to the main actor for the
+    /// markup compositing step (which requires `ImageRenderer`).
     /// - Parameters:
-    ///   - image: The original UIImage
-    ///   - editState: The edit state
-    ///   - completion: Callback with the processed image
-    func applyEditsAsync(to image: UIImage, editState: EditState, completion: @escaping (UIImage?) -> Void) {
-        processingQueue.async { [weak self] in
-            let result = self?.applyEdits(to: image, editState: editState)
-            DispatchQueue.main.async {
-                completion(result)
+    ///   - image: The original UIImage.
+    ///   - editState: The edit state.
+    /// - Returns: The processed UIImage, or nil if processing failed.
+    func applyEditsAsync(to image: UIImage, editState: EditState) async -> UIImage? {
+        let adjusted: UIImage? = await withCheckedContinuation { continuation in
+            processingQueue.async { [weak self] in
+                continuation.resume(returning: self?.applyAdjustmentsAndTransforms(to: image, editState: editState))
             }
         }
+        guard let adjusted else { return nil }
+
+        return await MainActor.run {
+            applyMarkup(to: adjusted, markupState: editState.markup)
+        }
+    }
+
+    // MARK: - Split Pipeline Helpers
+
+    /// Runs the CoreImage adjustment + transform pipeline. Pure CoreImage work —
+    /// safe to call from any queue.
+    private func applyAdjustmentsAndTransforms(to image: UIImage, editState: EditState) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
+
+        var processed = ciImage
+        processed = applyAdjustments(to: processed, adjustments: editState.adjustments)
+        processed = applyTransform(to: processed, transform: editState.transform, originalSize: image.size)
+
+        return renderToUIImage(processed, originalOrientation: image.imageOrientation)
+    }
+
+    /// Composites markup over an already-adjusted image. Main-actor-bound
+    /// because `MarkupRenderingService` uses SwiftUI's `ImageRenderer`.
+    @MainActor
+    private func applyMarkup(to image: UIImage, markupState: MarkupState) -> UIImage? {
+        guard markupState.hasMarkup else { return image }
+        return MarkupRenderingService.shared.renderMarkup(onto: image, markupState: markupState) ?? image
     }
 
     // MARK: - Adjustment Processing
@@ -327,6 +341,7 @@ final class ImageProcessingService: ImageProcessing {
     ///   - editState: Current edit state
     ///   - maxDimension: Maximum dimension for preview (default 800)
     /// - Returns: Preview UIImage
+    @MainActor
     func generatePreview(from image: UIImage, editState: EditState, maxDimension: CGFloat = 800) -> UIImage? {
         // Downscale for preview
         let scale = min(maxDimension / max(image.size.width, image.size.height), 1.0)
@@ -366,6 +381,7 @@ final class ImageProcessingService: ImageProcessing {
     // MARK: - Full Quality Export
 
     /// Apply edits at full quality for saving
+    @MainActor
     func applyEditsFullQuality(to image: UIImage, editState: EditState) -> UIImage? {
         return applyEdits(to: image, editState: editState)
     }
