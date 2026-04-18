@@ -411,7 +411,21 @@ struct LibraryView: View {
                 Text("This will permanently remove \(viewModel.selectedAssetIds.count) photo\(viewModel.selectedAssetIds.count == 1 ? "" : "s") from your library.")
             }
             .toolbarBackground(.visible, for: .navigationBar)
+            .onAppear { consumePendingAllPhotos() }
+            .onChange(of: router.libraryPendingAllPhotos) { pending in
+                if pending { consumePendingAllPhotos() }
+            }
         }
+    }
+
+    /// Deep-link into the All Photos grid when another surface requested it
+    /// (e.g. the home "n photos need tagging" card). Resets the path so the
+    /// push is deterministic regardless of where the stack was previously.
+    private func consumePendingAllPhotos() {
+        guard router.libraryPendingAllPhotos else { return }
+        navigationPath = NavigationPath()
+        navigationPath.append(LibraryDestination.allPhotos)
+        router.libraryPendingAllPhotos = false
     }
 
     // MARK: - Action Handlers
@@ -1049,6 +1063,16 @@ struct ProceduresListView: View {
                             }
                         }
                     }
+
+                    DPButton(
+                        "Import from Photos",
+                        icon: "photo.on.rectangle.angled",
+                        style: .secondary,
+                        isFullWidth: true,
+                        action: { router.presentSheet(.importPhotos()) }
+                    )
+                    .padding(.top, AppTheme.Spacing.sm)
+                    .accessibilityIdentifier("library-procedures-import-from-photos")
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
                 .animation(.easeInOut(duration: 0.2), value: procedureSortOrder)
@@ -1915,23 +1939,25 @@ struct PhotoGridCell: View {
                 // Photo thumbnail
                 ZStack(alignment: .topTrailing) {
                     // Image
-                    Group {
-                        if let image = image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            Rectangle()
-                                .fill(AppTheme.Colors.surfaceSecondary)
-                                .overlay(
-                                    ProgressView()
-                                        .scaleEffect(0.5)
-                                )
+                    Color.clear
+                        .overlay {
+                            if let image = image {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Rectangle()
+                                    .fill(AppTheme.Colors.surfaceSecondary)
+                                    .overlay(
+                                        ProgressView()
+                                            .scaleEffect(0.5)
+                                    )
+                            }
                         }
-                    }
-                    .frame(height: 100)
-                    .clipped()
-                    .cornerRadius(AppTheme.CornerRadius.small)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 100)
+                        .clipped()
+                        .cornerRadius(AppTheme.CornerRadius.small)
 
                     // Selection indicator
                     if isSelectionMode {
@@ -2932,18 +2958,23 @@ struct PhotoMetadataEditSheet: View {
                     selectionSection(title: "PROCEDURE") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                FilterToggleChip(
-                                    text: procedure,
-                                    color: AppTheme.procedureColor(for: procedure),
-                                    isSelected: selectedProcedure == procedure
-                                ) {
+                                Button(action: {
                                     if selectedProcedure == procedure {
                                         selectedProcedure = nil
                                     } else {
                                         selectedProcedure = procedure
                                     }
                                     hasChanges = true
+                                }) {
+                                    Text(procedure)
+                                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        .foregroundStyle(selectedProcedure == procedure ? .white : AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(selectedProcedure == procedure ? AppTheme.procedureColor(for: procedure) : AppTheme.Colors.surfaceSecondary)
+                                        .cornerRadius(AppTheme.CornerRadius.full)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
 
                             // Add procedure button
@@ -3007,7 +3038,7 @@ struct PhotoMetadataEditSheet: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: AppTheme.Spacing.sm) {
                                 ForEach(metadataManager.getEnabledStages()) { stageConfig in
-                                    StageChipWithDelete(
+                                    StagePillWithDelete(
                                         stageConfig: stageConfig,
                                         isSelected: selectedStage == stageConfig.name,
                                         onSelect: {
@@ -3064,18 +3095,23 @@ struct PhotoMetadataEditSheet: View {
                     selectionSection(title: "ANGLE") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(MetadataManager.angles, id: \.self) { angle in
-                                FilterToggleChip(
-                                    text: angle,
-                                    color: AppTheme.angleColor(for: angle),
-                                    isSelected: selectedAngle == angle
-                                ) {
+                                Button(action: {
                                     if selectedAngle == angle {
                                         selectedAngle = nil
                                     } else {
                                         selectedAngle = angle
                                     }
                                     hasChanges = true
+                                }) {
+                                    Text(angle)
+                                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        .foregroundStyle(selectedAngle == angle ? .white : AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(selectedAngle == angle ? AppTheme.angleColor(for: angle) : AppTheme.Colors.surfaceSecondary)
+                                        .cornerRadius(AppTheme.CornerRadius.full)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
 
                             if selectedAngle != nil {
@@ -3784,13 +3820,16 @@ struct LibraryFilterSheet: View {
                     filterSection(title: "PROCEDURES") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(metadataManager.procedures, id: \.self) { procedure in
-                                FilterToggleChip(
-                                    text: procedure,
-                                    color: AppTheme.procedureColor(for: procedure),
-                                    isSelected: tempFilter.procedures.contains(procedure)
-                                ) {
-                                    toggleProcedure(procedure)
+                                Button(action: { toggleProcedure(procedure) }) {
+                                    Text(procedure)
+                                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        .foregroundStyle(tempFilter.procedures.contains(procedure) ? .white : AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(tempFilter.procedures.contains(procedure) ? AppTheme.procedureColor(for: procedure) : AppTheme.Colors.surfaceSecondary)
+                                        .cornerRadius(AppTheme.CornerRadius.full)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                     }
@@ -3800,13 +3839,16 @@ struct LibraryFilterSheet: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: AppTheme.Spacing.sm) {
                                 ForEach(metadataManager.getEnabledStages()) { stageConfig in
-                                    FilterToggleChip(
-                                        text: stageConfig.name,
-                                        color: stageConfig.color,
-                                        isSelected: tempFilter.stages.contains(stageConfig.name)
-                                    ) {
-                                        toggleStage(stageConfig.name)
+                                    Button(action: { toggleStage(stageConfig.name) }) {
+                                        Text(stageConfig.name)
+                                            .font(AppTheme.Typography.subheadline.weight(.medium))
+                                            .foregroundStyle(tempFilter.stages.contains(stageConfig.name) ? .white : AppTheme.Colors.textPrimary)
+                                            .padding(.horizontal, AppTheme.Spacing.sm)
+                                            .padding(.vertical, AppTheme.Spacing.xs)
+                                            .background(tempFilter.stages.contains(stageConfig.name) ? stageConfig.color : AppTheme.Colors.surfaceSecondary)
+                                            .cornerRadius(AppTheme.CornerRadius.full)
                                     }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                             }
                         }
@@ -3816,13 +3858,16 @@ struct LibraryFilterSheet: View {
                     filterSection(title: "ANGLES") {
                         FlowLayout(spacing: AppTheme.Spacing.sm) {
                             ForEach(MetadataManager.angles, id: \.self) { angle in
-                                FilterToggleChip(
-                                    text: angle,
-                                    color: AppTheme.angleColor(for: angle),
-                                    isSelected: tempFilter.angles.contains(angle)
-                                ) {
-                                    toggleAngle(angle)
+                                Button(action: { toggleAngle(angle) }) {
+                                    Text(angle)
+                                        .font(AppTheme.Typography.subheadline.weight(.medium))
+                                        .foregroundStyle(tempFilter.angles.contains(angle) ? .white : AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, AppTheme.Spacing.xs)
+                                        .background(tempFilter.angles.contains(angle) ? AppTheme.angleColor(for: angle) : AppTheme.Colors.surfaceSecondary)
+                                        .cornerRadius(AppTheme.CornerRadius.full)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                     }
@@ -3989,44 +4034,6 @@ struct LibraryFilterSheet: View {
         } else {
             tempFilter.angles.insert(angle)
         }
-    }
-}
-
-// MARK: - Filter Toggle Chip
-
-/// Toggleable chip for filter selection with colored dot and checkmark
-struct FilterToggleChip: View {
-    let text: String
-    let color: Color
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: AppTheme.Spacing.xs) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 8, height: 8)
-
-                Text(text)
-                    .font(AppTheme.Typography.subheadline)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: AppTheme.IconSize.xs, weight: .bold))
-                }
-            }
-            .foregroundStyle(isSelected ? .white : AppTheme.Colors.textPrimary)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.sm)
-            .background(isSelected ? color : AppTheme.Colors.surface)
-            .cornerRadius(AppTheme.CornerRadius.full)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.full)
-                    .stroke(isSelected ? color : AppTheme.Colors.surfaceSecondary, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 

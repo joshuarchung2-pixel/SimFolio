@@ -41,8 +41,7 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "NO">
+      shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
             reference = "container:SimFolio.xctestplan"
@@ -73,6 +72,10 @@
       <CommandLineArguments>
          <CommandLineArgument
             argument = "--skip-onboarding"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "--with-sample-data"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument

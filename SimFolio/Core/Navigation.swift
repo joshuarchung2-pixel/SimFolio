@@ -336,6 +336,10 @@ class NavigationRouter: ObservableObject, NavigationRouting {
     /// Current library filter configuration
     @Published var libraryFilter: LibraryFilter = LibraryFilter()
 
+    /// One-shot flag requesting the Library stack push its All Photos destination.
+    /// Consumed (reset to false) by LibraryView after pushing.
+    @Published var libraryPendingAllPhotos: Bool = false
+
     // MARK: - Portfolio State
 
     /// Currently selected portfolio ID for detail view
@@ -405,10 +409,15 @@ class NavigationRouter: ObservableObject, NavigationRouting {
     }
 
     /// Navigate to library with optional filter
-    /// - Parameter filter: Filter to apply (nil = keep current filter)
-    func navigateToLibrary(filter: LibraryFilter? = nil) {
+    /// - Parameters:
+    ///   - filter: Filter to apply (nil = keep current filter)
+    ///   - presentAllPhotos: When true, deep-link into the All Photos grid instead of landing on the Procedures root
+    func navigateToLibrary(filter: LibraryFilter? = nil, presentAllPhotos: Bool = false) {
         if let filter = filter {
             libraryFilter = filter
+        }
+        if presentAllPhotos {
+            libraryPendingAllPhotos = true
         }
         selectedTab = .library
     }
@@ -457,6 +466,7 @@ class NavigationRouter: ObservableObject, NavigationRouting {
         selectedTab = .home
         resetCaptureState()
         libraryFilter.reset()
+        libraryPendingAllPhotos = false
         selectedPortfolioId = nil
         activeSheet = nil
         isTabBarVisible = true

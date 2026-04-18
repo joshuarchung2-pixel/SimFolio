@@ -114,7 +114,9 @@ struct PortfolioDetailView: View {
                             requirePremium(.portfolioExport, showPaywall: $showPremiumPaywall) {
                                 showExportSheet = true
                             }
-                        }
+                        },
+                        onEditRequirementsPressed: { showEditSheet = true },
+                        onDeletePressed: { showDeleteConfirmation = true }
                     )
                     .tag(PortfolioTab.overview)
 
@@ -292,6 +294,8 @@ struct PortfolioOverviewTab: View {
     let onCapturePressed: () -> Void
     let onRequirementCapturePressed: (String, String, String) -> Void
     let onExportPressed: () -> Void
+    let onEditRequirementsPressed: () -> Void
+    let onDeletePressed: () -> Void
 
     @ObservedObject var metadataManager = MetadataManager.shared
 
@@ -362,12 +366,13 @@ struct PortfolioOverviewTab: View {
                 }
 
                 // Stats row
-                HStack(spacing: AppTheme.Spacing.xl) {
+                HStack(spacing: 0) {
                     statItem(
                         value: "\(stats.fulfilled)",
                         label: "Complete",
                         color: AppTheme.Colors.success
                     )
+                    .frame(maxWidth: .infinity)
 
                     Divider()
                         .frame(height: 40)
@@ -377,6 +382,7 @@ struct PortfolioOverviewTab: View {
                         label: "Remaining",
                         color: stats.total - stats.fulfilled > 0 ? AppTheme.Colors.warning : AppTheme.Colors.textTertiary
                     )
+                    .frame(maxWidth: .infinity)
 
                     Divider()
                         .frame(height: 40)
@@ -386,6 +392,7 @@ struct PortfolioOverviewTab: View {
                         label: "Total",
                         color: AppTheme.Colors.textSecondary
                     )
+                    .frame(maxWidth: .infinity)
                 }
 
                 // Due date status
@@ -502,6 +509,23 @@ struct PortfolioOverviewTab: View {
                             }
                         )
                     }
+
+                    DPButton(
+                        "Edit Requirements",
+                        icon: "pencil",
+                        style: .secondary,
+                        isFullWidth: true,
+                        action: onEditRequirementsPressed
+                    )
+                    .padding(.top, AppTheme.Spacing.sm)
+
+                    DPButton(
+                        "Delete Portfolio",
+                        icon: "trash",
+                        style: .destructive,
+                        isFullWidth: true,
+                        action: onDeletePressed
+                    )
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
             }

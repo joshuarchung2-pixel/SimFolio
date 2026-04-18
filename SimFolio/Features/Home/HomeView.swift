@@ -83,7 +83,7 @@ struct HomeView: View {
                             AnalyticsService.logImportNudgeTapped()
                             var filter = LibraryFilter()
                             filter.showUntaggedOnly = true
-                            router.navigateToLibrary(filter: filter)
+                            router.navigateToLibrary(filter: filter, presentAllPhotos: true)
                         },
                         onDismiss: {
                             UntaggedCardDismissal.dismiss()
@@ -300,26 +300,26 @@ struct RecentThumbnailView: View {
     @State private var image: UIImage?
 
     var body: some View {
-        Group {
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        ProgressView()
-                            .tint(AppTheme.Colors.textTertiary)
-                    )
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    AppTheme.Colors.surface
+                        .overlay {
+                            ProgressView()
+                                .tint(AppTheme.Colors.textTertiary)
+                        }
+                }
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
-        .onAppear {
-            image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
-        }
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.small))
+            .onAppear {
+                image = PhotoStorageService.shared.loadEditedThumbnail(id: record.id)
+            }
     }
 }
 

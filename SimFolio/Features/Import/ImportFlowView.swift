@@ -268,7 +268,7 @@ struct ImportFlowView: View {
                     AnalyticsService.logImportNudgeTapped()
                     var filter = LibraryFilter()
                     filter.showUntaggedOnly = true
-                    router.navigateToLibrary(filter: filter)
+                    router.navigateToLibrary(filter: filter, presentAllPhotos: true)
                 }
                 userInfo["onTap"] = onTap
             }

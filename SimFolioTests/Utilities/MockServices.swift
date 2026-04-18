@@ -218,7 +218,7 @@ final class MockNavigationRouter: NavigationRouting {
         captureFlowActive = true
     }
 
-    func navigateToLibrary(filter: LibraryFilter?) {
+    func navigateToLibrary(filter: LibraryFilter?, presentAllPhotos: Bool) {
         navigateToLibraryCalls += 1
         if let filter = filter { libraryFilter = filter }
         selectedTab = .library

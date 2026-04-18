@@ -9,7 +9,7 @@ protocol NavigationRouting: AnyObject {
 
     func navigateToHome()
     func navigateToCapture(procedure: String?, stage: String?, angle: String?, toothNumber: Int?, forPortfolioId: String?)
-    func navigateToLibrary(filter: LibraryFilter?)
+    func navigateToLibrary(filter: LibraryFilter?, presentAllPhotos: Bool)
     func navigateToPortfolio(id: String)
     func presentSheet(_ sheet: NavigationRouter.SheetType)
     func dismissSheet()

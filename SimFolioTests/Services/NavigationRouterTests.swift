@@ -63,14 +63,14 @@ final class NavigationRouterTests: XCTestCase {
     // MARK: - navigateToLibrary
 
     func testNavigateToLibraryWithoutFilter() {
-        sut.navigateToLibrary(filter: nil)
+        sut.navigateToLibrary(filter: nil, presentAllPhotos: false)
         XCTAssertEqual(sut.selectedTab, .library)
         XCTAssertEqual(sut.navigateToLibraryCalls, 1)
     }
 
     func testNavigateToLibraryWithFilter() {
         let filter = TestData.createFullFilter()
-        sut.navigateToLibrary(filter: filter)
+        sut.navigateToLibrary(filter: filter, presentAllPhotos: false)
         XCTAssertEqual(sut.selectedTab, .library)
         XCTAssertFalse(sut.libraryFilter.procedures.isEmpty)
     }
@@ -79,7 +79,7 @@ final class NavigationRouterTests: XCTestCase {
         var filter = LibraryFilter()
         filter.procedures = ["Class 1"]
         sut.libraryFilter = filter
-        sut.navigateToLibrary(filter: nil)
+        sut.navigateToLibrary(filter: nil, presentAllPhotos: false)
         // Mock preserves existing filter when nil is passed (no replacement)
         XCTAssertFalse(sut.libraryFilter.procedures.isEmpty)
     }
