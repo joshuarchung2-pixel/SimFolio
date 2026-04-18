@@ -150,10 +150,19 @@ xcodebuild build-for-testing -project SimFolio.xcodeproj -scheme SimFolio -sdk i
 
 **Step 2 — run tests against the prebuilt bundle (fast, ~10-30s):**
 ```bash
-xcodebuild test-without-building -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
+./scripts/run-tests.sh
 ```
 
+The wrapper boots the simulator if needed, runs `test-without-building`, then classifies the run by parsing the xcresult bundle instead of trusting xcodebuild's exit code. That absorbs the simulator preflight flake (see below) — exit 0 iff 0 tests actually failed.
+
+Override via env vars: `SIM_NAME="iPhone 16" ./scripts/run-tests.sh`, `ONLY_TESTING="SimFolioTests/PhotoEditorTests" ./scripts/run-tests.sh`.
+
 Re-run step 2 as often as you like. Re-run step 1 only when source files change.
+
+If you need the raw xcodebuild command (e.g. debugging the wrapper itself):
+```bash
+xcodebuild test-without-building -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SimFolioTests 2>&1 | tail -40
+```
 
 ### One-shot test runs (slow but self-contained)
 
@@ -177,9 +186,14 @@ xcodebuild -project SimFolio.xcodeproj -scheme SimFolio -sdk iphonesimulator -de
 xcodebuild clean -project SimFolio.xcodeproj -scheme SimFolio
 ```
 
-### Simulator hangs / "Application failed preflight checks"
+### Simulator preflight flake ("TEST EXECUTE FAILED" with 0 real failures)
 
-If `xcodebuild test` reports `TEST FAILED` even though the test summary shows 0 failures, the simulator's app-launch preflight is failing intermittently. Reset and retry:
+`xcodebuild test` exits non-zero when the simulator's app-launch preflight trips, even when every test in the run actually passed. Two layers of mitigation are in place:
+
+1. **`./scripts/run-tests.sh`** — the default dev-loop runner. It classifies the run from the xcresult bundle, so a preflight flake with 0 real failures exits 0 and is silent. Prefer this over raw `xcodebuild test-without-building`.
+2. **Keep the simulator booted between runs.** The wrapper auto-boots `iPhone 17` if it isn't warm; don't shut it down between runs. Cold boots are when the preflight race is worst.
+
+If the simulator gets genuinely stuck (boots fail, tests hang indefinitely, not just a preflight flake), nuke and retry:
 
 ```bash
 xcrun simctl shutdown all; killall Simulator 2>/dev/null; xcrun simctl erase all
