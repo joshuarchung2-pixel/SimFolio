@@ -15,7 +15,7 @@ SimFolio helps dental students manage their clinical photography portfolios by:
 
 - **Language**: Swift
 - **UI Framework**: SwiftUI
-- **Minimum iOS**: iOS 16.0+
+- **Minimum iOS**: iOS 17.0+
 - **Architecture**: Feature-based modular structure with shared Core components
 
 ## Design System
@@ -130,6 +130,7 @@ The app supports launch arguments for UI testing:
 - `--skip-onboarding` - Skips onboarding flow
 - `--reset-all-data` - Clears all app data
 - `--with-sample-data` - Adds sample portfolios and metadata
+- `--screenshot-mode` - Overlays `ScreenshotCameraPreview` asset on top of the (always-black) simulator camera feed, so App Store screenshots can show a realistic viewfinder. Drop your reference JPG/PNG into `SimFolio/Assets.xcassets/ScreenshotCameraPreview.imageset/` via Xcode's asset editor
 
 ### Test Structure
 - `SimFolioTests/` - Unit tests (models, services, accessibility, photo editor)

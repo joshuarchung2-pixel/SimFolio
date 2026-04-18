@@ -252,9 +252,13 @@ class EditHistory: ObservableObject {
         redoStack.removeAll()
     }
 
-    // Explicit `nonisolated deinit` bypasses Swift's MainActor back-deploy
-    // shim (`swift_task_deinitOnExecutorMainActorBackDeploy`), which
-    // double-frees its TaskLocal scope on iOS < 17 and crashes the test host.
+    // Explicit `nonisolated deinit` avoids the compiler emitting
+    // `swift_task_deinitOnExecutorMainActorBackDeploy` for this class's
+    // deallocating deinit. That shim has a heap-corruption bug (double-free of
+    // its TaskLocal scope) that SIGABRTs when short-lived instances are
+    // destroyed back-to-back — reproduces reliably in EditHistoryTests on the
+    // iOS 26.2 simulator. Bumping the deployment target does not help; the
+    // compiler emits the shim regardless.
     nonisolated deinit {}
 }
 
