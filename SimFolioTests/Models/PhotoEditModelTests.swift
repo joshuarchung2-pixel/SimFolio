@@ -243,7 +243,6 @@ final class EditStateTests: XCTestCase {
 
 // MARK: - EditHistory Tests
 
-@MainActor
 final class EditHistoryTests: XCTestCase {
 
     func testInitialState() {

@@ -251,6 +251,11 @@ class EditHistory: ObservableObject {
         undoStack.removeAll()
         redoStack.removeAll()
     }
+
+    // Explicit `nonisolated deinit` bypasses Swift's MainActor back-deploy
+    // shim (`swift_task_deinitOnExecutorMainActorBackDeploy`), which
+    // double-frees its TaskLocal scope on iOS < 17 and crashes the test host.
+    nonisolated deinit {}
 }
 
 // MARK: - Editor Mode
