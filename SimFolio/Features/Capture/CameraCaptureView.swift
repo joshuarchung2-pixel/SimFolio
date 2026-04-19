@@ -11,7 +11,6 @@
 
 import SwiftUI
 import AVFoundation
-import Photos
 
 // MARK: - Camera Capture View
 
@@ -51,7 +50,6 @@ struct CameraCaptureView: View {
     @State private var ghostAssetId: String? = nil
     @State private var ghostOpacity: Double = 0.35
     @State private var showGhostPicker: Bool = false
-    @State private var ghostImageRequestID: PHImageRequestID? = nil
 
     // MARK: - Computed Properties
 
@@ -725,36 +723,17 @@ struct CameraCaptureView: View {
         }
     }
 
-    /// Load a ghost image from the photo library by asset ID
+    /// Load a ghost image from app storage by asset ID
     private func loadGhostImage(assetId: String) {
-        // Cancel any in-flight request
-        if let existing = ghostImageRequestID {
-            PHImageManager.default().cancelImageRequest(existing)
-            ghostImageRequestID = nil
+        guard let uuid = UUID(uuidString: assetId),
+              let image = PhotoStorageService.shared.loadEditedImage(id: uuid) else {
+            resetGhostState()
+            return
         }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
-            guard let asset = result.firstObject else {
-                DispatchQueue.main.async { self.resetGhostState() }
-                return
-            }
-
-            let screenSize = UIScreen.main.bounds.size
-            let scale = UIScreen.main.scale
-            let targetSize = CGSize(width: screenSize.width * scale, height: screenSize.height * scale)
-
-            DispatchQueue.main.async {
-                let requestID = PhotoLibraryManager.shared.requestThumbnail(for: asset, size: targetSize) { image in
-                    guard self.ghostAssetId == assetId else { return }
-                    if let image = image {
-                        self.ghostImage = image
-                        self.ghostEnabled = true
-                    }
-                }
-                self.ghostImageRequestID = requestID
-            }
-        }
+        guard ghostAssetId == assetId else { return }
+        ghostImage = image
+        ghostEnabled = true
     }
 
     /// Clear ghost selection from state and persistence
@@ -1695,45 +1674,17 @@ struct GhostPhotoPickerSheet: View {
             return
         }
 
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: assetIds, options: nil)
-        var fetchedAssets: [PHAsset] = []
-        fetchResult.enumerateObjects { asset, _, _ in
-            fetchedAssets.append(asset)
-        }
-
-        // Reorder to match priority from getMatchingAssetIds
-        let assetMap = Dictionary(uniqueKeysWithValues: fetchedAssets.map { ($0.localIdentifier, $0) })
-        let orderedAssets = assetIds.compactMap { assetMap[$0] }
-
-        guard !orderedAssets.isEmpty else {
-            isLoading = false
-            return
-        }
-
-        let displayAssets = Array(orderedAssets.prefix(50))
-        let thumbnailSize = CGSize(width: 200, height: 200)
-        let group = DispatchGroup()
-        var loaded: [(id: String, image: UIImage)] = []
-        let lock = NSLock()
-
-        for asset in displayAssets {
-            group.enter()
-            PhotoLibraryManager.shared.requestThumbnail(for: asset, size: thumbnailSize) { image in
-                if let image = image {
-                    lock.lock()
-                    loaded.append((id: asset.localIdentifier, image: image))
-                    lock.unlock()
-                }
-                group.leave()
+        let storage = PhotoStorageService.shared
+        let loaded: [(id: String, image: UIImage)] = assetIds
+            .prefix(50)
+            .compactMap { idString in
+                guard let uuid = UUID(uuidString: idString),
+                      let image = storage.loadEditedThumbnail(id: uuid) else { return nil }
+                return (id: idString, image: image)
             }
-        }
 
-        group.notify(queue: .main) {
-            // Restore priority order
-            let idOrder = assetIds.enumerated().reduce(into: [String: Int]()) { $0[$1.element] = $1.offset }
-            self.thumbnails = loaded.sorted { (idOrder[$0.id] ?? Int.max) < (idOrder[$1.id] ?? Int.max) }
-            self.isLoading = false
-        }
+        thumbnails = loaded
+        isLoading = false
     }
 }
 
