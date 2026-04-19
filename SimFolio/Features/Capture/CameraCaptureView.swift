@@ -145,6 +145,20 @@ struct CameraCaptureView: View {
                             )
                     )
 
+                #if DEBUG
+                // Screenshot-mode stub: the simulator's camera feed is always black,
+                // so overlay a static reference image when `--screenshot-mode` is set.
+                if ProcessInfo.processInfo.arguments.contains("--screenshot-mode") {
+                    Image("ScreenshotCameraPreview")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .allowsHitTesting(false)
+                        .ignoresSafeArea()
+                }
+                #endif
+
                 // Grid overlay
                 if showGrid {
                     GridOverlay()

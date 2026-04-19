@@ -120,15 +120,27 @@ https://joshuarchung2-pixel.github.io/SimFolio-legal/privacy.html
 - 1242 x 2208 pixels
 - Optional but recommended
 
-**Suggested Screenshots:**
-1. Home dashboard showing stats and portfolios
-2. Camera capture with tagging interface
-3. Library grid view with filters
-4. Portfolio detail with progress ring
-5. Requirement checklist view
-6. Photo detail with metadata
-7. Export options sheet
-8. Dark mode view
+**Screenshots (4 — one per core benefit, in order):**
+
+1. **FIND ANY PHOTO INSTANTLY**
+   - Screen: Library grid view with active filter chips (procedure / stage / angle)
+   - Must show: visible filter state, tag chips on thumbnails, dense grid
+   - Subtext: "Tag by procedure, stage, angle, tooth — then filter and sort."
+
+2. **TRACK EVERY REQUIREMENT**
+   - Screen: Portfolio detail with progress ring + requirement checklist
+   - Must show: progress ring at ~60–70%, due date, mix of checked/unchecked requirements
+   - Subtext: "Portfolio checklist with progress, due dates, and per-procedure tracking."
+
+3. **ANNOTATE WITH PRECISION**
+   - Screen: Markup editor on a tooth photo
+   - Must show: at least one measurement line + one text label, markup toolbar visible
+   - Subtext: "Measurement lines, text, and freehand — built in."
+
+4. **CAPTURE EXAM-READY SHOTS**
+   - Screen: Camera view with stub reference image (via `--screenshot-mode`)
+   - Must show: pre-filled tag badges at top (procedure · tooth · stage · angle), "N photo required" counter visible, shutter + thumbnail + zoom controls in frame
+   - Subtext: "Pre-tagged capture from your portfolio — never forget a required shot."
 
 ---
 

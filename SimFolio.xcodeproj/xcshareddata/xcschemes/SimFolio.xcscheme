@@ -72,7 +72,11 @@
       <CommandLineArguments>
          <CommandLineArgument
             argument = "--skip-onboarding"
-            isEnabled = "YES">
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "--screenshot-mode"
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--with-sample-data"
